@@ -1,3 +1,3 @@
 # improved-goggles
-# cosc 3339
-# sprint 1
+cosc 3339<br>
+sprint 1
