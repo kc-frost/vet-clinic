@@ -16,3 +16,19 @@ else:
     print("invalid email")
 
 # password validation
+# a valid password requires at least one letter (in both cases) and at least one number
+# support for special characters will come later
+# (and also a better way to code this)
+while True:
+    new_password = input("Enter password: ")
+    if (len(new_password) < 8):
+        print("min password length: 8")
+    elif (re.search("[0-9]+", new_password) is None):
+        print("password needs at least one number")
+    elif (re.search("[a-z]+", new_password) is None):
+        print("password needs at least one lowercase letter")
+    elif (re.search("[A-Z]+", new_password) is None):
+        print("password needs at least one uppercase letter")
+    else:
+        print("valid password created")
+        break
