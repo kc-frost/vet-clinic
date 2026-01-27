@@ -79,13 +79,12 @@ def sign_in(email: str, password: str, conn) -> bool:
 
     cur.execute("SELECT * FROM customer WHERE email = %s AND password = %s", (email, enc_pw))
 
-    if cur.fetchall():
+    # if no users exist, will return an empty list
+    if list(cur):
         print("Login successful")
         # lead to inventory page from here
     else:
-        print("Your account doesn't exist")
-
-
+        print("Invalid email or password")
 
 def main():
     choice = input("Sign in or up? [i/u]: ").lower()
