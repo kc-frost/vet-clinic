@@ -52,7 +52,7 @@ def validate_password(password: str) -> list:
         
     return [info_msg, is_valid]
 
-def sign_in(new_email: str, new_password: str, conn) -> bool:
+def sign_up(new_email: str, new_password: str, conn) -> bool:
     while True:
         email_info_msg, is_email_valid = validate_email(new_email)
         pw_info_msg, is_pw_valid = validate_password(new_password)
@@ -73,8 +73,17 @@ def sign_in(new_email: str, new_password: str, conn) -> bool:
     cur.execute("INSERT INTO user_creds (email, password) VALUES (%s, %s)", (new_email, enc))
     conn.commit()
 
-def sign_up(email: str, password: str, conn) -> bool:
-    pass
+def sign_in(email: str, password: str, conn) -> bool:
+    cur = conn.cursor()
+    enc_pw = hashlib.md5(password.encode()).hexdigest()
+
+    cur.execute("SELECT * FROM user_creds WHERE email = %s AND password = %s", (email, enc_pw))
+
+    if cur.fetchall():
+        print("Login successful")
+    else:
+        print("Your account doesn't exist")
+
 
 
 def main():
@@ -88,14 +97,13 @@ def main():
                                 password=PASSWORD,
                                 host=HOST,
                                 database=DATABASE)
-        print("Connected!")
     except mysql.connector.Error as err:
-        print("Connection error:", err)
+        print("\nConnection error:", err)
     
     if (choice == "i"):
-        sign_in(new_email=email, new_password=password, conn=conn)
+        sign_in(email=email, password=password, conn=conn)
     elif (choice == "u"):
-        sign_up(email=email, password=password, conn=conn)
+        sign_up(new_email=email, new_password=password, conn=conn)
 
     conn.close()
 if __name__ == "__main__":
