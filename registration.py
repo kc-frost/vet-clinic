@@ -1,18 +1,18 @@
 # basic setup
 # temporarily assumes that a new email is to be typed, rather than retrieved from a http post request
 
-# database variables
-USER = "root"
-PASSWORD = ""
-HOST = "localhost"
-DATABASE = ""
-
-# built-in (python 3.0<=)
 import re
 import hashlib
-
-# requires pip
+import os
+from dotenv import load_dotenv
 import mysql.connector
+
+# database variables
+load_dotenv()
+USER = os.getenv("USER")
+PASSWORD = os.getenv("PASSWORD")
+HOST = os.getenv("HOST")
+DATABASE = os.getenv("DATABASE")
 
 def validate_email(email: str) -> list:
     # email requirements:
@@ -70,24 +70,25 @@ def sign_up(new_email: str, new_password: str, conn) -> bool:
     cur = conn.cursor()
     enc = hashlib.md5(new_password.encode()).hexdigest()
     
-    cur.execute("INSERT INTO user_creds (email, password) VALUES (%s, %s)", (new_email, enc))
+    cur.execute("INSERT INTO customer (email, password) VALUES (%s, %s)", (new_email, enc))
     conn.commit()
 
 def sign_in(email: str, password: str, conn) -> bool:
     cur = conn.cursor()
     enc_pw = hashlib.md5(password.encode()).hexdigest()
 
-    cur.execute("SELECT * FROM user_creds WHERE email = %s AND password = %s", (email, enc_pw))
+    cur.execute("SELECT * FROM customer WHERE email = %s AND password = %s", (email, enc_pw))
 
     if cur.fetchall():
         print("Login successful")
+        # lead to inventory page from here
     else:
         print("Your account doesn't exist")
 
 
 
 def main():
-    choice = input("Sign in or up? [i/u]: ")
+    choice = input("Sign in or up? [i/u]: ").lower()
 
     email = input("Enter your email: ")
     password = input("Enter your password: ")
