@@ -1,5 +1,5 @@
 create database veterinarianDB;
-use veterinariandb;
+use veterinarianDB;
 
 create table veterinary(
 branch int auto_increment primary key,
