@@ -33,6 +33,8 @@ behavior varchar(255) -- i.e aggressive, tame, etc.
 create table staff(
 staffID int auto_increment primary key,
 name varchar(255),
+StaffNumber varchar(12), -- includes dashes
+email varchar(255),
 position varchar(255)
 );
 
@@ -60,6 +62,7 @@ inUse boolean,
 itemDescription text,
 ndc int references medicine(ndc),
 equipmentID int references equipment(equipmentID)
+quantity int
 );
 
 create table leasings(
@@ -117,4 +120,10 @@ TimeOfPayment datetime,
 insuranceID int references insurance(insuranceID),
 appointmentID int references appointment(appointmentID),
 userID int references customer(userID)
+);
+
+create table rooms(
+roomNumber int primary key,
+roomType varchar(255),
+capacity int(255)  
 );
