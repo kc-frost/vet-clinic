@@ -1,7 +1,9 @@
+export type RoomType = "CheckupRoom" | "XrayRoom" | "SurgeryRoom";
+
 export type Room = {
-  roomID: number;
-  roomName: string;
-  roomType: string;
+  roomNumber: number;
+  roomType: RoomType;
   capacity: number;
-  status: string | null;
 };
+
+export type RoomCreate = Omit<Room, "roomNumber">;

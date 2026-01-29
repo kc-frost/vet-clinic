@@ -13,13 +13,21 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
+  const contentType = res.headers.get("content-type") || "";
+
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`${options.method || "GET"} ${path} failed (${res.status}) ${text}`);
+    const errorText = contentType.includes("application/json")
+      ? JSON.stringify(await res.json().catch(() => ({})))
+      : await res.text().catch(() => "");
+    throw new Error(`${options.method || "GET"} ${path} failed (${res.status}) ${errorText}`);
   }
 
-  if (res.status === 204) {
-    return undefined as T;
+  if (res.status === 204) return undefined as T;
+
+  if (!contentType.includes("application/json")) {
+    // If backend accidentally returns HTML, this prevents JSON parse crashes
+    const text = await res.text().catch(() => "");
+    throw new Error(`Expected JSON from ${path} but got: ${text.slice(0, 80)}...`);
   }
 
   return res.json();

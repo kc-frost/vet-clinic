@@ -1,18 +1,14 @@
 import { api } from "./client";
-import type { Room } from "../types/rooms";
+import type { Room, RoomCreate } from "../types/rooms";
 
 export function getRooms() {
   return api<Room[]>("/rooms");
 }
 
-export function createRoom(data: Omit<Room, "roomID">) {
+export function createRoom(data: RoomCreate) {
   return api<Room>("/rooms", { method: "POST", body: data });
 }
 
-export function deleteRoom(roomID: number) {
-  return api<void>(`/rooms/${roomID}`, { method: "DELETE" });
-}
-
-export function updateRoom(roomID: number, patch: Partial<Room>) {
-  return api<Room>(`/rooms/${roomID}`, { method: "PATCH", body: patch });
+export function deleteRoom(roomNumber: number) {
+  return api<void>(`/rooms/${roomNumber}`, { method: "DELETE" });
 }
