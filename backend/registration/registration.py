@@ -41,7 +41,7 @@ def validate_password(password: str) -> list:
     if (len(password) < 8):
         info_msg = "Password needs a minimum length of 8 characters"
     elif (re.search("[0-9]+", password) is None):
-        info_msg = "Passwords needs at least one number"
+        info_msg = "Password needs at least one number"
     elif (re.search("[a-z]+", password) is None):
         info_msg = "Password needs at least one lowercase letter"
     elif (re.search("[A-Z]+", password) is None):
