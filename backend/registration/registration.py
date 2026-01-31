@@ -51,26 +51,31 @@ def validate_password(password: str) -> list:
         
     return [info_msg, is_valid]
 
-def sign_up(new_email: str, new_password: str, conn) -> bool:
-    while True:
-        email_info_msg, is_email_valid = validate_email(new_email)
-        pw_info_msg, is_pw_valid = validate_password(new_password)
+@app.post("/register")
+def register():
+    data = request.json
+    email = data["email"]
+    password = data["password"]
 
-        if (is_email_valid == True and is_pw_valid == True):
-            break
-        else:
-            if not is_email_valid:
-                print("\n"+email_info_msg)
-                new_email = input("Enter your email: ")
-            if not is_pw_valid:
-                print("\n"+pw_info_msg)
-                new_password = input("Enter your password: ")
+    msg, ok = validate_email(email)
+    if not ok:
+        return jsonify({"error": msg}), 400
 
+    msg, ok = validate_password(password)
+    if not ok:
+        return jsonify({"error": msg}), 400
+
+    conn = get_conn()
     cur = conn.cursor()
-    enc = hashlib.md5(new_password.encode()).hexdigest()
-    
-    cur.execute("INSERT INTO customer (email, password) VALUES (%s, %s)", (new_email, enc))
+    enc = hashlib.md5(password.encode()).hexdigest()
+    cur.execute(
+        "INSERT INTO customer (email, password) VALUES (%s, %s)",
+        (email, enc),
+    )
     conn.commit()
+    conn.close()
+
+    return jsonify({"message": "User registered"}), 201
 
 @app.post("/login")
 def login():
