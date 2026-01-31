@@ -61,7 +61,7 @@ displayName varchar(255), -- e.g., "anesthesia" rather than "lidocaine"
 inUse boolean,
 itemDescription text,
 ndc int references medicine(ndc),
-equipmentID int references equipment(equipmentID)
+equipmentID int references equipment(equipmentID),
 quantity int
 );
 
