@@ -72,19 +72,6 @@ def sign_up(new_email: str, new_password: str, conn) -> bool:
     cur.execute("INSERT INTO customer (email, password) VALUES (%s, %s)", (new_email, enc))
     conn.commit()
 
-def sign_in(email: str, password: str, conn) -> bool:
-    cur = conn.cursor()
-    enc_pw = hashlib.md5(password.encode()).hexdigest()
-
-    cur.execute("SELECT * FROM customer WHERE email = %s AND password = %s", (email, enc_pw))
-
-    # if no users exist, will return an empty list
-    if list(cur):
-        print("Login successful")
-        # lead to inventory page from here
-    else:
-        print("Invalid email or password")
-
 @app.post("/login")
 def login():
     data = request.json
