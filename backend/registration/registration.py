@@ -4,15 +4,21 @@
 import re
 import hashlib
 import os
-from dotenv import load_dotenv
 import mysql.connector
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
 
 # database variables
 load_dotenv()
-USER = os.getenv("USER")
-PASSWORD = os.getenv("PASSWORD")
-HOST = os.getenv("HOST")
-DATABASE = os.getenv("DATABASE")
+app = Flask(__name__)
+
+def get_conn():
+    return mysql.connector.connect(
+        user = os.getenv("USER"),
+        password = os.getenv("PASSWORD"),
+        host = os.getenv("HOST"),
+        database = os.getenv("DATABASE")
+    )
 
 def validate_email(email: str) -> list:
     # email requirements:
@@ -29,20 +35,13 @@ def validate_email(email: str) -> list:
     return [info_msg, is_valid]
 
 def validate_password(password: str) -> list:
-    # password requirements:
-        # >8 alphanumerical characters
-        # >=1 (upper & lower)case letters
-        # >=1 number
-        # >=1 special character (TODO)
-    # (and also a better way to code this)
-
     is_valid = False
     info_msg = ""
 
     if (len(password) < 8):
         info_msg = "Password needs a minimum length of 8 characters"
     elif (re.search("[0-9]+", password) is None):
-        info_msg = "Passwords needs at least one number"
+        info_msg = "Password needs at least one number"
     elif (re.search("[a-z]+", password) is None):
         info_msg = "Password needs at least one lowercase letter"
     elif (re.search("[A-Z]+", password) is None):
@@ -52,59 +51,54 @@ def validate_password(password: str) -> list:
         
     return [info_msg, is_valid]
 
-def sign_up(new_email: str, new_password: str, conn) -> bool:
-    while True:
-        email_info_msg, is_email_valid = validate_email(new_email)
-        pw_info_msg, is_pw_valid = validate_password(new_password)
+@app.post("/register")
+def register():
+    data = request.json
+    email = data["email"]
+    password = data["password"]
 
-        if (is_email_valid == True and is_pw_valid == True):
-            break
-        else:
-            if not is_email_valid:
-                print("\n"+email_info_msg)
-                new_email = input("Enter your email: ")
-            if not is_pw_valid:
-                print("\n"+pw_info_msg)
-                new_password = input("Enter your password: ")
+    msg, ok = validate_email(email)
+    if not ok:
+        return jsonify({"error": msg}), 400
 
+    msg, ok = validate_password(password)
+    if not ok:
+        return jsonify({"error": msg}), 400
+
+    conn = get_conn()
     cur = conn.cursor()
-    enc = hashlib.md5(new_password.encode()).hexdigest()
-    
-    cur.execute("INSERT INTO customer (email, password) VALUES (%s, %s)", (new_email, enc))
+    enc = hashlib.md5(password.encode()).hexdigest()
+    cur.execute(
+        "INSERT INTO customer (email, password) VALUES (%s, %s)",
+        (email, enc),
+    )
     conn.commit()
-
-def sign_in(email: str, password: str, conn) -> bool:
-    cur = conn.cursor()
-    enc_pw = hashlib.md5(password.encode()).hexdigest()
-
-    cur.execute("SELECT * FROM customer WHERE email = %s AND password = %s", (email, enc_pw))
-
-    # if no users exist, will return an empty list
-    if list(cur):
-        print("Login successful")
-        # lead to inventory page from here
-    else:
-        print("Invalid email or password")
-
-def main():
-    choice = input("Sign in or up? [i/u]: ").lower()
-
-    email = input("Enter your email: ")
-    password = input("Enter your password: ")
-
-    try:
-        conn = mysql.connector.connect(user=USER, 
-                                password=PASSWORD,
-                                host=HOST,
-                                database=DATABASE)
-    except mysql.connector.Error as err:
-        print("\nConnection error:", err)
-    
-    if (choice == "i"):
-        sign_in(email=email, password=password, conn=conn)
-    elif (choice == "u"):
-        sign_up(new_email=email, new_password=password, conn=conn)
-
     conn.close()
+
+    return jsonify({"message": "User registered"}), 201
+
+@app.post("/login")
+def login():
+    data = request.json
+    email = data["email"]
+    password = data["password"]
+
+    enc = hashlib.md5(password.encode()).hexdigest()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT 1 FROM customer WHERE email=%s AND password=%s",
+        (email, enc),
+    )
+
+    ok = cur.fetchone() is not None
+    conn.close()
+
+    if not ok:
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    return jsonify({"message": "Login successful"}), 200
+
+
 if __name__ == "__main__":
-    main()
+    app.run(port=5000)
