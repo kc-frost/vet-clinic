@@ -4,15 +4,21 @@
 import re
 import hashlib
 import os
-from dotenv import load_dotenv
 import mysql.connector
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
 
 # database variables
 load_dotenv()
-USER = os.getenv("USER")
-PASSWORD = os.getenv("PASSWORD")
-HOST = os.getenv("HOST")
-DATABASE = os.getenv("DATABASE")
+app = Flask(__name__)
+
+def get_conn():
+    return mysql.connector.connect(
+        user = os.getenv("USER"),
+        password = os.getenv("PASSWORD"),
+        host = os.getenv("HOST"),
+        database = os.getenv("DATABASE")
+    )
 
 def validate_email(email: str) -> list:
     # email requirements:
@@ -29,13 +35,6 @@ def validate_email(email: str) -> list:
     return [info_msg, is_valid]
 
 def validate_password(password: str) -> list:
-    # password requirements:
-        # >8 alphanumerical characters
-        # >=1 (upper & lower)case letters
-        # >=1 number
-        # >=1 special character (TODO)
-    # (and also a better way to code this)
-
     is_valid = False
     info_msg = ""
 
@@ -86,25 +85,28 @@ def sign_in(email: str, password: str, conn) -> bool:
     else:
         print("Invalid email or password")
 
-def main():
-    choice = input("Sign in or up? [i/u]: ").lower()
+@app.post("/login")
+def login():
+    data = request.json
+    email = data["email"]
+    password = data["password"]
 
-    email = input("Enter your email: ")
-    password = input("Enter your password: ")
+    enc = hashlib.md5(password.encode()).hexdigest()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT 1 FROM customer WHERE email=%s AND password=%s",
+        (email, enc),
+    )
 
-    try:
-        conn = mysql.connector.connect(user=USER, 
-                                password=PASSWORD,
-                                host=HOST,
-                                database=DATABASE)
-    except mysql.connector.Error as err:
-        print("\nConnection error:", err)
-    
-    if (choice == "i"):
-        sign_in(email=email, password=password, conn=conn)
-    elif (choice == "u"):
-        sign_up(new_email=email, new_password=password, conn=conn)
-
+    ok = cur.fetchone() is not None
     conn.close()
+
+    if not ok:
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    return jsonify({"message": "Login successful"}), 200
+
+
 if __name__ == "__main__":
-    main()
+    app.run(port=5000)
