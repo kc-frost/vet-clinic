@@ -13,6 +13,7 @@ export type RegisterRequest = {
 export type AuthResponse = {
 	ok?: boolean;
 	message?: string;
+        userID?: number;
 	//Add later if backend returns in future user/token/etc.
 };
 

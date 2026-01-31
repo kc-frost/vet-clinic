@@ -1,529 +1,539 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import "../../styles/inventory.css";
+  import { useEffect, useMemo, useState } from "react";
+  import { useNavigate } from "react-router-dom";
+  import "../../styles/inventory.css";
 
-import type { Person } from "../../types/people";
-import type { Room } from "../../types/rooms";
-import type { Resource } from "../../types/resources";
+  import type { Staff, StaffPosition } from "../../types/staff";
+  import type { Room, RoomCreate, RoomType } from "../../types/rooms";
+  import type { InventoryItem, InventoryType, InventoryCreate } from "../../types/inventory";
+  import type { Equipment } from "../../types/equipment";
+  import type { Medicine } from "../../types/medicine";
 
-import { getPeople, createPerson, deletePerson, updatePerson } from "../../api/people";
-import { getRooms, createRoom, deleteRoom, updateRoom } from "../../api/rooms";
-import { getResources, createResource, deleteResource, updateResource } from "../../api/resources";
+  import { getStaff, createStaff, deleteStaff } from "../../api/staff";
+  import { getRooms, createRoom, deleteRoom } from "../../api/rooms";
+  import { getInventory, createInventoryItem, deleteInventoryItem } from "../../api/inventory";
+  import { getEquipment } from "../../api/equipment";
+  import { getMedicines } from "../../api/medicine";
 
-function normalizeStatus(value: string | null | undefined, fallback: string) {
-	const s = (value ?? "").trim();
-	return s.length ? s : fallback;
-}
+  const STAFF_POSITION_OPTIONS: { value: StaffPosition; label: string }[] = [
+    { value: "Veterinarian", label: "Veterinarian" },
+    { value: "VetAssistant", label: "Vet Assistant" },
+    { value: "ServiceRepresentative", label: "Service Representative" },
+  ];
 
-export default function Inventory() {
-	const navigate = useNavigate();
+  const ROOM_TYPE_OPTIONS: { value: RoomType; label: string }[] = [
+    { value: "CheckupRoom", label: "Checkup Room" },
+    { value: "XrayRoom", label: "X-ray Room" },
+    { value: "SurgeryRoom", label: "Surgery Room" },
+  ];
 
-	const [people, setPeople] = useState<Person[]>([]);
-	const [rooms, setRooms] = useState<Room[]>([]);
-	const [resources, setResources] = useState<Resource[]>([]);
+  const INVENTORY_TYPE_OPTIONS: { value: InventoryType; label: string }[] = [
+    { value: "medicine", label: "Medicine" },
+    { value: "equipment", label: "Equipment" },
+  ];
 
-	const [loading, setLoading] = useState(false);
-	const [pageError, setPageError] = useState("");
+  function errMsg(err: unknown): string {
+    return err instanceof Error ? err.message : "Unknown error.";
+  }
 
-	// People form
-	const [pFullName, setPFullName] = useState("");
-	const [pRole, setPRole] = useState("");
-	const [pPhoneNumber, setPPhoneNumber] = useState("");
+  export default function Inventory() {
+    const navigate = useNavigate();
 
-	// Rooms form
-	const [rRoomName, setRRoomName] = useState("");
-	const [rRoomType, setRRoomType] = useState("");
-	const [rCapacity, setRCapacity] = useState<number>(1);
+    const [loading, setLoading] = useState(false);
+    const [pageError, setPageError] = useState("");
 
-	// Resources form
-	const [resName, setResName] = useState("");
-	const [resType, setResType] = useState("");
-	const [resQty, setResQty] = useState<number>(1);
+    // data lists
+    const [staff, setStaff] = useState<Staff[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [items, setItems] = useState<InventoryItem[]>([]);
+    const [equipment, setEquipment] = useState<Equipment[]>([]);
+    const [medicines, setMedicines] = useState<Medicine[]>([]);
 
-	const peopleSorted = useMemo(
-		() => [...people].sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "")),
-		[people]
-	);
-	const roomsSorted = useMemo(
-		() => [...rooms].sort((a, b) => (a.roomName || "").localeCompare(b.roomName || "")),
-		[rooms]
-	);
-	const resourcesSorted = useMemo(
-		() => [...resources].sort((a, b) => (a.resourceName || "").localeCompare(b.resourceName || "")),
-		[resources]
-	);
+    // staff form
+    const [sName, setSName] = useState("");
+    const [sStaffNumber, setSStaffNumber] = useState("");
+    const [sEmail, setSEmail] = useState("");
+    const [sPosition, setSPosition] = useState<StaffPosition>("Veterinarian");
 
-	async function refreshAll() {
-		setPageError("");
-		setLoading(true);
-		try {
-			const [p, r, res] = await Promise.all([getPeople(), getRooms(), getResources()]);
-			setPeople(p);
-			setRooms(r);
-			setResources(res);
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to load inventory.");
-		} finally {
-			setLoading(false);
-		}
-	}
+    // rooms form
+    const [rRoomType, setRRoomType] = useState<RoomType>("CheckupRoom");
+    const [rCapacity, setRCapacity] = useState<number>(1);
 
-	useEffect(() => {
-		refreshAll();
-	}, []);
+    // inventory form
+    const [iType, setIType] = useState<InventoryType>("medicine");
+    const [selectedNdc, setSelectedNdc] = useState<number | null>(null);
+    const [selectedEquipmentID, setSelectedEquipmentID] = useState<number | null>(null);
+    const [iQty, setIQty] = useState<number>(1);
+    const [iDesc, setIDesc] = useState("");
+    const [iInUse, setIInUse] = useState(false);
 
-	function handleBackToHome() {
-		navigate("/");
-	}
+    const staffSorted = useMemo(
+      () => [...staff].sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+      [staff]
+    );
+    const roomsSorted = useMemo(() => [...rooms].sort((a, b) => a.roomNumber - b.roomNumber), [rooms]);
+    const itemsSorted = useMemo(
+      () => [...items].sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "")),
+      [items]
+    );
 
-	// ---------- PEOPLE ----------
-	async function handleAddPerson() {
-		setPageError("");
+    const equipmentSorted = useMemo(
+      () => [...equipment].sort((a, b) => (a.equipmentType || "").localeCompare(b.equipmentType || "")),
+      [equipment]
+    );
+    const medicinesSorted = useMemo(
+      () => [...medicines].sort((a, b) => (a.medicineName || "").localeCompare(b.medicineName || "")),
+      [medicines]
+    );
 
-		const fullName = pFullName.trim();
-		const role = pRole.trim();
-		const phoneNumber = pPhoneNumber.trim();
+    async function refreshAll() {
+      setPageError("");
+      setLoading(true);
 
-		if (!fullName || !role) {
-			setPageError("People: fullName and role are required.");
-			return;
-		}
+      const results = await Promise.allSettled([getStaff(), getRooms(), getInventory(), getEquipment(), getMedicines()]);
 
-		setLoading(true);
-		try {
-			await createPerson({
-				fullName,
-				role,
-				phoneNumber: phoneNumber.length ? phoneNumber : null,
-				status: "available",
-			});
+      const errs: string[] = [];
 
-			setPFullName("");
-			setPRole("");
-			setPPhoneNumber("");
+      const s = results[0];
+      if (s.status === "fulfilled") setStaff(s.value);
+      else errs.push(errMsg(s.reason));
 
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to add person.");
-			setLoading(false);
-		}
-	}
+      const r = results[1];
+      if (r.status === "fulfilled") setRooms(r.value);
+      else errs.push(errMsg(r.reason));
 
-	async function handleDeletePerson(personID: number) {
-		setPageError("");
-		setLoading(true);
-		try {
-			await deletePerson(personID);
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to delete person.");
-			setLoading(false);
-		}
-	}
+      const it = results[2];
+      if (it.status === "fulfilled") setItems(it.value);
+      else errs.push(errMsg(it.reason));
 
-	async function handleTogglePersonStatus(person: Person) {
-		const current = normalizeStatus(person.status, "available");
-		const next = current === "available" ? "inUse" : "available";
+      const eq = results[3];
+      if (eq.status === "fulfilled") setEquipment(eq.value);
+      else errs.push(errMsg(eq.reason));
 
-		setPageError("");
-		setLoading(true);
-		try {
-			await updatePerson(person.personID, { status: next });
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to update person status.");
-			setLoading(false);
-		}
-	}
+      const med = results[4];
+      if (med.status === "fulfilled") setMedicines(med.value);
+      else errs.push(errMsg(med.reason));
 
-	// ---------- ROOMS ----------
-	async function handleAddRoom() {
-		setPageError("");
+      if (errs.length > 0) setPageError(errs[0]);
+      setLoading(false);
+    }
 
-		const roomName = rRoomName.trim();
-		const roomType = rRoomType.trim();
+    useEffect(() => {
+      refreshAll();
+    }, []);
 
-		if (!roomName || !roomType || !Number.isFinite(rCapacity) || rCapacity < 1) {
-			setPageError("Rooms: roomName, roomType, and capacity (>= 1) are required.");
-			return;
-		}
+    function handleBackToHome() {
+      navigate("/");
+    }
 
-		setLoading(true);
-		try {
-			await createRoom({
-				roomName,
-				roomType,
-				capacity: rCapacity,
-				status: "available",
-			});
+    async function handleAddStaff() {
+      setPageError("");
 
-			setRRoomName("");
-			setRRoomType("");
-			setRCapacity(1);
+      const name = sName.trim();
+      const staffNumber = sStaffNumber.trim();
+      const email = sEmail.trim();
 
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to add room.");
-			setLoading(false);
-		}
-	}
+      if (!name) {
+        setPageError("Staff: name is required.");
+        return;
+      }
 
-	async function handleDeleteRoom(roomID: number) {
-		setPageError("");
-		setLoading(true);
-		try {
-			await deleteRoom(roomID);
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to delete room.");
-			setLoading(false);
-		}
-	}
+      const payload: Omit<Staff, "staffID"> = {
+        name,
+        position: sPosition,
+        StaffNumber: staffNumber.length ? staffNumber : null,
+        email: email.length ? email : null,
+      };
 
-	async function handleToggleRoomStatus(room: Room) {
-		const current = normalizeStatus(room.status, "available");
-		const next = current === "available" ? "inUse" : "available";
+      setLoading(true);
+      try {
+        await createStaff(payload);
+        setSName("");
+        setSStaffNumber("");
+        setSEmail("");
+        setSPosition("Veterinarian");
+        await refreshAll();
+      } catch (err) {
+        setPageError(errMsg(err));
+        setLoading(false);
+      }
+    }
 
-		setPageError("");
-		setLoading(true);
-		try {
-			await updateRoom(room.roomID, { status: next });
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to update room status.");
-			setLoading(false);
-		}
-	}
+    async function handleDeleteStaff(staffID: number) {
+      setPageError("");
+      setLoading(true);
+      try {
+        await deleteStaff(staffID);
+        await refreshAll();
+      } catch (err) {
+        setPageError(errMsg(err));
+        setLoading(false);
+      }
+    }
 
-	// ---------- RESOURCES ----------
-	async function handleAddResource() {
-		setPageError("");
+    async function handleAddRoom() {
+      setPageError("");
 
-		const resourceName = resName.trim();
-		const resourceType = resType.trim();
+      if (!Number.isFinite(rCapacity) || rCapacity < 1 || !Number.isInteger(rCapacity)) {
+        setPageError("Rooms: capacity must be a whole number >= 1.");
+        return;
+      }
 
-		if (!resourceName || !resourceType || !Number.isFinite(resQty) || resQty < 0) {
-			setPageError("Resources: resourceName, resourceType, and quantity (>= 0) are required.");
-			return;
-		}
+      const payload: RoomCreate = {
+        roomType: rRoomType,
+        capacity: rCapacity,
+      };
 
-		setLoading(true);
-		try {
-			await createResource({
-				resourceName,
-				resourceType,
-				quantity: resQty,
-				status: resQty === 0 ? "depleted" : "available",
-			});
+      setLoading(true);
+      try {
+        await createRoom(payload);
+        setRRoomType("CheckupRoom");
+        setRCapacity(1);
+        await refreshAll();
+      } catch (err) {
+        setPageError(errMsg(err));
+        setLoading(false);
+      }
+    }
 
-			setResName("");
-			setResType("");
-			setResQty(1);
+    async function handleDeleteRoom(roomNumber: number) {
+      setPageError("");
+      setLoading(true);
+      try {
+        await deleteRoom(roomNumber);
+        await refreshAll();
+      } catch (err) {
+        setPageError(errMsg(err));
+        setLoading(false);
+      }
+    }
 
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to add resource.");
-			setLoading(false);
-		}
-	}
+    function handleInventoryTypeChange(next: InventoryType) {
+      setIType(next);
+      setPageError("");
+      setSelectedNdc(null);
+      setSelectedEquipmentID(null);
+      setIInUse(false);
+    }
 
-	async function handleDeleteResource(resourceID: number) {
-		setPageError("");
-		setLoading(true);
-		try {
-			await deleteResource(resourceID);
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to delete resource.");
-			setLoading(false);
-		}
-	}
+    async function handleAddItem() {
+      setPageError("");
 
-	async function handleUseOne(resource: Resource) {
-		const nextQty = Math.max(0, resource.quantity - 1);
-		const nextStatus = nextQty === 0 ? "depleted" : normalizeStatus(resource.status, "available");
+      const desc = iDesc.trim();
 
-		setPageError("");
-		setLoading(true);
-		try {
-			await updateResource(resource.resourceID, {
-				quantity: nextQty,
-				status: nextStatus,
-			});
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to use resource.");
-			setLoading(false);
-		}
-	}
+      if (!Number.isFinite(iQty) || iQty < 0 || !Number.isInteger(iQty)) {
+        setPageError("Inventory: quantity must be a whole number >= 0.");
+        return;
+      }
 
-	/* TODO: POSSIBLY ADD A CAP TO DENOTE SPACE LIMIT OF ITEM*/
-	async function handleRestockOne(resource: Resource) {
-		const nextQty = resource.quantity + 1;
+      let displayName = "";
+      let ndc: number | null = null;
+      let equipmentID: number | null = null;
+      let inUse = false;
 
-		setPageError("");
-		setLoading(true);
-		try {
-			await updateResource(resource.resourceID, {
-				quantity: nextQty,
-				status: "available",
-			});
-			await refreshAll();
-		} catch (err) {
-			setPageError(err instanceof Error ? err.message : "Failed to restock resource.");
-			setLoading(false);
-		}
-	}
+      if (iType === "medicine") {
+        if (selectedNdc == null) {
+          setPageError("Inventory: select a medicine.");
+          return;
+        }
+        const med = medicines.find((m) => m.ndc === selectedNdc);
+        if (!med) {
+          setPageError("Inventory: selected medicine not found.");
+          return;
+        }
+        displayName = med.medicineName;
+        ndc = med.ndc;
+        equipmentID = null;
+        inUse = false; // backend should force/ignore for medicine anyway
+      } else {
+        if (selectedEquipmentID == null) {
+          setPageError("Inventory: select equipment.");
+          return;
+        }
+        const eq = equipment.find((e) => e.equipmentID === selectedEquipmentID);
+        if (!eq) {
+          setPageError("Inventory: selected equipment not found.");
+          return;
+        }
+        displayName = eq.equipmentType;
+        ndc = null;
+        equipmentID = eq.equipmentID;
+        inUse = iInUse;
+      }
 
-	return (
-		<div className="inventory-page">
-			<div className="inventory-header">
-				<div className="inventory-topbar">
-					<button
-						className="btn"
-						type="button"
-						onClick={handleBackToHome}
-						disabled={loading}
-					>
-						← Home
-					</button>
+      const payload: InventoryCreate = {
+        inventoryType: iType,
+        quantity: iQty,
+        itemDescription: desc.length ? desc : null,
+        inUse,
+        ndc,
+        equipmentID,
+        displayName, // backend can recompute/override
+      };
 
-					<button
-						className="btn"
-						type="button"
-						onClick={refreshAll}
-						disabled={loading}
-					>
-						{loading ? "Loading..." : "Refresh"}
-					</button>
-				</div>
+      setLoading(true);
+      try {
+        await createInventoryItem(payload);
+        setIType("medicine");
+        setSelectedNdc(null);
+        setSelectedEquipmentID(null);
+        setIQty(1);
+        setIDesc("");
+        setIInUse(false);
+        await refreshAll();
+      } catch (err) {
+        setPageError(errMsg(err));
+        setLoading(false);
+      }
+    }
 
-				<h1 className="inventory-title">Inventory</h1>
-				<p className="inventory-subtitle">Manage people, rooms, and resources</p>
+    async function handleDeleteItem(itemID: number) {
+      setPageError("");
+      setLoading(true);
+      try {
+        await deleteInventoryItem(itemID);
+        await refreshAll();
+      } catch (err) {
+        setPageError(errMsg(err));
+        setLoading(false);
+      }
+    }
 
-				{pageError ? <div className="inventory-error">{pageError}</div> : null}
-			</div>
+    return (
+      <div className="inventory-page">
+        <div className="inventory-header">
+          <div className="inventory-topbar">
+            <button className="btn" type="button" onClick={handleBackToHome} disabled={loading}>
+              ← Home
+            </button>
+            <button className="btn" type="button" onClick={refreshAll} disabled={loading}>
+              {loading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
 
-			<div className="inventory-grid">
-				{/* PEOPLE */}
-				<section className="card">
-					<h2 className="card-title">People</h2>
+          <h1 className="inventory-title">Staff / Rooms / Inventory</h1>
 
-					<div className="form">
-						<input
-							className="input"
-							placeholder="Full name"
-							value={pFullName}
-							onChange={(e) => setPFullName(e.target.value)}
-							disabled={loading}
-						/>
-						<input
-							className="input"
-							placeholder="Role (Vet, Tech...)"
-							value={pRole}
-							onChange={(e) => setPRole(e.target.value)}
-							disabled={loading}
-						/>
-						<input
-							className="input"
-							placeholder="Phone (optional)"
-							value={pPhoneNumber}
-							onChange={(e) => setPPhoneNumber(e.target.value)}
-							disabled={loading}
-						/>
-						<button
-							className="btn primary"
-							type="button"
-							onClick={handleAddPerson}
-							disabled={loading}
-						>
-							Add person
-						</button>
-					</div>
+          {pageError ? <div className="inventory-error">{pageError}</div> : null}
+        </div>
 
-					<div className="list">
-						{peopleSorted.map((p) => (
-							<div key={p.personID} className="row">
-								<div className="row-main">
-									<div className="row-title">{p.fullName}</div>
-									<div className="row-meta">
-										Role: {p.role} · Status: {normalizeStatus(p.status, "available")}
-									</div>
-								</div>
-								<div className="row-actions">
-									<button
-										className="btn"
-										type="button"
-										onClick={() => handleTogglePersonStatus(p)}
-										disabled={loading}
-									>
-										Toggle inUse
-									</button>
-									<button
-										className="btn danger"
-										type="button"
-										onClick={() => handleDeletePerson(p.personID)}
-										disabled={loading}
-									>
-										Delete
-									</button>
-								</div>
-							</div>
-						))}
-						{peopleSorted.length === 0 ? <div className="empty">No people yet.</div> : null}
-					</div>
-				</section>
+        <div className="inventory-grid">
+          {/* STAFF */}
+          <section className="card">
+            <h2 className="card-title">Staff</h2>
 
-				{/* ROOMS */}
-				<section className="card">
-					<h2 className="card-title">Rooms</h2>
+            <div className="form">
+              <label className="label">Name</label>
+              <input
+                className="input"
+                placeholder="Required"
+                value={sName}
+                onChange={(e) => setSName(e.target.value)}
+                disabled={loading}
+              />
 
-					<div className="form">
-						<input
-							className="input"
-							placeholder="Room name (Exam Room 1)"
-							value={rRoomName}
-							onChange={(e) => setRRoomName(e.target.value)}
-							disabled={loading}
-						/>
-						<input
-							className="input"
-							placeholder="Room type (Exam, Surgery...)"
-							value={rRoomType}
-							onChange={(e) => setRRoomType(e.target.value)}
-							disabled={loading}
-						/>
-						<input
-							className="input"
-							type="number"
-							min={1}
-							placeholder="Capacity"
-							value={rCapacity}
-							onChange={(e) => setRCapacity(Number(e.target.value))}
-							disabled={loading}
-						/>
-						<button
-							className="btn primary"
-							type="button"
-							onClick={handleAddRoom}
-							disabled={loading}
-						>
-							Add room
-						</button>
-					</div>
+              <label className="label">Staff Number</label>
+              <input
+                className="input"
+                placeholder="Optional (e.g., 512-555-0101)"
+                value={sStaffNumber}
+                onChange={(e) => setSStaffNumber(e.target.value)}
+                disabled={loading}
+              />
 
-					<div className="list">
-						{roomsSorted.map((r) => (
-							<div key={r.roomID} className="row">
-								<div className="row-main">
-									<div className="row-title">{r.roomName}</div>
-									<div className="row-meta">
-										Type: {r.roomType} · Capacity: {r.capacity} · Status: {normalizeStatus(r.status, "available")}
-									</div>
-								</div>
-								<div className="row-actions">
-									<button
-										className="btn"
-										type="button"
-										onClick={() => handleToggleRoomStatus(r)}
-										disabled={loading}
-									>
-										Toggle inUse
-									</button>
-									<button
-										className="btn danger"
-										type="button"
-										onClick={() => handleDeleteRoom(r.roomID)}
-										disabled={loading}
-									>
-										Delete
-									</button>
-								</div>
-							</div>
-						))}
-						{roomsSorted.length === 0 ? <div className="empty">No rooms yet.</div> : null}
-					</div>
-				</section>
+              <label className="label">Email</label>
+              <input
+                className="input"
+                placeholder="Optional"
+                value={sEmail}
+                onChange={(e) => setSEmail(e.target.value)}
+                disabled={loading}
+              />
 
-				{/* RESOURCES */}
-				<section className="card">
-					<h2 className="card-title">Resources</h2>
+              <label className="label">Position</label>
+              <select
+                className="input"
+                value={sPosition}
+                onChange={(e) => setSPosition(e.target.value as StaffPosition)}
+                disabled={loading}
+              >
+                {STAFF_POSITION_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
 
-					<div className="form">
-						<input
-							className="input"
-							placeholder="Resource name (X-ray Machine)"
-							value={resName}
-							onChange={(e) => setResName(e.target.value)}
-							disabled={loading}
-						/>
-						<input
-							className="input"
-							placeholder="Resource type (Imaging...)"
-							value={resType}
-							onChange={(e) => setResType(e.target.value)}
-							disabled={loading}
-						/>
-						<input
-							className="input"
-							type="number"
-							min={0}
-							placeholder="Quantity"
-							value={resQty}
-							onChange={(e) => setResQty(Number(e.target.value))}
-							disabled={loading}
-						/>
-						<button
-							className="btn primary"
-							type="button"
-							onClick={handleAddResource}
-							disabled={loading}
-						>
-							Add resource
-						</button>
-					</div>
+              <button className="btn primary" type="button" onClick={handleAddStaff} disabled={loading}>
+                Add staff
+              </button>
+            </div>
 
-					<div className="list">
-						{resourcesSorted.map((res) => (
-							<div key={res.resourceID} className="row">
-								<div className="row-main">
-									<div className="row-title">{res.resourceName}</div>
-									<div className="row-meta">
-										Type: {res.resourceType} · Qty: {res.quantity} · Status: {normalizeStatus(res.status, "available")}
-									</div>
-								</div>
-								<div className="row-actions">
-									<button
-										className="btn"
-										type="button"
-										onClick={() => handleUseOne(res)}
-										disabled={loading || res.quantity <= 0}
-									>
-										Use -1
-									</button>
-									<button
-										className="btn"
-										type="button"
-										onClick={() => handleRestockOne(res)}
-										disabled={loading}
-									>
-										Restock +1
-									</button>
-									<button
-										className="btn danger"
-										type="button"
-										onClick={() => handleDeleteResource(res.resourceID)}
-										disabled={loading}
-									>
-										Delete
-									</button>
-								</div>
-							</div>
-						))}
-						{resourcesSorted.length === 0 ? <div className="empty">No resources yet.</div> : null}
-					</div>
-				</section>
-			</div>
-		</div>
-	);
-}
+            <div className="list">
+              {staffSorted.map((s) => (
+                <div key={s.staffID} className="row">
+                  <div className="row-main">
+                    <div className="row-title">{s.name}</div>
+                    <div className="row-meta">
+                      Position: {s.position}
+                      {s.email ? ` · ${s.email}` : ""}
+                      {s.StaffNumber ? ` · ${s.StaffNumber}` : ""}
+                    </div>
+                  </div>
+                  <div className="row-actions">
+                    <button className="btn danger" type="button" onClick={() => handleDeleteStaff(s.staffID)} disabled={loading}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {staffSorted.length === 0 ? <div className="empty">No staff yet.</div> : null}
+            </div>
+          </section>
+
+          {/* ROOMS */}
+          <section className="card">
+            <h2 className="card-title">Rooms</h2>
+
+            <div className="form">
+              <label className="label">Room Type</label>
+              <select
+                className="input"
+                value={rRoomType}
+                onChange={(e) => setRRoomType(e.target.value as RoomType)}
+                disabled={loading}
+              >
+                {ROOM_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+
+              <label className="label">Capacity</label>
+              <input
+                className="input"
+                type="number"
+                min={1}
+                value={rCapacity}
+                onChange={(e) => setRCapacity(Number(e.target.value))}
+                disabled={loading}
+              />
+
+              <button className="btn primary" type="button" onClick={handleAddRoom} disabled={loading}>
+                Add room
+              </button>
+            </div>
+
+            <div className="list">
+              {roomsSorted.map((r) => (
+                <div key={r.roomNumber} className="row">
+                  <div className="row-main">
+                    <div className="row-title">Room #{r.roomNumber}</div>
+                    <div className="row-meta">
+                      Type: {r.roomType} · Capacity: {r.capacity}
+                    </div>
+                  </div>
+                  <div className="row-actions">
+                    <button className="btn danger" type="button" onClick={() => handleDeleteRoom(r.roomNumber)} disabled={loading}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {roomsSorted.length === 0 ? <div className="empty">No rooms yet.</div> : null}
+            </div>
+          </section>
+
+          {/* INVENTORY */}
+          <section className="card">
+            <h2 className="card-title">Inventory Items</h2>
+
+            <div className="form">
+              <label className="label">Category</label>
+              <select className="input" value={iType} onChange={(e) => handleInventoryTypeChange(e.target.value as InventoryType)} disabled={loading}>
+                {INVENTORY_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+
+              {iType === "medicine" ? (
+                <>
+                  <label className="label">Medicine</label>
+                  <select
+                    className="input"
+                    value={selectedNdc ?? ""}
+                    onChange={(e) => setSelectedNdc(e.target.value ? Number(e.target.value) : null)}
+                    disabled={loading}
+                  >
+                    <option value="">Select medicine</option>
+                    {medicinesSorted.map((m) => (
+                      <option key={m.ndc} value={m.ndc}>
+                        {m.medicineName}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <>
+                  <label className="label">Equipment</label>
+                  <select
+                    className="input"
+                    value={selectedEquipmentID ?? ""}
+                    onChange={(e) => setSelectedEquipmentID(e.target.value ? Number(e.target.value) : null)}
+                    disabled={loading}
+                  >
+                    <option value="">Select equipment</option>
+                    {equipmentSorted.map((eq) => (
+                      <option key={eq.equipmentID} value={eq.equipmentID}>
+                        {eq.equipmentType}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              <label className="label">Quantity</label>
+              <input className="input" type="number" min={0} value={iQty} onChange={(e) => setIQty(Number(e.target.value))} disabled={loading} />
+
+              <label className="label">Description</label>
+              <input className="input" placeholder="Optional" value={iDesc} onChange={(e) => setIDesc(e.target.value)} disabled={loading} />
+
+              {iType === "equipment" ? (
+                <label className="checkboxRow">
+                  <input type="checkbox" checked={iInUse} onChange={(e) => setIInUse(e.target.checked)} disabled={loading} />
+                  In use
+                </label>
+              ) : null}
+
+              <button className="btn primary" type="button" onClick={handleAddItem} disabled={loading}>
+                Add item
+              </button>
+            </div>
+
+            <div className="list">
+              {itemsSorted.map((it) => (
+                <div key={it.itemID} className="row">
+                  <div className="row-main">
+                    <div className="row-title">{it.displayName}</div>
+                    <div className="row-meta">
+                      Type: {it.inventoryType} · Qty: {it.quantity}
+                      {it.inventoryType === "equipment" ? ` · In use: ${it.inUse ? "yes" : "no"}` : ""}
+                    </div>
+                    {it.itemDescription ? <div className="row-desc">{it.itemDescription}</div> : null}
+                  </div>
+
+                  <div className="row-actions">
+                    <button className="btn danger" type="button" onClick={() => handleDeleteItem(it.itemID)} disabled={loading}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {itemsSorted.length === 0 ? <div className="empty">No inventory yet.</div> : null}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
