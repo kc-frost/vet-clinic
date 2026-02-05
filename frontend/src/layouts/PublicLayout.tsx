@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import "../styles/publicLayout.css";
 import NavButton from "../components/NavButton";
+import { Link } from "react-router-dom";
 
 export default function PublicLayout() {
   return (
@@ -21,7 +22,7 @@ export default function PublicLayout() {
             {/* Real nav buttons */}
             <NavButton to="/login" className="nav-btn">Login</NavButton>
             <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
-            <NavButton to="/appointments" className="nav-btn">Appointments</NavButton>
+            <Link to="/appointments" className="nav-btn">Appointments</Link>
           </div>
         </nav>
       </header>
