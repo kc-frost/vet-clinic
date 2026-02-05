@@ -17,7 +17,6 @@ export default function PublicLayout() {
             <button type="button" className="nav-btn">Services</button>
             <button type="button" className="nav-btn">Resources</button>
             <button type="button" className="nav-btn">Contact</button>
-            <button type="button" className ="nav-btn">Appointments</button>
 
             {/* Real nav buttons */}
             <NavButton to="/login" className="nav-btn">Login</NavButton>
