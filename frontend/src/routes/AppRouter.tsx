@@ -6,6 +6,7 @@ import StaffLayout from "../layouts/StaffLayout";
 import Home from "../pages/public/Home";
 import Login from "../pages/public/Login";
 import Register from "../pages/public/Register";
+import Appointments from "../pages/public/Appointments";
 
 import Inventory from "../pages/staff/Inventory";
 
@@ -20,6 +21,7 @@ export default function AppRouter() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/appointments" element={<Appointments />} />
         </Route>
 
         {/* Staff routes, separate layout w/ no public header/footer) */}
