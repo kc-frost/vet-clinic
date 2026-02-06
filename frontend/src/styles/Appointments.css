@@ -1,0 +1,11 @@
+.appointments {
+  min-height: calc(100vh - 120px);
+  padding: 48px 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.appointmentsInner {
+  width: 100%;
+  max-width: 900px;
+}
