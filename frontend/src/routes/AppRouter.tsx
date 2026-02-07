@@ -9,7 +9,7 @@ import Register from "../pages/public/Register";
 
 import Inventory from "../pages/staff/Inventory";
 
-import Appointments from "../pages/public/Appointments";
+import ViewAppointments from "../pages/public/ViewAppointments";
 
 
 export default function AppRouter() {
@@ -21,7 +21,7 @@ export default function AppRouter() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/appointments" element={<Appointments />} />
+          <Route path="/appointments" element={<ViewAppointments />} />
         </Route>
 
         {/* Staff routes, separate layout w/ no public header/footer) */}

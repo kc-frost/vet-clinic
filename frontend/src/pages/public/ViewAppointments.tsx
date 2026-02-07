@@ -1,13 +1,13 @@
-import "../../styles/Appointments.css";
+import "../../styles/home.css";
 
 export default function Appointments() {
   return (
     <div className="appointments">
       <div className="appointmentsInner">
-        <section className="Villain">
-          <h1 className="title">Appointments</h1>
+        <section className="hero">
+          <h1 className="title">View Appointments</h1>
           <p className="subtitle">
-            Please make an appointment with the following prompts.
+            View all current and upcoming appointments.
           </p>
         </section>
       </div>
