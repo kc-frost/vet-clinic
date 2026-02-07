@@ -21,7 +21,7 @@ export default function AppRouter() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/appointments" element={<ViewAppointments />} />
+          <Route path="/viewappointments" element={<ViewAppointments />} />
         </Route>
 
         {/* Staff routes, separate layout w/ no public header/footer) */}

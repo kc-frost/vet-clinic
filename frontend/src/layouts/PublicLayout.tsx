@@ -20,7 +20,7 @@ export default function PublicLayout() {
             <button type="button" className="nav-btn">Contact</button>
 
             {/* Real nav buttons */}
-            <Link to="/appointments" className="nav-btn">Appointments</Link>
+            <Link to="/viewappointments" className="nav-btn">View Appointments</Link>
             <NavButton to="/login" className="nav-btn">Login</NavButton>
             <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
           </div>
