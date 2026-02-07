@@ -6,10 +6,10 @@ import StaffLayout from "../layouts/StaffLayout";
 import Home from "../pages/public/Home";
 import Login from "../pages/public/Login";
 import Register from "../pages/public/Register";
-import Appointments from "../pages/public/Appointments";
 
 import Inventory from "../pages/staff/Inventory";
 
+import Appointments from "../pages/public/Appointments";
 
 
 export default function AppRouter() {

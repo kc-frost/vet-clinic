@@ -1,6 +1,7 @@
-import { Link, Outlet } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import "../styles/publicLayout.css";
 import NavButton from "../components/NavButton";
+import { Link } from "react-router-dom";
 
 export default function PublicLayout() {
   return (
@@ -8,7 +9,7 @@ export default function PublicLayout() {
       <header className="public-header">
         <nav className="public-nav">
           <NavButton to="/" className="nav-brand">
-            WEBSITENAME
+            Vet Clinic
           </NavButton>
 
           <div className="nav-right">
