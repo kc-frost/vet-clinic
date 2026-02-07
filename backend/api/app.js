@@ -14,7 +14,14 @@ import equipmentRoutes from "./routes/equipment.js";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+// app.use(cors());
+
+// DO NOT DEPLOY TO MAIN, but can commit to branch
+// origin: "url" of frontend
+app.use(cors({
+  origin: "http://localhost:5173",
+  credentials: true
+}));
 app.use(express.json());
 
 app.get("/api/db-test", async (req, res) => {
