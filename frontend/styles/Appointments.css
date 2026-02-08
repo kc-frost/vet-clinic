@@ -1,0 +1,61 @@
+/* Page Styling*/
+
+.centered {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* applied ONLY to .centered's direct children */
+.centered > h1,
+.centered > p {
+  margin-left: 20px;
+}
+
+.box {
+  background-color: #FFFFFF;
+  min-height: calc(100vh - 120px);
+  border: 2px solid #DBDBDB;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 10px 75px;
+  width: 100%;
+  max-width: 90%;
+}
+
+/* Table Styling */
+/*
+TR = "Table Row"
+TH = "Table Header
+TD = "Table Data"
+*/
+
+table {
+  width: 100%;
+}
+
+tr:hover {
+  background-color: #D6EEEE;
+}
+
+th {
+  color: #585858;
+  background-color:#f3f3f3;
+  padding: 10px;
+  text-align: left;
+  vertical-align: middle;
+  border-radius: 8px;
+}
+
+td {
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  vertical-align: middle;
+  padding: 15px;
+}
+
+.trash-icon {
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+}
