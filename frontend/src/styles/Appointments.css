@@ -7,22 +7,46 @@
 }
 
 /* applied ONLY to .centered's direct children */
-.centered > h1,
-.centered > p {
-  margin-left: 20px;
+.centered > h1 {
+  margin-left: 50px;
 }
 
 .box {
   background-color: #FFFFFF;
   min-height: calc(100vh - 120px);
-  border: 2px solid #DBDBDB;
+  border: 3px solid #DBDBDB;
   border-radius: 8px;
   padding: 15px;
-  margin: 10px 75px;
+  margin: 40px;
   width: 100%;
   max-width: 90%;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+
 }
 
+.square {
+  display: flex;
+  width: 150px;
+  height: 70px;
+  color: red;
+  background-color: red;
+  transition: width 1s, color 1s, background-color 1s, opacity 0.5s;
+  border-radius: 8px;
+
+  line-height: 50px;
+  text-align: center;
+  vertical-align: middle;
+  margin:auto;
+  margin-bottom: 10px;
+  /* opacity: 0; */
+}
+
+/* div.square:hover {
+  background-color: red;
+  color:white;
+  width: 100px;
+  opacity: 1;
+} */
 /* Table Styling */
 /*
 TR = "Table Row"
@@ -31,12 +55,14 @@ TD = "Table Data"
 */
 
 table {
+  border-collapse: collapse;
   width: 100%;
 }
 
 tr:hover {
   background-color: #D6EEEE;
 }
+
 
 th {
   color: #585858;
@@ -48,10 +74,13 @@ th {
 }
 
 td {
+  border-radius: 8px;
   border-bottom: 1px solid #ddd;
   text-align: left;
   vertical-align: middle;
   padding: 15px;
+  /* animation-name: myAnimation;
+  animation-duration: 4s; */
 }
 
 .trash-icon {
@@ -59,4 +88,8 @@ td {
   height: 24px;
   padding: .5px;
   pointer-events: none;
+/* Animations */
+@keyframes myAnimation {
+  from {background-color: red;}
+  to {background-color: yellow;}
 }
