@@ -125,5 +125,8 @@ userID int references customer(userID)
 create table rooms(
 roomNumber int primary key,
 roomType varchar(255),
-capacity int(255)  
+capacity int,
+isOccupied boolean
 );
+
+select * from inventory;

@@ -54,3 +54,9 @@ td {
   padding: 15px;
 }
 
+.trash-icon {
+  width: 24px;
+  height: 24px;
+  padding: .5px;
+  pointer-events: none;
+}
