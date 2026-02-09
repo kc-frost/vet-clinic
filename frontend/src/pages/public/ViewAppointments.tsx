@@ -125,7 +125,7 @@ return (
             );
           })}
 
-          // If no appointments, show this.
+          {/* Show this when no upcoming appointments */}
           {!loading && visibleAppointments.length === 0 && (
             <tr>
               <td colSpan={5}>No upcoming appointments.</td>
