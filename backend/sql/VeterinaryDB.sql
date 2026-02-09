@@ -130,3 +130,10 @@ isOccupied boolean
 );
 
 select * from inventory;
+
+insert appointment(userID, vetID, petID, reason, date) values (67, 6, 7, "My dog kinda weird", '2026-02-14 14:30:00');
+insert appointment(userID, vetID, petID, reason, date) values (6, 7, 67, "My dog still kinda weird", '2026-02-13 12:30:00');
+insert appointment(userID, vetID, petID, reason, date) values (6, 7, 67, "My dog hella weird", '2026-02-14 12:30:00');
+
+select * from appointment;
+
