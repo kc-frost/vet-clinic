@@ -43,7 +43,7 @@
 
 .appt-trash p {
   opacity: 0;
-  transition: opacity 0.3s ease-in;
+  transition: opacity 0.8s;
 }
 
 .appt-trash:hover p {
