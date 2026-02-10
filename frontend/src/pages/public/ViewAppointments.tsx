@@ -65,8 +65,8 @@ export default function Appointments() {
       })
       .sort(
         (a, b) =>
-          parseMySqlDateTime(b.date).getTime() -
-          parseMySqlDateTime(a.date).getTime()
+          parseMySqlDateTime(a.date).getTime() -
+          parseMySqlDateTime(b.date).getTime() 
       );
   }, [appointments]);
 
