@@ -21,32 +21,40 @@
   width: 100%;
   max-width: 90%;
   box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
-
 }
 
-.delete-square {
+.appt-trash {
   display: flex;
-  width: 150px;
-  height: 70px;
-  color: red;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 5px;
+  width: 50px;
+  height: 50px;
   background-color: red;
   transition: width 1s, color 1s, background-color 1s, opacity 0.5s;
   border-radius: 8px;
-
   line-height: 50px;
   text-align: center;
   vertical-align: middle;
   margin:auto;
   margin-bottom: 10px;
-  /* opacity: 0; */
+  overflow:hidden;  /* keeps text within the box */
 }
 
-/* div.square:hover {
+.appt-trash p {
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
+}
+
+.appt-trash:hover p {
+  opacity: 1;
+}
+
+.appt-trash:hover {
   background-color: red;
-  color:white;
   width: 100px;
   opacity: 1;
-} */
+}
 
 /* Table Styling */
 /*

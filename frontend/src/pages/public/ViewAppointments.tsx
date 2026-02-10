@@ -115,6 +115,7 @@ export default function Appointments() {
                     {/* delete button */}
                   <button onClick={() => deleteAppt(a.appointmentID)} className="btn danger appt-trash" aria-label="Delete appointment" title="Delete">
                     <img src={trashIcon} alt="" className="trash-icon" />
+                    <p> Delete </p>
                   </button>
                   </td>
                 </tr>
