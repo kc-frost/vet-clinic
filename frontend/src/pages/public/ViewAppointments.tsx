@@ -97,7 +97,7 @@ export default function Appointments() {
               <th>#️⃣ Appointment ID</th>
               <th>📝 Appointment Type</th>
               <th>📧 User Email</th>
-              <th> Equipment</th>
+              <th>💉 Equipment</th>
               <th>🔧 Action</th>
             </tr>
           </thead>
