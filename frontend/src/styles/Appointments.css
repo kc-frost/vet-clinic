@@ -88,8 +88,4 @@ td {
   height: 24px;
   padding: .5px;
   pointer-events: none;
-/* Animations */
-@keyframes myAnimation {
-  from {background-color: red;}
-  to {background-color: yellow;}
 }

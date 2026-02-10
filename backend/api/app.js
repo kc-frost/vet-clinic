@@ -9,6 +9,9 @@ import resourcesRoutes from "./routes/resources.js";
 import authRoutes from "./routes/auth.js";
 import medicineRoutes from "./routes/medicine.js";
 import equipmentRoutes from "./routes/equipment.js";
+import appointmentsRoutes from "./routes/appointments.js";
+console.log("appointmentsRoutes is:", appointmentsRoutes);
+
 
 
 dotenv.config();
@@ -41,6 +44,7 @@ app.use("/api/resources", resourcesRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/medicine", medicineRoutes);
 app.use("/api/equipment", equipmentRoutes);
+app.use("/api/appointments", appointmentsRoutes);
 
 
 
