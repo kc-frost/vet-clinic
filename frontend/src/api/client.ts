@@ -1,8 +1,4 @@
-//const API_BASE = "/api";
-
-// used to connect to the backend's api route
-// can commit to branch BUT DELETE BEFORE PUSHING TO MAIN. do not deploy this code as is
-const API_BASE = "http://localhost:3001/api";
+const API_BASE = "/api";
 
 type ApiOptions = Omit<RequestInit, "body"> & { body?: unknown };
 
