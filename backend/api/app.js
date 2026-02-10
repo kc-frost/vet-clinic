@@ -10,7 +10,6 @@ import authRoutes from "./routes/auth.js";
 import medicineRoutes from "./routes/medicine.js";
 import equipmentRoutes from "./routes/equipment.js";
 import appointmentsRoutes from "./routes/appointments.js";
-console.log("appointmentsRoutes is:", appointmentsRoutes);
 
 
 

@@ -130,12 +130,3 @@ roomType varchar(255),
 capacity int,
 isOccupied boolean
 );
-
-select * from inventory;
-
-insert appointment(userEmail, equipmentRequired, vetID, petID, reason, date) values ("67@gmail.com", "Syringe maybe?", 6, 7, "My dog kinda weird", '2026-02-14 14:30:00');
-insert appointment(userEmail, equipmentRequired, vetID, petID, reason, date) values ("6767@gmail.com", "Batmobile", 7, 67, "My dog still kinda weird", '2026-02-13 12:30:00');
-insert appointment(userEmail, equipmentRequired, vetID, petID, reason, date) values ("gmail@gmail.com", "Xray Machine", 7, 67, "My dog hella weird", '2026-02-14 12:30:00');
-
-select * from appointment;
-
