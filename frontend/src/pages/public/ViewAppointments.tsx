@@ -97,6 +97,7 @@ export default function Appointments() {
               <th>#️⃣ Appointment ID</th>
               <th>📝 Appointment Type</th>
               <th>📧 User Email</th>
+              <th>💉 Equipment</th>
               <th>🔧 Action</th>
             </tr>
           </thead>
@@ -110,7 +111,8 @@ export default function Appointments() {
                   <td>{dateObj.toLocaleString()}</td>
                   <td>{a.appointmentID}</td>
                   <td>{a.reason}</td>
-                  <td>{a.userID}</td>
+                  <td>{a.userEmail}</td>
+                  <td>{a.equipmentRequired}</td>
                   <td>
                     {/* delete button */}
                   <button onClick={() => deleteAppt(a.appointmentID)} className="btn danger appt-trash" aria-label="Delete appointment" title="Delete">
