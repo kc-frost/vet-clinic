@@ -1,6 +1,8 @@
 export type Appointment = {
-  datetime: string;
   appointmentID: number;
-  appointmentType: string;
-  userEmail: string;
+  userID: number;
+  vetID: number;
+  petID: number;
+  reason: string;
+  date: string;
 };
