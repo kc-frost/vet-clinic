@@ -94,10 +94,10 @@ export default function Appointments() {
           <thead>
             <tr>
               <th>🗓️ Date</th>
-              <th>#️⃣Appointment ID</th>
-              <th>📝Appointment Type</th>
+              <th>#️⃣ Appointment ID</th>
+              <th>📝 Appointment Type</th>
               <th>📧 User Email</th>
-              <th>🔧Action</th>
+              <th>🔧 Action</th>
             </tr>
           </thead>
 
