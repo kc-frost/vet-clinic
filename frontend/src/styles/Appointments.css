@@ -11,7 +11,7 @@
   margin-left: 50px;
 }
 
-.box {
+.appointments-box {
   background-color: #FFFFFF;
   min-height: calc(100vh - 120px);
   border: 3px solid #DBDBDB;
@@ -24,7 +24,7 @@
 
 }
 
-.square {
+.delete-square {
   display: flex;
   width: 150px;
   height: 70px;
@@ -47,6 +47,7 @@
   width: 100px;
   opacity: 1;
 } */
+
 /* Table Styling */
 /*
 TR = "Table Row"
@@ -79,8 +80,6 @@ td {
   text-align: left;
   vertical-align: middle;
   padding: 15px;
-  /* animation-name: myAnimation;
-  animation-duration: 4s; */
 }
 
 .trash-icon {

@@ -83,15 +83,13 @@ export default function Appointments() {
 
   return (
     <div className="centered">
-      <h1>Appointments</h1>
-      <p className="subtitle">View all appointments here</p>
-
+      <h1>View All Appointments</h1>
 
       {/*Show error message, also a loading message for when data is loading. */}
       {pageError && <p className="error">{pageError}</p>}
       {loading && <p>Loading...</p>}
 
-      <div className="box">
+      <div className="appointments-box">
         <table className="appointments-table">
           <thead>
             <tr>
