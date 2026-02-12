@@ -8,7 +8,7 @@ export default function PublicLayout() {
       <header className="public-header">
         <nav className="public-nav">
           <NavButton to="/" className="nav-brand">
-            WEBSITENAME
+            Vet Clinic
           </NavButton>
 
           <div className="nav-right">
@@ -19,7 +19,7 @@ export default function PublicLayout() {
             <button type="button" className="nav-btn">Contact</button>
 
             {/* Real nav buttons */}
-            <NavButton to="/reservation" className="nav-btn">Appointments</NavButton>
+            <NavButton to="/viewappointments" className="nav-btn">View Appointments</NavButton>
             <NavButton to="/login" className="nav-btn">Login</NavButton>
             <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
           </div>
