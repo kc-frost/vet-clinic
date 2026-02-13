@@ -42,11 +42,6 @@ const COL = {
  * =========================================================
  * reasonKey -> resources required per appointment
  * =========================================================
- *
- * IMPORTANT:
- * Keys here are canonical internal keys.
- * DB roomType/equipmentType values are normalized through normalizeResourceKey()
- * so values like "XrayRoom", "xray room", "xray_room" can match.
  */
 const REASON_REQUIREMENTS = {
   wellness_exam: {
@@ -183,8 +178,13 @@ async function fetchAppointmentsInRange(conn, startDate, endDate) {
   const startTs = `${startDate} 00:00:00`;
   const endTs = `${endDate} 23:59:59`;
 
+  // IMPORTANT: return dateStr/startTime explicitly so we do not rely on JS Date timezone parsing
   const sql = `
-    SELECT ${COL.apptId} AS id, ${COL.apptDateTime} AS startAt, ${COL.apptReason} AS reasonKey
+    SELECT
+      ${COL.apptId} AS id,
+      DATE_FORMAT(${COL.apptDateTime}, '%Y-%m-%d') AS dateStr,
+      DATE_FORMAT(${COL.apptDateTime}, '%H:%i') AS startTime,
+      ${COL.apptReason} AS reasonKey
     FROM ${TABLES.appointment}
     WHERE ${COL.apptDateTime} BETWEEN ? AND ?
   `;
@@ -192,13 +192,20 @@ async function fetchAppointmentsInRange(conn, startDate, endDate) {
   return rows;
 }
 
+/**
+ * Expects rows with:
+ * - dateStr: YYYY-MM-DD
+ * - startTime: HH:MM
+ * - reasonKey: string
+ */
 function buildSlotUsage(appts) {
   const usage = {};
 
   for (const a of appts) {
-    const dt = new Date(a.startAt);
-    const dateStr = toDateOnlyUTC(dt);
-    const startTime = `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`;
+    const dateStr = String(a.dateStr || "").trim();
+    const startTime = String(a.startTime || "").trim();
+
+    if (!dateStr || !startTime) continue;
 
     const rk = normalizeReasonKey(a.reasonKey);
     const req = REASON_REQUIREMENTS[rk];
@@ -211,6 +218,7 @@ function buildSlotUsage(appts) {
       const rr = normalizeResourceKey(rtype);
       usage[sk].rooms[rr] = (usage[sk].rooms[rr] || 0) + Number(units);
     }
+
     for (const [etype, units] of Object.entries(req.equipment)) {
       const ee = normalizeResourceKey(etype);
       usage[sk].equipment[ee] = (usage[sk].equipment[ee] || 0) + Number(units);
@@ -346,10 +354,14 @@ router.post("/", async (req, res) => {
 
     const { roomCaps, eqCaps } = await fetchCapacities(conn);
 
-    // lock same-day rows for race-safe capacity check
+    // Lock rows on that day for race-safe capacity check
     const [sameDay] = await conn.query(
       `
-      SELECT ${COL.apptId} AS id, ${COL.apptDateTime} AS startAt, ${COL.apptReason} AS reasonKey
+      SELECT
+        ${COL.apptId} AS id,
+        DATE_FORMAT(${COL.apptDateTime}, '%Y-%m-%d') AS dateStr,
+        DATE_FORMAT(${COL.apptDateTime}, '%H:%i') AS startTime,
+        ${COL.apptReason} AS reasonKey
       FROM ${TABLES.appointment}
       WHERE DATE(${COL.apptDateTime}) = ?
       FOR UPDATE
@@ -372,8 +384,6 @@ router.post("/", async (req, res) => {
     }
 
     const appointmentDateTime = combineDateAndTimeSQL(appointmentDate, startTime);
-
-    // Optional summary field
     const equipmentRequiredSummary = Object.keys(reqForReason.equipment).join(",");
 
     const insertSql = `
