@@ -3,6 +3,8 @@ import { pool } from "../db.js";
 
 const router = Router();
 
+const DEBUG_RESERVATIONS = true; // set false after fixing, MODIFIED
+
 const TABLES = {
   appointment: "appointment",
   rooms: "rooms",
@@ -61,6 +63,10 @@ const SLOT_TEMPLATES = [
   { start: "15:00", end: "16:00" },
 ];
 
+function dbg(...args) {
+  if (DEBUG_RESERVATIONS) console.log("[reservations]", ...args);
+}
+
 function pad2(n) {
   return n < 10 ? `0${n}` : `${n}`;
 }
@@ -95,10 +101,19 @@ function normalizeReasonKey(reasonKey) {
 
 function normalizeResourceKey(v) {
   let s = String(v || "").trim();
+
+  // split camelCase / PascalCase boundaries
   s = s.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+
+  // spaces/hyphens -> underscore
   s = s.replace(/[\s-]+/g, "_");
+
+  // remove non-word except underscore
   s = s.replace(/[^\w]/g, "");
+
+  // collapse multiple underscores
   s = s.replace(/_+/g, "_");
+
   return s.toLowerCase();
 }
 
@@ -141,6 +156,11 @@ async function fetchCapacities(conn) {
     eqCaps[key] = Number(e.qty || 0);
   }
 
+  dbg("raw roomRows:", roomRows);
+  dbg("raw eqRows:", eqRows);
+  dbg("roomCaps:", roomCaps);
+  dbg("eqCaps:", eqCaps);
+
   return { roomCaps, eqCaps };
 }
 
@@ -157,7 +177,10 @@ async function fetchAppointmentsInRange(conn, startDate, endDate) {
     FROM ${TABLES.appointment}
     WHERE ${COL.apptDateTime} BETWEEN ? AND ?
   `;
+
   const [rows] = await conn.query(sql, [startTs, endTs]);
+  dbg("fetchAppointmentsInRange", { startDate, endDate, count: rows.length });
+  dbg("appts sample:", rows.slice(0, 20));
   return rows;
 }
 
@@ -199,6 +222,7 @@ function buildSlotUsage(appts) {
       const rr = normalizeResourceKey(rtype);
       usage[sk].rooms[rr] = (usage[sk].rooms[rr] || 0) + Number(units);
     }
+
     for (const [etype, units] of Object.entries(req.equipment)) {
       const ee = normalizeResourceKey(etype);
       usage[sk].equipment[ee] = (usage[sk].equipment[ee] || 0) + Number(units);
@@ -245,41 +269,6 @@ function buildSlots(startDate, endDate) {
   return out;
 }
 
-// EXTRA HARD GUARD: computes exact used resources for one slot directly from DB
-async function fetchSlotUsageDirect(conn, appointmentDate, startTime) {
-  const ts = combineDateAndTimeSQL(appointmentDate, startTime);
-
-  const sql = `
-    SELECT ${COL.apptReason} AS reasonKey, COUNT(*) AS cnt
-    FROM ${TABLES.appointment}
-    WHERE ${COL.apptDateTime} = ?
-    GROUP BY ${COL.apptReason}
-    FOR UPDATE
-  `;
-  const [rows] = await conn.query(sql, [ts]);
-
-  const used = { rooms: {}, equipment: {} };
-
-  for (const r of rows) {
-    const rk = normalizeReasonKey(r.reasonKey);
-    const req = REASON_REQUIREMENTS[rk];
-    if (!req) continue;
-
-    const count = Number(r.cnt || 0);
-
-    for (const [rtype, units] of Object.entries(req.rooms)) {
-      const rr = normalizeResourceKey(rtype);
-      used.rooms[rr] = (used.rooms[rr] || 0) + count * Number(units);
-    }
-    for (const [etype, units] of Object.entries(req.equipment)) {
-      const ee = normalizeResourceKey(etype);
-      used.equipment[ee] = (used.equipment[ee] || 0) + count * Number(units);
-    }
-  }
-
-  return used;
-}
-
 router.get("/availability", async (req, res) => {
   try {
     const reasonKey = ensureReason(req.query.reasonKey);
@@ -289,7 +278,6 @@ router.get("/availability", async (req, res) => {
     if (!reasonKey) {
       return res.status(400).json({ code: "BAD_REASON", message: "Invalid reasonKey" });
     }
-
     if (!startDate || !endDate) {
       return res.status(400).json({
         code: "BAD_DATE_RANGE",
@@ -304,11 +292,18 @@ router.get("/availability", async (req, res) => {
       const usage = buildSlotUsage(appts);
       const reqForReason = REASON_REQUIREMENTS[reasonKey];
 
+      const probeKey = `${startDate}|11:00`;
+      dbg("availability reasonKey:", reasonKey);
+      dbg("usage[probe 11:00]:", usage[probeKey] || { rooms: {}, equipment: {} });
+      dbg("requirements for reason:", reqForReason);
+
       const available = buildSlots(startDate, endDate).filter((s) => {
         const sk = slotKey(s.date, s.startTime);
         const u = usage[sk] || { rooms: {}, equipment: {} };
         return hasCapacity(reqForReason, u, roomCaps, eqCaps);
       });
+
+      dbg("availability returned slot count:", available.length);
 
       return res.json({ reasonKey, slots: available });
     } finally {
@@ -327,7 +322,6 @@ router.post("/", async (req, res) => {
 
     const reasonRaw = req.body.reasonKey ?? req.body.reasonForVisit;
     const reasonKey = ensureReason(reasonRaw);
-
     const appointmentDate = String(req.body.appointmentDate || "").trim();
 
     let startTime = String(req.body.startTime || "").trim();
@@ -356,12 +350,35 @@ router.post("/", async (req, res) => {
     }
 
     const { roomCaps, eqCaps } = await fetchCapacities(conn);
+
+    const [sameDay] = await conn.query(
+      `
+      SELECT
+        ${COL.apptId} AS id,
+        DATE_FORMAT(${COL.apptDateTime}, '%Y-%m-%d') AS dateStr,
+        DATE_FORMAT(${COL.apptDateTime}, '%H:%i') AS startTime,
+        ${COL.apptReason} AS reasonKey
+      FROM ${TABLES.appointment}
+      WHERE DATE(${COL.apptDateTime}) = ?
+      FOR UPDATE
+      `,
+      [appointmentDate]
+    );
+
+    const usage = buildSlotUsage(sameDay);
+    const sk = slotKey(appointmentDate, startTime);
+    const current = usage[sk] || { rooms: {}, equipment: {} };
     const reqForReason = REASON_REQUIREMENTS[reasonKey];
 
-    // hard guard from direct DB counts at exact slot
-    const current = await fetchSlotUsageDirect(conn, appointmentDate, startTime);
+    dbg("POST payload:", { reasonRaw, reasonKey, appointmentDate, startTime });
+    dbg("POST roomCaps/eqCaps:", { roomCaps, eqCaps });
+    dbg("POST sameDay count:", sameDay.length);
+    dbg("POST usage at slot:", { sk, current });
+    dbg("POST reqForReason:", reqForReason);
 
     const canBook = hasCapacity(reqForReason, current, roomCaps, eqCaps);
+    dbg("POST canBook:", canBook);
+
     if (!canBook) {
       await conn.rollback();
       return res.status(409).json({
