@@ -8,6 +8,7 @@ import Login from "../pages/public/Login";
 import Register from "../pages/public/Register";
 
 import Inventory from "../pages/staff/Inventory";
+import Reservation from "../pages/public/Reservation";
 
 import ViewAppointments from "../pages/public/ViewAppointments";
 
@@ -19,6 +20,7 @@ export default function AppRouter() {
         {/* Public site routes w/  public header/footer */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/reservation" element={<Reservation />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/viewappointments" element={<ViewAppointments />} />
