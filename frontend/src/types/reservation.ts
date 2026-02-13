@@ -1,35 +1,21 @@
-// UI label with backend/internal key convention
 export type ReasonKey =
 	| "wellness_exam"
 	| "vaccination"
-	| "sick_visit"
-	| "injury_general"
 	| "fracture"
-	| "wound_care"
-	| "skin_ear_issue"
-	| "gi_issue"
-	| "medication_refill"
-	| "follow_up"
-	| "other";
+	| "surgery_consult";
 
 export type ReasonOption = {
-	label: string; // UI example, "Wellness Exam"
-	key: ReasonKey; // internal example, "wellness_exam"
+	label: string;
+	key: ReasonKey;
 };
 
 export const REASON_OPTIONS: ReasonOption[] = [
 	{ label: "Wellness Exam", key: "wellness_exam" },
 	{ label: "Vaccination", key: "vaccination" },
-	{ label: "Sick Visit", key: "sick_visit" },
-	{ label: "Injury (General)", key: "injury_general" },
 	{ label: "Fracture Concern", key: "fracture" },
-	{ label: "Wound / Laceration", key: "wound_care" },
-	{ label: "Skin / Ear Issue", key: "skin_ear_issue" },
-	{ label: "GI Issue", key: "gi_issue" },
-	{ label: "Medication Refill", key: "medication_refill" },
-	{ label: "Follow-up", key: "follow_up" },
-	{ label: "Other", key: "other" },
+	{ label: "Surgery Consult", key: "surgery_consult" },
 ];
+
 
 export type PetType = "Dog" | "Cat" | "Other";
 export type PetSex = "Male" | "Female" | "Unknown";

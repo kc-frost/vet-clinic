@@ -85,6 +85,17 @@ function isValidZip(zipRaw: string): boolean {
 	return /^\d{5}(-\d{4})?$/.test(zip);
 }
 
+function extractStartTimeFromSlotId(slotId: string): string {
+	// expected: slot_YYYY-MM-DD_HHMM_HHMM
+	const parts = String(slotId || "").split("_");
+	if (parts.length < 4) return "";
+	const hhmm = parts[2]; // start time segment
+	if (!/^\d{4}$/.test(hhmm)) return "";
+	return `${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)}`;
+}
+
+
+
 export default function Reservation() {
 	const [currentStep, setCurrentStep] = useState<number>(1);
 	const [furthestCompletedStep, setFurthestCompletedStep] = useState<number>(1);
@@ -395,31 +406,46 @@ export default function Reservation() {
 	}
 
     async function handleSubmitAppointment() {
-        if (isSubmitting || isSubmitted) return;
+    if (isSubmitting || isSubmitted) return;
 
-        const isValid = validateStep6();
-        if (!isValid) return;
+    const isValid = validateStep6();
+    if (!isValid) return;
 
-        setIsSubmitting(true);
-        setSubmitMessage("");
+    setIsSubmitting(true);
+    setSubmitMessage("");
 
-        try {
-            const { consentToFormInfo, ...payload } = formData; //removed consentButtonInfo from payload
-            const res = await createReservation(payload);
+    try {
+        // Convert UI slotId -> backend startTime
+        const startTime = extractStartTimeFromSlotId(formData.appointmentTimeSlot);
 
-            setIsSubmitted(true);
-            setSubmitMessage(
-                res.message || "Your appointment request has been submitted successfully."
-            );
-        } catch (err) {
-            const msg =
-                err instanceof Error
-                    ? err.message
-                    : "Failed to submit appointment.";
-            setSubmitMessage(msg);
-        } finally {
-            setIsSubmitting(false);
+        if (!startTime) {
+        setSubmitMessage("Invalid appointment time slot format.");
+        return;
         }
+
+        // Build payload expected by backend /api/reservations
+        const payload = {
+        reasonKey: formData.reasonForVisit as ReasonKey,
+        appointmentDate: formData.appointmentDate,
+        startTime,
+        userEmail: formData.email?.trim() || null,
+        vetID: null,
+        petID: null,
+        };
+
+        const res = await createReservation(payload);
+
+        setIsSubmitted(true);
+        setSubmitMessage(
+        res.message || "Your appointment request has been submitted successfully."
+        );
+    } catch (err) {
+        const msg =
+        err instanceof Error ? err.message : "Failed to submit appointment.";
+        setSubmitMessage(msg);
+    } finally {
+        setIsSubmitting(false);
+    }
     }
 
 	function handleNext() {
