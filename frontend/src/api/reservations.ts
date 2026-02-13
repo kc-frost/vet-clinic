@@ -20,18 +20,17 @@ export async function getAvailabilityByReason(
 	});
 
 	return api<AvailabilityResponse>(
-		`/appointments/availability?${params.toString()}`
+		`/reservations/availability?${params.toString()}`
 	);
 }
 
 /**
  * Submit final reservation payload.
- * consentToFormInfo is UI-only and intentionally excluded.
  */
 export async function createReservation(
 	payload: CreateReservationPayload
 ): Promise<{ message: string; reservationId?: string }> {
-	return api<{ message: string; reservationId?: string }>("/appointments", {
+	return api<{ message: string; reservationId?: string }>("/reservations", {
 		method: "POST",
 		body: payload,
 	});

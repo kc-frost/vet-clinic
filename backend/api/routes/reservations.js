@@ -4,361 +4,349 @@ import { pool } from "../db.js";
 const router = Router();
 
 /**
- * Frontend reason keys (contract source of truth)
+ * =========================================================
+ * DB column/table mappings (aligned to your schema usage)
+ * =========================================================
  */
-const REASON_KEYS = new Set([
-  "wellness_exam",
-  "vaccination",
-  "sick_visit",
-  "injury_general",
-  "fracture",
-  "wound_care",
-  "skin_ear_issue",
-  "gi_issue",
-  "medication_refill",
-  "follow_up",
-  "other",
-]);
+const TABLES = {
+  appointment: "appointment",
+  rooms: "rooms",
+  equipment: "equipment",
+};
+
+const COL = {
+  // appointment
+  apptId: "appointmentID",
+  apptDateTime: "date",
+  apptReason: "reason",
+  apptUserEmail: "userEmail",
+  apptVetID: "vetID",
+  apptPetID: "petID",
+  apptEquipmentRequired: "equipmentRequired",
+
+  // rooms
+  roomType: "roomType",
+  roomQty: "quantityAvailable",
+
+  // equipment
+  eqType: "equipmentType",
+  eqQty: "quantityAvailable",
+};
 
 /**
- * We generate a simple, stable set of bookable slots per day.
- * SlotId format must match frontend expectation:
- * slot_YYYY-MM-DD_HHMM_HHMM_roomX
+ * =========================================================
+ * reasonKey -> resources required per appointment
+ * Adjust keys to match frontend reason keys
+ * =========================================================
  */
+const REASON_REQUIREMENTS = {
+  wellness_exam: {
+    rooms: { exam_room: 1 },
+    equipment: {},
+  },
+  fracture: {
+    rooms: { xray_room: 1 },
+    equipment: { xray_machine: 1 },
+  },
+  surgery_consult: {
+    rooms: { consult_room: 1 },
+    equipment: { ultrasound: 1 },
+  },
+  vaccination: {
+    rooms: { exam_room: 1 },
+    equipment: {},
+  },
+};
+
 const SLOT_TEMPLATES = [
-  { startHHMM: "0900", endHHMM: "1000", room: "roomA" },
-  { startHHMM: "1000", endHHMM: "1100", room: "roomA" },
-  { startHHMM: "1100", endHHMM: "1200", room: "roomA" },
-  { startHHMM: "1300", endHHMM: "1400", room: "roomB" },
-  { startHHMM: "1400", endHHMM: "1500", room: "roomB" },
-  { startHHMM: "1500", endHHMM: "1600", room: "roomB" },
+  { start: "09:00", end: "10:00" },
+  { start: "10:00", end: "11:00" },
+  { start: "11:00", end: "12:00" },
+  { start: "13:00", end: "14:00" },
+  { start: "14:00", end: "15:00" },
+  { start: "15:00", end: "16:00" },
 ];
 
-function isYYYYMMDD(s) {
-  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+function pad2(n) {
+  return n < 10 ? `0${n}` : `${n}`;
 }
 
-function localMidnight(dateStrYYYYMMDD) {
-  const [y, m, d] = dateStrYYYYMMDD.split("-").map(Number);
-  return new Date(y, m - 1, d, 0, 0, 0, 0);
+function toDateOnlyUTC(d) {
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 
-function todayLocalMidnight() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+function addDaysUTC(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return toDateOnlyUTC(d);
 }
 
-function hhmmToColon(hhmm) {
-  return `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
-}
-
-function toDisplayLabel(startHHMM, endHHMM) {
-  return `${hhmmToColon(startHHMM)} - ${hhmmToColon(endHHMM)}`;
-}
-
-function slotIdFor(dateYYYYMMDD, startHHMM, endHHMM, room) {
-  return `slot_${dateYYYYMMDD}_${startHHMM}_${endHHMM}_${room}`;
-}
-
-function generateSlotsForDate(dateYYYYMMDD) {
-  return SLOT_TEMPLATES.map((t) => ({
-    slotId: slotIdFor(dateYYYYMMDD, t.startHHMM, t.endHHMM, t.room),
-    date: dateYYYYMMDD,
-    startTime: hhmmToColon(t.startHHMM),
-    endTime: hhmmToColon(t.endHHMM),
-    displayLabel: toDisplayLabel(t.startHHMM, t.endHHMM),
-  }));
-}
-
-function dateRangeInclusive(startYYYYMMDD, endYYYYMMDD) {
-  const start = localMidnight(startYYYYMMDD);
-  const end = localMidnight(endYYYYMMDD);
+function dateRange(startDate, endDate) {
   const out = [];
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    out.push(`${y}-${m}-${dd}`);
+  let cur = startDate;
+  while (cur <= endDate) {
+    out.push(cur);
+    cur = addDaysUTC(cur, 1);
   }
   return out;
 }
 
-/**
- * Parse: slot_YYYY-MM-DD_HHMM_HHMM_roomX  -> { date, startHHMM, endHHMM, room }
- */
-function parseSlotId(slotId) {
-  if (typeof slotId !== "string") return null;
-  const parts = slotId.split("_");
-  if (parts.length < 5) return null;
-  if (parts[0] !== "slot") return null;
+function combineDateAndTimeSQL(dateStr, hhmm) {
+  return `${dateStr} ${hhmm}:00`;
+}
 
-  const date = parts[1];
-  const startHHMM = parts[2];
-  const endHHMM = parts[3];
-  const room = parts.slice(4).join("_"); // in case room name has underscores
+function normalizeReasonKey(reasonKey) {
+  return String(reasonKey || "").trim().toLowerCase();
+}
 
-  if (!isYYYYMMDD(date)) return null;
-  if (!/^\d{4}$/.test(startHHMM) || !/^\d{4}$/.test(endHHMM)) return null;
+function ensureReason(reasonKey) {
+  const k = normalizeReasonKey(reasonKey);
+  return REASON_REQUIREMENTS[k] ? k : null;
+}
 
-  return { date, startHHMM, endHHMM, room };
+function slotKey(dateStr, startTime) {
+  return `${dateStr}|${startTime}`;
+}
+
+async function fetchCapacities(conn) {
+  const roomSql = `
+    SELECT ${COL.roomType} AS type, COALESCE(SUM(${COL.roomQty}),0) AS qty
+    FROM ${TABLES.rooms}
+    GROUP BY ${COL.roomType}
+  `;
+  const eqSql = `
+    SELECT ${COL.eqType} AS type, COALESCE(SUM(${COL.eqQty}),0) AS qty
+    FROM ${TABLES.equipment}
+    GROUP BY ${COL.eqType}
+  `;
+
+  const [roomRows] = await conn.query(roomSql);
+  const [eqRows] = await conn.query(eqSql);
+
+  const roomCaps = {};
+  const eqCaps = {};
+
+  for (const r of roomRows) roomCaps[String(r.type)] = Number(r.qty || 0);
+  for (const e of eqRows) eqCaps[String(e.type)] = Number(e.qty || 0);
+
+  return { roomCaps, eqCaps };
+}
+
+async function fetchAppointmentsInRange(conn, startDate, endDate) {
+  const startTs = `${startDate} 00:00:00`;
+  const endTs = `${endDate} 23:59:59`;
+
+  const sql = `
+    SELECT ${COL.apptId} AS id, ${COL.apptDateTime} AS startAt, ${COL.apptReason} AS reasonKey
+    FROM ${TABLES.appointment}
+    WHERE ${COL.apptDateTime} BETWEEN ? AND ?
+  `;
+  const [rows] = await conn.query(sql, [startTs, endTs]);
+  return rows;
+}
+
+function buildSlotUsage(appts) {
+  const usage = {};
+
+  for (const a of appts) {
+    const dt = new Date(a.startAt);
+    const dateStr = toDateOnlyUTC(dt);
+    const startTime = `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`;
+
+    const rk = normalizeReasonKey(a.reasonKey);
+    const req = REASON_REQUIREMENTS[rk];
+    if (!req) continue;
+
+    const sk = slotKey(dateStr, startTime);
+    if (!usage[sk]) usage[sk] = { rooms: {}, equipment: {} };
+
+    for (const [rtype, units] of Object.entries(req.rooms)) {
+      usage[sk].rooms[rtype] = (usage[sk].rooms[rtype] || 0) + Number(units);
+    }
+    for (const [etype, units] of Object.entries(req.equipment)) {
+      usage[sk].equipment[etype] = (usage[sk].equipment[etype] || 0) + Number(units);
+    }
+  }
+
+  return usage;
+}
+
+function hasCapacity(requirements, currentUsage, roomCaps, eqCaps) {
+  for (const [rtype, needed] of Object.entries(requirements.rooms)) {
+    const cap = Number(roomCaps[rtype] || 0);
+    const used = Number(currentUsage.rooms?.[rtype] || 0);
+    if (used + Number(needed) > cap) return false;
+  }
+  for (const [etype, needed] of Object.entries(requirements.equipment)) {
+    const cap = Number(eqCaps[etype] || 0);
+    const used = Number(currentUsage.equipment?.[etype] || 0);
+    if (used + Number(needed) > cap) return false;
+  }
+  return true;
+}
+
+function buildSlots(startDate, endDate) {
+  const days = dateRange(startDate, endDate);
+  const out = [];
+
+  for (const d of days) {
+    for (const t of SLOT_TEMPLATES) {
+      out.push({
+        slotId: `slot_${d}_${t.start.replace(":", "")}_${t.end.replace(":", "")}`,
+        date: d,
+        startTime: t.start,
+        endTime: t.end,
+        displayLabel: `${t.start} - ${t.end}`,
+      });
+    }
+  }
+
+  return out;
 }
 
 /**
- * Convert slot -> DATETIME string "YYYY-MM-DD HH:MM:00"
- * We'll store the appointment start time in appointment.date (DATETIME).
- */
-function slotToDatetimeString(slotId) {
-  const parsed = parseSlotId(slotId);
-  if (!parsed) return null;
-  const hh = parsed.startHHMM.slice(0, 2);
-  const mm = parsed.startHHMM.slice(2);
-  return `${parsed.date} ${hh}:${mm}:00`;
-}
-
-/**
- * GET /api/appointments/availability
- * Query: reasonKey, startDate, endDate
- * Response: { reasonKey, slots: [...] }
+ * GET /api/reservations/availability
+ * query: reasonKey, startDate, endDate
  */
 router.get("/availability", async (req, res) => {
   try {
-    const { reasonKey, startDate, endDate } = req.query;
+    const reasonKey = ensureReason(req.query.reasonKey);
+    const startDate = String(req.query.startDate || "").trim();
+    const endDate = String(req.query.endDate || "").trim();
 
-    if (!REASON_KEYS.has(reasonKey)) {
-      return res.status(400).json({
-        message: "Invalid reasonKey",
-        code: "INVALID_REASON_KEY",
-      });
+    if (!reasonKey) {
+      return res.status(400).json({ code: "BAD_REASON", message: "Invalid reasonKey" });
     }
-    if (!isYYYYMMDD(startDate) || !isYYYYMMDD(endDate)) {
+    if (!startDate || !endDate) {
       return res.status(400).json({
-        message: "startDate and endDate must be YYYY-MM-DD",
-        code: "INVALID_DATE_FORMAT",
-      });
-    }
-
-    const start = localMidnight(startDate);
-    const end = localMidnight(endDate);
-    if (start > end) {
-      return res.status(400).json({
-        message: "startDate must be <= endDate",
-        code: "INVALID_DATE_RANGE",
+        code: "BAD_DATE_RANGE",
+        message: "startDate and endDate are required (YYYY-MM-DD)",
       });
     }
 
-    // Pull existing appointment start times in that date window
-    // Your DB stores a single datetime column named `date`.
-    const [rows] = await pool.query(
-      `
-      SELECT date
-      FROM appointment
-      WHERE date >= ? AND date < DATE_ADD(?, INTERVAL 1 DAY)
-      `,
-      [`${startDate} 00:00:00`, `${endDate} 00:00:00`]
-    );
+    const conn = await pool.getConnection();
+    try {
+      const { roomCaps, eqCaps } = await fetchCapacities(conn);
+      const appts = await fetchAppointmentsInRange(conn, startDate, endDate);
+      const usage = buildSlotUsage(appts);
+      const reqForReason = REASON_REQUIREMENTS[reasonKey];
 
-    // Convert existing appointment DATETIMEs into slotIds so we can filter.
-    // We only mark conflicts for times that match our slot templates.
-    const bookedSlotIds = new Set();
-    for (const r of rows) {
-      const dt = new Date(r.date);
-      const y = dt.getFullYear();
-      const m = String(dt.getMonth() + 1).padStart(2, "0");
-      const d = String(dt.getDate()).padStart(2, "0");
-      const hh = String(dt.getHours()).padStart(2, "0");
-      const mm = String(dt.getMinutes()).padStart(2, "0");
-      const dateStr = `${y}-${m}-${d}`;
-      const hhmm = `${hh}${mm}`;
+      const available = buildSlots(startDate, endDate).filter((s) => {
+        const sk = slotKey(s.date, s.startTime);
+        const u = usage[sk] || { rooms: {}, equipment: {} };
+        return hasCapacity(reqForReason, u, roomCaps, eqCaps);
+      });
 
-      // If booked time matches one of our templates, consider that slot booked.
-      for (const t of SLOT_TEMPLATES) {
-        if (t.startHHMM === hhmm) {
-          bookedSlotIds.add(slotIdFor(dateStr, t.startHHMM, t.endHHMM, t.room));
-        }
-      }
+      return res.json({ reasonKey, slots: available });
+    } finally {
+      conn.release();
     }
-
-    const days = dateRangeInclusive(startDate, endDate);
-    const allSlots = days.flatMap((day) => generateSlotsForDate(day));
-    const availableSlots = allSlots.filter((s) => !bookedSlotIds.has(s.slotId));
-
-    return res.status(200).json({
-      reasonKey,
-      slots: availableSlots,
-    });
   } catch (e) {
-    return res.status(500).json({ message: e.message, code: "SERVER_ERROR" });
+    return res.status(500).json({ code: "SERVER_ERROR", message: e.message });
   }
 });
 
 /**
- * POST /api/appointments
- * Contract payload is large, but your DB stores a smaller subset:
- * - userEmail (from email)
- * - reason (from reasonForVisit or reasonDetails)
- * - date (DATETIME derived from appointmentTimeSlot)
- * - vetID, petID, equipmentRequired (optional if you don’t have them yet)
+ * POST /api/reservations
+ * body supports:
+ * - reasonKey OR reasonForVisit
+ * - appointmentDate (YYYY-MM-DD)
+ * - startTime (HH:MM) OR appointmentTimeSlot ("HH:MM - HH:MM")
+ * - userEmail, vetID, petID
  */
 router.post("/", async (req, res) => {
+  const conn = await pool.getConnection();
+
   try {
-    const body = req.body || {};
+    await conn.beginTransaction();
 
-    // Minimal required for your DB + frontend flow
-    const missing = [];
-    if (!body.email) missing.push("email");
-    if (!body.reasonForVisit) missing.push("reasonForVisit");
-    if (!body.appointmentDate) missing.push("appointmentDate");
-    if (!body.appointmentTimeSlot) missing.push("appointmentTimeSlot");
+    const reasonRaw = req.body.reasonKey ?? req.body.reasonForVisit;
+    const reasonKey = ensureReason(reasonRaw);
 
-    if (missing.length) {
+    const appointmentDate = String(req.body.appointmentDate || "").trim();
+
+    let startTime = String(req.body.startTime || "").trim();
+    if (!startTime) {
+      const s = String(req.body.appointmentTimeSlot || "").trim();
+      if (s.includes("-")) startTime = s.split("-")[0].trim();
+    }
+
+    if (!reasonKey) {
+      await conn.rollback();
+      return res.status(400).json({ code: "BAD_REASON", message: "Invalid reason key" });
+    }
+    if (!appointmentDate || !startTime) {
+      await conn.rollback();
       return res.status(400).json({
-        message: `Missing required fields: ${missing.join(", ")}`,
-        code: "MISSING_DATA",
-        details: { missing },
+        code: "BAD_INPUT",
+        message: "appointmentDate and startTime (or appointmentTimeSlot) are required",
       });
     }
 
-    if (!REASON_KEYS.has(body.reasonForVisit)) {
-      return res.status(400).json({
-        message: "Invalid reasonForVisit",
-        code: "INVALID_REASON_KEY",
-      });
+    const validStart = SLOT_TEMPLATES.some((t) => t.start === startTime);
+    if (!validStart) {
+      await conn.rollback();
+      return res.status(400).json({ code: "BAD_SLOT", message: "Invalid slot start time" });
     }
 
-    if (!isYYYYMMDD(body.appointmentDate)) {
-      return res.status(400).json({
-        message: "appointmentDate must be YYYY-MM-DD",
-        code: "INVALID_DATE_FORMAT",
-      });
-    }
+    const { roomCaps, eqCaps } = await fetchCapacities(conn);
 
-    // Must not be in the past (date-level check)
-    if (localMidnight(body.appointmentDate) < todayLocalMidnight()) {
-      return res.status(400).json({
-        message: "Appointment date cannot be in the past",
-        code: "PAST_DATE",
-      });
-    }
-
-    // Slot must match the chosen date and our templates
-    const parsed = parseSlotId(body.appointmentTimeSlot);
-    if (!parsed || parsed.date !== body.appointmentDate) {
-      return res.status(400).json({
-        message: "appointmentTimeSlot is invalid for the selected date",
-        code: "INVALID_SLOT",
-      });
-    }
-
-    const validSlotIds = new Set(
-      generateSlotsForDate(body.appointmentDate).map((s) => s.slotId)
-    );
-    if (!validSlotIds.has(body.appointmentTimeSlot)) {
-      return res.status(400).json({
-        message: "appointmentTimeSlot is not a valid bookable slot",
-        code: "INVALID_SLOT",
-      });
-    }
-
-    // Convert slot to DATETIME for storage in `appointment.date`
-    const apptDatetime = slotToDatetimeString(body.appointmentTimeSlot);
-    if (!apptDatetime) {
-      return res.status(400).json({
-        message: "Could not parse appointmentTimeSlot",
-        code: "INVALID_SLOT",
-      });
-    }
-
-    // Conflict: same exact datetime already booked
-    const [conflictRows] = await pool.query(
-      `SELECT 1 FROM appointment WHERE date = ? LIMIT 1`,
-      [apptDatetime]
-    );
-
-    if (conflictRows.length > 0) {
-      return res.status(409).json({
-        message:
-          "Selected time slot is no longer available. Please choose another slot.",
-        code: "CONFLICT",
-      });
-    }
-
-    // Build DB insert
-    // Your table requires: userEmail, reason, date
-    // vetID/petID/equipmentRequired may be optional depending on schema constraints.
-    const userEmail = body.email;
-    const reason = body.reasonDetails
-      ? `${body.reasonForVisit}: ${body.reasonDetails}`
-      : body.reasonForVisit;
-
-    // Optional mapping (only include if provided, otherwise insert NULL)
-    const vetID = body.vetID ?? null;
-    const petID = body.petID ?? null;
-    const equipmentRequired = body.equipmentRequired ?? null;
-
-    const [result] = await pool.execute(
+    // lock same day appointments during capacity check to reduce race conditions
+    const [sameDay] = await conn.query(
       `
-      INSERT INTO appointment (userEmail, vetID, petID, reason, date, equipmentRequired)
-      VALUES (?, ?, ?, ?, ?, ?)
+      SELECT ${COL.apptId} AS id, ${COL.apptDateTime} AS startAt, ${COL.apptReason} AS reasonKey
+      FROM ${TABLES.appointment}
+      WHERE DATE(${COL.apptDateTime}) = ?
+      FOR UPDATE
       `,
-      [userEmail, vetID, petID, reason, apptDatetime, equipmentRequired]
+      [appointmentDate]
     );
+
+    const usage = buildSlotUsage(sameDay);
+    const sk = slotKey(appointmentDate, startTime);
+    const current = usage[sk] || { rooms: {}, equipment: {} };
+    const reqForReason = REASON_REQUIREMENTS[reasonKey];
+
+    const canBook = hasCapacity(reqForReason, current, roomCaps, eqCaps);
+    if (!canBook) {
+      await conn.rollback();
+      return res.status(409).json({
+        code: "NO_CAPACITY",
+        message: "Selected slot is no longer available for this reason",
+      });
+    }
+
+    const appointmentDateTime = combineDateAndTimeSQL(appointmentDate, startTime);
+
+    // Store compact equipment summary for now (if column exists)
+    const equipmentRequiredSummary = Object.keys(reqForReason.equipment).join(",");
+
+    const insertSql = `
+      INSERT INTO ${TABLES.appointment}
+      (${COL.apptUserEmail}, ${COL.apptVetID}, ${COL.apptPetID}, ${COL.apptReason}, ${COL.apptDateTime}, ${COL.apptEquipmentRequired})
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    const [result] = await conn.query(insertSql, [
+      req.body.userEmail ?? null,
+      req.body.vetID ?? null,
+      req.body.petID ?? null,
+      reasonKey,
+      appointmentDateTime,
+      equipmentRequiredSummary,
+    ]);
+
+    await conn.commit();
 
     return res.status(201).json({
-      message: "Appointment created successfully",
-      reservationId: `apt_${result.insertId}`,
+      message: "Reservation created",
+      reservationId: result.insertId,
     });
   } catch (e) {
-    return res.status(500).json({ message: e.message, code: "SERVER_ERROR" });
-  }
-});
-
-/**
- * GET /api/appointments
- * For Part 5: current + future only, sorted by appointment start time.
- * Your rubric wants: ID, Item Reserved, User Email, Start Date, End Date, delete.
- * Your schema currently only has `date` (start) and no end time or item name.
- * This endpoint returns what exists now; the frontend "View All" page can adapt.
- */
-router.get("/", async (req, res) => {
-  try {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    const todayStr = `${yyyy}-${mm}-${dd} 00:00:00`;
-
-    const [rows] = await pool.query(
-      `
-      SELECT appointmentID, userEmail, vetID, petID, reason, date, equipmentRequired
-      FROM appointment
-      WHERE date >= ?
-      ORDER BY date ASC
-      `,
-      [todayStr]
-    );
-
-    return res.json(rows);
-  } catch (e) {
-    return res.status(500).json({ message: e.message, code: "SERVER_ERROR" });
-  }
-});
-
-/**
- * DELETE /api/appointments/:id
- */
-router.delete("/:id", async (req, res) => {
-  try {
-    const [result] = await pool.execute(
-      `DELETE FROM appointment WHERE appointmentID = ?`,
-      [req.params.id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Not found", code: "NOT_FOUND" });
-    }
-    return res.status(204).send();
-  } catch (e) {
-    return res.status(500).json({ message: e.message, code: "SERVER_ERROR" });
+    await conn.rollback();
+    return res.status(500).json({ code: "SERVER_ERROR", message: e.message });
+  } finally {
+    conn.release();
   }
 });
 
