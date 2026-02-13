@@ -4,6 +4,7 @@ import { pool } from "../db.js";
 const router = Router();
 
 /**
+ * ACTUALLY MODIFIED?
  * =========================================================
  * DB column/table mappings (aligned to your schema usage)
  * =========================================================
@@ -138,6 +139,45 @@ function slotKey(dateStr, startTime) {
   return `${dateStr}|${startTime}`;
 }
 
+/**
+ * Accepts:
+ * - Date object
+ * - "YYYY-MM-DD HH:MM:SS"
+ * - "YYYY-MM-DDTHH:MM:SS(.sss)Z"
+ * Returns: { dateStr: "YYYY-MM-DD", startTime: "HH:MM" } or null
+ */
+function coerceDateTimeParts(value) {
+  if (value == null) return null;
+
+  // Date object from mysql2 (depending on connection options)
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return {
+      dateStr: toDateOnlyUTC(value),
+      startTime: `${pad2(value.getUTCHours())}:${pad2(value.getUTCMinutes())}`,
+    };
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  // exact SQL-like string
+  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+    const [d, t] = raw.split(" ");
+    return { dateStr: d, startTime: t.slice(0, 5) };
+  }
+
+  // ISO string fallback
+  const dt = new Date(raw);
+  if (!Number.isNaN(dt.getTime())) {
+    return {
+      dateStr: toDateOnlyUTC(dt),
+      startTime: `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`,
+    };
+  }
+
+  return null;
+}
+
 async function fetchCapacities(conn) {
   // Room capacity from rooms.capacity grouped by roomType
   const roomSql = `
@@ -147,7 +187,6 @@ async function fetchCapacities(conn) {
   `;
 
   // Equipment capacity from inventory.quantity joined to equipment via equipmentID
-  // ignoring inventory.inUse as requested
   const eqSql = `
     SELECT e.${COL.eqType} AS type, COALESCE(SUM(i.${COL.invQty}),0) AS qty
     FROM ${TABLES.inventory} i
@@ -178,12 +217,11 @@ async function fetchAppointmentsInRange(conn, startDate, endDate) {
   const startTs = `${startDate} 00:00:00`;
   const endTs = `${endDate} 23:59:59`;
 
-  // IMPORTANT: return dateStr/startTime explicitly so we do not rely on JS Date timezone parsing
+  // Return raw datetime + reason for robust parsing in JS
   const sql = `
     SELECT
       ${COL.apptId} AS id,
-      DATE_FORMAT(${COL.apptDateTime}, '%Y-%m-%d') AS dateStr,
-      DATE_FORMAT(${COL.apptDateTime}, '%H:%i') AS startTime,
+      ${COL.apptDateTime} AS startAt,
       ${COL.apptReason} AS reasonKey
     FROM ${TABLES.appointment}
     WHERE ${COL.apptDateTime} BETWEEN ? AND ?
@@ -193,37 +231,25 @@ async function fetchAppointmentsInRange(conn, startDate, endDate) {
 }
 
 /**
- * Expects rows with:
- * - dateStr: YYYY-MM-DD
- * - startTime: HH:MM
- * - reasonKey: string
+ * Expects rows with one of:
+ * - { startAt, reasonKey }
+ * - { dateStr, startTime, reasonKey }
  */
 function buildSlotUsage(appts) {
   const usage = {};
 
   for (const a of appts) {
-    // Supports both shapes:
-    // 1) from fetchAppointmentsInRange: { dateStr, startTime, reasonKey }
-    // 2) from FOR UPDATE query:        { startAt, reasonKey }
     let dateStr = "";
     let startTime = "";
 
     if (a.dateStr && a.startTime) {
-      dateStr = String(a.dateStr);
-      startTime = String(a.startTime).slice(0, 5); // "HH:MM"
-    } else if (a.startAt) {
-      // handle mysql DATETIME string "YYYY-MM-DD HH:MM:SS"
-      const raw = String(a.startAt);
-      if (raw.includes(" ")) {
-        const [d, t] = raw.split(" ");
-        dateStr = d;
-        startTime = t.slice(0, 5);
-      } else {
-        const dt = new Date(raw);
-        if (!Number.isNaN(dt.getTime())) {
-          dateStr = toDateOnlyUTC(dt);
-          startTime = `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`;
-        }
+      dateStr = String(a.dateStr).slice(0, 10);
+      startTime = String(a.startTime).slice(0, 5);
+    } else {
+      const parts = coerceDateTimeParts(a.startAt);
+      if (parts) {
+        dateStr = parts.dateStr;
+        startTime = parts.startTime;
       }
     }
 
@@ -375,13 +401,12 @@ router.post("/", async (req, res) => {
 
     const { roomCaps, eqCaps } = await fetchCapacities(conn);
 
-    // Lock rows on that day for race-safe capacity check
+    // Lock all rows for that day to avoid race conditions
     const [sameDay] = await conn.query(
       `
       SELECT
         ${COL.apptId} AS id,
-        DATE_FORMAT(${COL.apptDateTime}, '%Y-%m-%d') AS dateStr,
-        DATE_FORMAT(${COL.apptDateTime}, '%H:%i') AS startTime,
+        ${COL.apptDateTime} AS startAt,
         ${COL.apptReason} AS reasonKey
       FROM ${TABLES.appointment}
       WHERE DATE(${COL.apptDateTime}) = ?
