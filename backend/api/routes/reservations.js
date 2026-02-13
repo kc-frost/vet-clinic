@@ -3,12 +3,6 @@ import { pool } from "../db.js";
 
 const router = Router();
 
-/**
- * ACTUALLY MODIFIED?
- * =========================================================
- * DB column/table mappings (aligned to your schema usage)
- * =========================================================
- */
 const TABLES = {
   appointment: "appointment",
   rooms: "rooms",
@@ -39,11 +33,6 @@ const COL = {
   invQty: "quantity",
 };
 
-/**
- * =========================================================
- * reasonKey -> resources required per appointment
- * =========================================================
- */
 const REASON_REQUIREMENTS = {
   wellness_exam: {
     rooms: { checkup_room: 1 },
@@ -104,29 +93,12 @@ function normalizeReasonKey(reasonKey) {
   return String(reasonKey || "").trim().toLowerCase();
 }
 
-/**
- * Normalize resource keys from DB/user/config into canonical snake-style keys.
- * Examples:
- * "XrayRoom" -> "xray_room"
- * "xray room" -> "xray_room"
- * "CheckupRoom" -> "checkup_room"
- * "Dog Cage" -> "dog_cage"
- */
 function normalizeResourceKey(v) {
   let s = String(v || "").trim();
-
-  // split camelCase / PascalCase boundaries
   s = s.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
-
-  // convert spaces/hyphens to underscore
   s = s.replace(/[\s-]+/g, "_");
-
-  // remove non-word chars except underscore
   s = s.replace(/[^\w]/g, "");
-
-  // collapse repeated underscores
   s = s.replace(/_+/g, "_");
-
   return s.toLowerCase();
 }
 
@@ -139,54 +111,13 @@ function slotKey(dateStr, startTime) {
   return `${dateStr}|${startTime}`;
 }
 
-/**
- * Accepts:
- * - Date object
- * - "YYYY-MM-DD HH:MM:SS"
- * - "YYYY-MM-DDTHH:MM:SS(.sss)Z"
- * Returns: { dateStr: "YYYY-MM-DD", startTime: "HH:MM" } or null
- */
-function coerceDateTimeParts(value) {
-  if (value == null) return null;
-
-  // Date object from mysql2 (depending on connection options)
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return {
-      dateStr: toDateOnlyUTC(value),
-      startTime: `${pad2(value.getUTCHours())}:${pad2(value.getUTCMinutes())}`,
-    };
-  }
-
-  const raw = String(value).trim();
-  if (!raw) return null;
-
-  // exact SQL-like string
-  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
-    const [d, t] = raw.split(" ");
-    return { dateStr: d, startTime: t.slice(0, 5) };
-  }
-
-  // ISO string fallback
-  const dt = new Date(raw);
-  if (!Number.isNaN(dt.getTime())) {
-    return {
-      dateStr: toDateOnlyUTC(dt),
-      startTime: `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`,
-    };
-  }
-
-  return null;
-}
-
 async function fetchCapacities(conn) {
-  // Room capacity from rooms.capacity grouped by roomType
   const roomSql = `
     SELECT ${COL.roomType} AS type, COALESCE(SUM(${COL.roomQty}),0) AS qty
     FROM ${TABLES.rooms}
     GROUP BY ${COL.roomType}
   `;
 
-  // Equipment capacity from inventory.quantity joined to equipment via equipmentID
   const eqSql = `
     SELECT e.${COL.eqType} AS type, COALESCE(SUM(i.${COL.invQty}),0) AS qty
     FROM ${TABLES.inventory} i
@@ -217,11 +148,11 @@ async function fetchAppointmentsInRange(conn, startDate, endDate) {
   const startTs = `${startDate} 00:00:00`;
   const endTs = `${endDate} 23:59:59`;
 
-  // Return raw datetime + reason for robust parsing in JS
   const sql = `
     SELECT
       ${COL.apptId} AS id,
-      ${COL.apptDateTime} AS startAt,
+      DATE_FORMAT(${COL.apptDateTime}, '%Y-%m-%d') AS dateStr,
+      DATE_FORMAT(${COL.apptDateTime}, '%H:%i') AS startTime,
       ${COL.apptReason} AS reasonKey
     FROM ${TABLES.appointment}
     WHERE ${COL.apptDateTime} BETWEEN ? AND ?
@@ -230,11 +161,6 @@ async function fetchAppointmentsInRange(conn, startDate, endDate) {
   return rows;
 }
 
-/**
- * Expects rows with one of:
- * - { startAt, reasonKey }
- * - { dateStr, startTime, reasonKey }
- */
 function buildSlotUsage(appts) {
   const usage = {};
 
@@ -243,13 +169,20 @@ function buildSlotUsage(appts) {
     let startTime = "";
 
     if (a.dateStr && a.startTime) {
-      dateStr = String(a.dateStr).slice(0, 10);
+      dateStr = String(a.dateStr);
       startTime = String(a.startTime).slice(0, 5);
-    } else {
-      const parts = coerceDateTimeParts(a.startAt);
-      if (parts) {
-        dateStr = parts.dateStr;
-        startTime = parts.startTime;
+    } else if (a.startAt) {
+      const raw = String(a.startAt);
+      if (raw.includes(" ")) {
+        const [d, t] = raw.split(" ");
+        dateStr = d;
+        startTime = t.slice(0, 5);
+      } else {
+        const dt = new Date(raw);
+        if (!Number.isNaN(dt.getTime())) {
+          dateStr = toDateOnlyUTC(dt);
+          startTime = `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`;
+        }
       }
     }
 
@@ -312,10 +245,41 @@ function buildSlots(startDate, endDate) {
   return out;
 }
 
-/**
- * GET /api/reservations/availability
- * query: reasonKey, startDate, endDate
- */
+// EXTRA HARD GUARD: computes exact used resources for one slot directly from DB
+async function fetchSlotUsageDirect(conn, appointmentDate, startTime) {
+  const ts = combineDateAndTimeSQL(appointmentDate, startTime);
+
+  const sql = `
+    SELECT ${COL.apptReason} AS reasonKey, COUNT(*) AS cnt
+    FROM ${TABLES.appointment}
+    WHERE ${COL.apptDateTime} = ?
+    GROUP BY ${COL.apptReason}
+    FOR UPDATE
+  `;
+  const [rows] = await conn.query(sql, [ts]);
+
+  const used = { rooms: {}, equipment: {} };
+
+  for (const r of rows) {
+    const rk = normalizeReasonKey(r.reasonKey);
+    const req = REASON_REQUIREMENTS[rk];
+    if (!req) continue;
+
+    const count = Number(r.cnt || 0);
+
+    for (const [rtype, units] of Object.entries(req.rooms)) {
+      const rr = normalizeResourceKey(rtype);
+      used.rooms[rr] = (used.rooms[rr] || 0) + count * Number(units);
+    }
+    for (const [etype, units] of Object.entries(req.equipment)) {
+      const ee = normalizeResourceKey(etype);
+      used.equipment[ee] = (used.equipment[ee] || 0) + count * Number(units);
+    }
+  }
+
+  return used;
+}
+
 router.get("/availability", async (req, res) => {
   try {
     const reasonKey = ensureReason(req.query.reasonKey);
@@ -355,14 +319,6 @@ router.get("/availability", async (req, res) => {
   }
 });
 
-/**
- * POST /api/reservations
- * body supports:
- * - reasonKey OR reasonForVisit
- * - appointmentDate (YYYY-MM-DD)
- * - startTime (HH:MM) OR appointmentTimeSlot ("HH:MM - HH:MM")
- * - userEmail, vetID, petID
- */
 router.post("/", async (req, res) => {
   const conn = await pool.getConnection();
 
@@ -400,25 +356,10 @@ router.post("/", async (req, res) => {
     }
 
     const { roomCaps, eqCaps } = await fetchCapacities(conn);
-
-    // Lock all rows for that day to avoid race conditions
-    const [sameDay] = await conn.query(
-      `
-      SELECT
-        ${COL.apptId} AS id,
-        ${COL.apptDateTime} AS startAt,
-        ${COL.apptReason} AS reasonKey
-      FROM ${TABLES.appointment}
-      WHERE DATE(${COL.apptDateTime}) = ?
-      FOR UPDATE
-      `,
-      [appointmentDate]
-    );
-
-    const usage = buildSlotUsage(sameDay);
-    const sk = slotKey(appointmentDate, startTime);
-    const current = usage[sk] || { rooms: {}, equipment: {} };
     const reqForReason = REASON_REQUIREMENTS[reasonKey];
+
+    // hard guard from direct DB counts at exact slot
+    const current = await fetchSlotUsageDirect(conn, appointmentDate, startTime);
 
     const canBook = hasCapacity(reqForReason, current, roomCaps, eqCaps);
     if (!canBook) {
