@@ -202,6 +202,12 @@ function buildSlotUsage(appts) {
   const usage = {};
 
   for (const a of appts) {
+    // IMPORTANT:
+    // fetchAppointmentsInRange returns:
+    //   a.dateStr   -> "YYYY-MM-DD"
+    //   a.startTime -> "HH:MM"
+    // so use those directly (no JS Date timezone conversion)
+
     const dateStr = String(a.dateStr || "").trim();
     const startTime = String(a.startTime || "").trim();
 
