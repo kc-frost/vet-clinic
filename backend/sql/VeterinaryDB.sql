@@ -1,3 +1,4 @@
+drop database veterinarianDB;
 create database veterinarianDB;
 use veterinarianDB;
 
@@ -74,11 +75,12 @@ equipmentID int references equipment(equipmentID)
 
 create table appointment(
 appointmentID int auto_increment primary key,
-userID int references customer(userID),
+userEmail varchar(255) references customer(email),
 vetID int references staff(staffID),
 petID int references pet(petID),
 reason text,
-date datetime
+date datetime,
+equipmentRequired varchar(255) references equipment(equipmentType)
 );
 
 -- service catalog (what services exist in general)
@@ -125,5 +127,6 @@ userID int references customer(userID)
 create table rooms(
 roomNumber int primary key,
 roomType varchar(255),
-capacity int(255)  
+capacity int,
+isOccupied boolean
 );

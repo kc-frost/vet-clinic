@@ -1,0 +1,98 @@
+/* Page Styling*/
+
+.centered {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* applied ONLY to .centered's direct children */
+.centered > h1 {
+  margin-left: 50px;
+}
+
+.appointments-box {
+  background-color: #FFFFFF;
+  min-height: calc(100vh - 120px);
+  border: 3px solid #DBDBDB;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 10px 70px;
+  width: 100%;
+  max-width: 90%;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
+.appt-trash {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 5px;
+  width: 50px;
+  height: 50px;
+  background-color: red;
+  transition: width 1s, color 1s, background-color 1s, opacity 0.5s;
+  border-radius: 8px;
+  line-height: 50px;
+  text-align: center;
+  vertical-align: middle;
+  margin:auto;
+  margin-bottom: 10px;
+  overflow:hidden;  /* keeps text within the box */
+}
+
+.appt-trash p {
+  opacity: 0;
+  transition: opacity 0.8s;
+}
+
+.appt-trash:hover p {
+  opacity: 1;
+}
+
+.appt-trash:hover {
+  background-color: red;
+  width: 100px;
+  opacity: 1;
+}
+
+/* Table Styling */
+/*
+TR = "Table Row"
+TH = "Table Header
+TD = "Table Data"
+*/
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+tr:hover {
+  background-color: #D6EEEE;
+}
+
+
+th {
+  color: #585858;
+  background-color:#f3f3f3;
+  padding: 10px;
+  text-align: left;
+  vertical-align: middle;
+  border-radius: 8px;
+}
+
+td {
+  border-radius: 8px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  vertical-align: middle;
+  padding: 15px;
+}
+
+.trash-icon {
+  width: 24px;
+  height: 24px;
+  padding: .5px;
+  pointer-events: none;
+}
