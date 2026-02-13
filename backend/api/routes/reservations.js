@@ -12,6 +12,7 @@ const TABLES = {
   appointment: "appointment",
   rooms: "rooms",
   equipment: "equipment",
+  inventory: "inventory",
 };
 
 const COL = {
@@ -26,22 +27,30 @@ const COL = {
 
   // rooms
   roomType: "roomType",
-  roomQty: "quantityAvailable",
+  roomQty: "capacity",
 
   // equipment
+  eqId: "equipmentID",
   eqType: "equipmentType",
-  eqQty: "quantityAvailable",
+
+  // inventory
+  invEqId: "equipmentID",
+  invQty: "quantity",
 };
 
 /**
  * =========================================================
  * reasonKey -> resources required per appointment
- * Adjust keys to match frontend reason keys
  * =========================================================
+ *
+ * IMPORTANT:
+ * Keys here are canonical internal keys.
+ * DB roomType/equipmentType values are normalized through normalizeResourceKey()
+ * so values like "XrayRoom", "xray room", "xray_room" can match.
  */
 const REASON_REQUIREMENTS = {
   wellness_exam: {
-    rooms: { exam_room: 1 },
+    rooms: { checkup_room: 1 },
     equipment: {},
   },
   fracture: {
@@ -49,11 +58,11 @@ const REASON_REQUIREMENTS = {
     equipment: { xray_machine: 1 },
   },
   surgery_consult: {
-    rooms: { consult_room: 1 },
+    rooms: { surgery_room: 1 },
     equipment: { ultrasound: 1 },
   },
   vaccination: {
-    rooms: { exam_room: 1 },
+    rooms: { checkup_room: 1 },
     equipment: {},
   },
 };
@@ -99,6 +108,32 @@ function normalizeReasonKey(reasonKey) {
   return String(reasonKey || "").trim().toLowerCase();
 }
 
+/**
+ * Normalize resource keys from DB/user/config into canonical snake-style keys.
+ * Examples:
+ * "XrayRoom" -> "xray_room"
+ * "xray room" -> "xray_room"
+ * "CheckupRoom" -> "checkup_room"
+ * "Dog Cage" -> "dog_cage"
+ */
+function normalizeResourceKey(v) {
+  let s = String(v || "").trim();
+
+  // split camelCase / PascalCase boundaries
+  s = s.replace(/([a-z0-9])([A-Z])/g, "$1_$2");
+
+  // convert spaces/hyphens to underscore
+  s = s.replace(/[\s-]+/g, "_");
+
+  // remove non-word chars except underscore
+  s = s.replace(/[^\w]/g, "");
+
+  // collapse repeated underscores
+  s = s.replace(/_+/g, "_");
+
+  return s.toLowerCase();
+}
+
 function ensureReason(reasonKey) {
   const k = normalizeReasonKey(reasonKey);
   return REASON_REQUIREMENTS[k] ? k : null;
@@ -109,15 +144,20 @@ function slotKey(dateStr, startTime) {
 }
 
 async function fetchCapacities(conn) {
+  // Room capacity from rooms.capacity grouped by roomType
   const roomSql = `
     SELECT ${COL.roomType} AS type, COALESCE(SUM(${COL.roomQty}),0) AS qty
     FROM ${TABLES.rooms}
     GROUP BY ${COL.roomType}
   `;
+
+  // Equipment capacity from inventory.quantity joined to equipment via equipmentID
+  // ignoring inventory.inUse as requested
   const eqSql = `
-    SELECT ${COL.eqType} AS type, COALESCE(SUM(${COL.eqQty}),0) AS qty
-    FROM ${TABLES.equipment}
-    GROUP BY ${COL.eqType}
+    SELECT e.${COL.eqType} AS type, COALESCE(SUM(i.${COL.invQty}),0) AS qty
+    FROM ${TABLES.inventory} i
+    JOIN ${TABLES.equipment} e ON e.${COL.eqId} = i.${COL.invEqId}
+    GROUP BY e.${COL.eqType}
   `;
 
   const [roomRows] = await conn.query(roomSql);
@@ -126,8 +166,15 @@ async function fetchCapacities(conn) {
   const roomCaps = {};
   const eqCaps = {};
 
-  for (const r of roomRows) roomCaps[String(r.type)] = Number(r.qty || 0);
-  for (const e of eqRows) eqCaps[String(e.type)] = Number(e.qty || 0);
+  for (const r of roomRows) {
+    const key = normalizeResourceKey(r.type);
+    roomCaps[key] = Number(r.qty || 0);
+  }
+
+  for (const e of eqRows) {
+    const key = normalizeResourceKey(e.type);
+    eqCaps[key] = Number(e.qty || 0);
+  }
 
   return { roomCaps, eqCaps };
 }
@@ -161,10 +208,12 @@ function buildSlotUsage(appts) {
     if (!usage[sk]) usage[sk] = { rooms: {}, equipment: {} };
 
     for (const [rtype, units] of Object.entries(req.rooms)) {
-      usage[sk].rooms[rtype] = (usage[sk].rooms[rtype] || 0) + Number(units);
+      const rr = normalizeResourceKey(rtype);
+      usage[sk].rooms[rr] = (usage[sk].rooms[rr] || 0) + Number(units);
     }
     for (const [etype, units] of Object.entries(req.equipment)) {
-      usage[sk].equipment[etype] = (usage[sk].equipment[etype] || 0) + Number(units);
+      const ee = normalizeResourceKey(etype);
+      usage[sk].equipment[ee] = (usage[sk].equipment[ee] || 0) + Number(units);
     }
   }
 
@@ -173,15 +222,19 @@ function buildSlotUsage(appts) {
 
 function hasCapacity(requirements, currentUsage, roomCaps, eqCaps) {
   for (const [rtype, needed] of Object.entries(requirements.rooms)) {
-    const cap = Number(roomCaps[rtype] || 0);
-    const used = Number(currentUsage.rooms?.[rtype] || 0);
+    const rr = normalizeResourceKey(rtype);
+    const cap = Number(roomCaps[rr] || 0);
+    const used = Number(currentUsage.rooms?.[rr] || 0);
     if (used + Number(needed) > cap) return false;
   }
+
   for (const [etype, needed] of Object.entries(requirements.equipment)) {
-    const cap = Number(eqCaps[etype] || 0);
-    const used = Number(currentUsage.equipment?.[etype] || 0);
+    const ee = normalizeResourceKey(etype);
+    const cap = Number(eqCaps[ee] || 0);
+    const used = Number(currentUsage.equipment?.[ee] || 0);
     if (used + Number(needed) > cap) return false;
   }
+
   return true;
 }
 
@@ -217,6 +270,7 @@ router.get("/availability", async (req, res) => {
     if (!reasonKey) {
       return res.status(400).json({ code: "BAD_REASON", message: "Invalid reasonKey" });
     }
+
     if (!startDate || !endDate) {
       return res.status(400).json({
         code: "BAD_DATE_RANGE",
@@ -275,6 +329,7 @@ router.post("/", async (req, res) => {
       await conn.rollback();
       return res.status(400).json({ code: "BAD_REASON", message: "Invalid reason key" });
     }
+
     if (!appointmentDate || !startTime) {
       await conn.rollback();
       return res.status(400).json({
@@ -291,7 +346,7 @@ router.post("/", async (req, res) => {
 
     const { roomCaps, eqCaps } = await fetchCapacities(conn);
 
-    // lock same day appointments during capacity check to reduce race conditions
+    // lock same-day rows for race-safe capacity check
     const [sameDay] = await conn.query(
       `
       SELECT ${COL.apptId} AS id, ${COL.apptDateTime} AS startAt, ${COL.apptReason} AS reasonKey
@@ -318,7 +373,7 @@ router.post("/", async (req, res) => {
 
     const appointmentDateTime = combineDateAndTimeSQL(appointmentDate, startTime);
 
-    // Store compact equipment summary for now (if column exists)
+    // Optional summary field
     const equipmentRequiredSummary = Object.keys(reqForReason.equipment).join(",");
 
     const insertSql = `
