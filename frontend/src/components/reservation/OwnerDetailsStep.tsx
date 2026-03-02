@@ -1,7 +1,4 @@
-import type {
-	ReservationFormData,
-	ReservationFormErrors,
-} from "../../types/reservation";
+import type {ReservationFormData, ReservationFormErrors,} from "../../types/reservation";
 
 type OwnerDetailsStepProps = {
 	formData: ReservationFormData;
@@ -14,7 +11,8 @@ type OwnerDetailsStepProps = {
 };
 
 export default function OwnerDetailsStep({formData, errors, onFieldChange, stateCodes}: OwnerDetailsStepProps) {
-	return (
+	
+    return (
 		<div>
 			<h2>Owner Details</h2>
 			<p>Please provide your contact information.</p>
@@ -65,7 +63,10 @@ export default function OwnerDetailsStep({formData, errors, onFieldChange, state
 					type="tel"
 					value={formData.phone}
 					onChange={(e) => onFieldChange("phone", e.target.value)}
-					placeholder="(555) 123-4567"
+					placeholder="737-123-4567"
+                    inputMode="numeric"
+                    maxLength={12}
+                    pattern="^[0-9]{3}-[0-9]{3}-[0-9]{4}$"
 				/>
 				{errors.phone ? <p className="field-error">{errors.phone}</p> : null}
 			</div>

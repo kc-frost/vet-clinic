@@ -17,13 +17,16 @@ import ReviewConfirmStep from "../../components/reservation/ReviewConfirmStep";
 import { createReservation, getAvailabilityByReason } from "../../api/reservations";
 
 
+//type for rendering stepper UI. Denotes what the state of a form section is
 type StepStatus = "complete" | "current" | "locked";
 
+//type structure for each step in the navigation
 type Step = {
 	id: number;
 	label: string;
 };
 
+//form is split into 6 steps, each step renders its own component based on which step user is on
 const STEPS: Step[] = [
 	{ id: 1, label: "Owner Details" },
 	{ id: 2, label: "Pet Information" },
@@ -33,6 +36,7 @@ const STEPS: Step[] = [
 	{ id: 6, label: "Review & Confirm" },
 ];
 
+//used for state validation in step 1
 const US_STATE_CODES = [
 	"AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
 	"HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
@@ -48,6 +52,7 @@ const US_STATE_CODES = [
  */
 const DEV_BYPASS_VALIDATION = false;
 
+//determines the visual state of each form section navigation button
 function getStepStatus(
 	stepId: number,
 	currentStep: number,
@@ -58,6 +63,7 @@ function getStepStatus(
 	return "locked";
 }
 
+//converts a date object into this format, YYYY-MM-DD, which the backend expects.
 function formatDateForInput(date: Date): string {
 	const y = date.getFullYear();
 	const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -65,26 +71,55 @@ function formatDateForInput(date: Date): string {
 	return `${y}-${m}-${d}`;
 }
 
+//helper func that adds days to an existing date object. Used to create range of dates
+//used when requesting availability from date range from backend.
 function addDays(date: Date, days: number): Date {
 	const next = new Date(date);
 	next.setDate(next.getDate() + days);
 	return next;
 }
 
+//basic email validation
 function isValidEmail(emailRaw: string): boolean {
 	const email = emailRaw.trim();
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function normalizePhoneDigits(phoneRaw: string): string {
-	return phoneRaw.replace(/\D/g, "");
+//phone number field validator and canonicalizer
+//accepted inputs are exactly 10 digits or exactly ###-###-####
+//if valid, returns and makes sure it's stored as ###-###-####. 
+function canonicalizePhone(phoneRaw: string): { ok: boolean; formatted: string } {
+	const raw = String(phoneRaw).trim();
+
+	//only takes exactly 10 digits
+	if (/^[0-9]{10}$/.test(raw)) {
+		return {
+			ok: true,
+			formatted: `${raw.slice(0, 3)}-${raw.slice(3, 6)}-${raw.slice(6, 10)}`,
+		};
+	}
+
+	//only takes string formatted exactly as ###-###-####
+	if (/^[0-9]{3}-[0-9]{3}-[0-9]{4}$/.test(raw)) {
+		const digits = raw.replace(/-/g, "");
+		return {
+			ok: true,
+			formatted: `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`,
+		};
+	}
+
+	return { ok: false, formatted: "" };
 }
 
+//validates zip code to 77777 or 77777+4 extra digit code
 function isValidZip(zipRaw: string): boolean {
 	const zip = zipRaw.trim();
 	return /^\d{5}(-\d{4})?$/.test(zip);
 }
 
+//availability slotID has start/end times inside the string. So this pulls the startTime out of the 
+//string. Parameter passed in strings look like slot_YYYY-MM-DD_HHMM_HHMM
+//returns the first HHMM
 function extractStartTimeFromSlotId(slotId: string): string {
 	// expected: slot_YYYY-MM-DD_HHMM_HHMM
 	const parts = String(slotId || "").split("_");
@@ -97,29 +132,36 @@ function extractStartTimeFromSlotId(slotId: string): string {
 
 
 export default function Reservation() {
+    //the step the user is currently on
 	const [currentStep, setCurrentStep] = useState<number>(1);
 	const [furthestCompletedStep, setFurthestCompletedStep] = useState<number>(1);
 
-	const [formData, setFormData] = useState<ReservationFormData>(
-		INITIAL_RESERVATION_FORM
-	);
+    //all form data lives in this one object, and each step edits its own relevant fields 
+	const [formData, setFormData] = useState<ReservationFormData>(INITIAL_RESERVATION_FORM);
+
+    //errors are stored per field, and are keyed by the field key.
 	const [errors, setErrors] = useState<ReservationFormErrors>({});
 
+    //these hold the availability responses from the backend for the Appointment Creation Step 
 	const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
 	const [availabilityLoading, setAvailabilityLoading] = useState<boolean>(false);
 	const [availabilityError, setAvailabilityError] = useState<string>("");
 
+    //submits state. this prevents double submits and lets us show submit message
 	const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 	const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
 	const [submitMessage, setSubmitMessage] = useState<string>("");
 
+    //step bounds for next and previous buttons
 	const canGoNext = useMemo(() => currentStep < STEPS.length, [currentStep]);
 	const canGoPrev = useMemo(() => currentStep > 1, [currentStep]);
 
+    //this component requests 90 days of availability from backend. So these are the date objects
 	const today = useMemo(() => new Date(), []);
 	const startDate = useMemo(() => formatDateForInput(today), [today]);
 	const endDate = useMemo(() => formatDateForInput(addDays(today, 90)), [today]);
 
+    // groups backend slots by date so we can populate the "date" dropdown first
 	const slotsByDate = useMemo(() => {
 		const map: Record<string, AvailableSlot[]> = {};
 		if (!availability) return map;
@@ -131,16 +173,19 @@ export default function Reservation() {
 		return map;
 	}, [availability]);
 
+    //list of dates for date dropdown
 	const availableDates = useMemo(
 		() => Object.keys(slotsByDate).sort(),
 		[slotsByDate]
 	);
 
+    //list of time slots for the currently selected date
 	const currentDateSlots = useMemo(() => {
 		if (!formData.appointmentDate) return [];
 		return slotsByDate[formData.appointmentDate] || [];
 	}, [formData.appointmentDate, slotsByDate]);
 
+    //clears the appointment date/time selection whenever reason changes, or when no availability exists
 	function clearAppointmentSelection() {
 		setFormData((prev) => ({
 			...prev,
@@ -149,6 +194,7 @@ export default function Reservation() {
 		}));
 	}
 
+    //resets the entire form so a user can submit another appointment starting new from the beginning
 	function resetReservationForm() {
 		setFormData(INITIAL_RESERVATION_FORM);
 		setErrors({});
@@ -162,6 +208,7 @@ export default function Reservation() {
 		setSubmitMessage("");
 	}
 
+    //calls backend to get availability for a given reason and date range
 	async function fetchAvailabilityForReason(reasonKey: ReasonKey) {
 		setAvailabilityLoading(true);
 		setAvailabilityError("");
@@ -183,6 +230,8 @@ export default function Reservation() {
 		}
 	}
 
+    //whenever "reason for visit" changes, re-fetches available slots from backend
+	//also clears the old selected date and time so we don't let the user keep a stale date
 	useEffect(() => {
 		if (DEV_BYPASS_VALIDATION) {
 			return;
@@ -224,12 +273,20 @@ export default function Reservation() {
 			nextErrors.email = "Please enter a valid email address.";
 		}
 
-		const phoneDigits = normalizePhoneDigits(formData.phone);
-		if (!formData.phone.trim()) {
-			nextErrors.phone = "Phone number is required.";
-		} else if (phoneDigits.length < 10) {
-			nextErrors.phone = "Phone number must have at least 10 digits.";
-		}
+        if (!formData.phone.trim()) {
+            nextErrors.phone = "Phone number is required.";
+        } else {
+            const phone = canonicalizePhone(formData.phone);
+
+            if (!phone.ok) {
+                nextErrors.phone = "Phone number must be 10 digits (e.g. 7773334444 or 777-777-7777).";
+            } else {
+                //stores canonical format for consistency
+                if (formData.phone !== phone.formatted) {
+                    setFormData((prev) => ({ ...prev, phone: phone.formatted }));
+                }
+            }
+}
 
 		if (!formData.addressLine1.trim()) {
 			nextErrors.addressLine1 = "Address line 1 is required.";
