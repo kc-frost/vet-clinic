@@ -4,9 +4,9 @@ import { pool } from "../db.js";
 const router = Router();
 
 /**
- * =========================================================
+ * ========================
  * DB column/table mappings
- * =========================================================
+ * ========================
  */
 const TABLES = {
   appointment: "appointment",
@@ -39,9 +39,13 @@ const COL = {
 };
 
 /**
- * =========================================================
+ * ===============================================
  * reasonKey -> required resources per appointment
- * =========================================================
+ * ===============================================
+ */
+/**
+ * Each reason requires certain rooms/equipment.
+ * This is basically our business logic.
  */
 const REASON_REQUIREMENTS = {
   wellness_exam: {
@@ -62,6 +66,7 @@ const REASON_REQUIREMENTS = {
   },
 };
 
+// Fixed Schedule each day 
 const SLOT_TEMPLATES = [
   { start: "09:00", end: "10:00" },
   { start: "10:00", end: "11:00" },
@@ -70,11 +75,11 @@ const SLOT_TEMPLATES = [
   { start: "14:00", end: "15:00" },
   { start: "15:00", end: "16:00" },
 ];
-
+// normalize reason input
 function normalizeReasonKey(reasonKey) {
   return String(reasonKey || "").trim().toLowerCase();
 }
-
+// normalize room/equipment names so DB + config match
 function normalizeResourceKey(v) {
   let s = String(v || "").trim();
   s = s.replace(/([a-z0-9])([A-Z])/g, "$1_$2"); // split camelCase
@@ -83,16 +88,16 @@ function normalizeResourceKey(v) {
   s = s.replace(/_+/g, "_"); // collapse __
   return s.toLowerCase();
 }
-
+// make sure reason exists in our config
 function ensureReason(reasonKey) {
   const k = normalizeReasonKey(reasonKey);
   return REASON_REQUIREMENTS[k] ? k : null;
 }
-
+// creates a unique key per date + time slot
 function slotKey(dateStr, startTime) {
   return `${dateStr}|${startTime}`;
 }
-
+// adds days safely (UTC)
 function addDaysUTC(dateStr, days) {
   const d = new Date(`${dateStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -101,7 +106,7 @@ function addDaysUTC(dateStr, days) {
   const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-
+// build array of dates between start and end
 function dateRange(startDate, endDate) {
   const out = [];
   let cur = startDate;
@@ -111,11 +116,11 @@ function dateRange(startDate, endDate) {
   }
   return out;
 }
-
+// combine date + time for SQL DATETIME
 function combineDateAndTimeSQL(dateStr, hhmm) {
   return `${dateStr} ${hhmm}:00`;
 }
-
+// build all possible slots in a date range
 function buildSlots(startDate, endDate) {
   const days = dateRange(startDate, endDate);
   const out = [];
@@ -132,7 +137,9 @@ function buildSlots(startDate, endDate) {
   }
   return out;
 }
-
+/**
+ * Pull total room + equipment capacities from DB
+ */
 async function fetchCapacities(conn) {
   const roomSql = `
     SELECT ${COL.roomType} AS type, COALESCE(SUM(${COL.roomQty}), 0) AS qty
@@ -152,7 +159,7 @@ async function fetchCapacities(conn) {
 
   const roomCaps = {};
   const eqCaps = {};
-
+  // store capacities
   for (const r of roomRows) {
     roomCaps[normalizeResourceKey(r.type)] = Number(r.qty || 0);
   }
@@ -166,6 +173,7 @@ async function fetchCapacities(conn) {
 /**
  * Returns rows shape:
  * { id, dateStr: YYYY-MM-DD, startTime: HH:MM, reasonKey }
+ * Get appointments within a date range
  */
 async function fetchAppointmentsInRange(conn, startDate, endDate) {
   const startTs = `${startDate} 00:00:00`;
@@ -190,6 +198,7 @@ async function fetchAppointmentsInRange(conn, startDate, endDate) {
  * - dateStr: YYYY-MM-DD
  * - startTime: HH:MM
  * - reasonKey
+ * Build usage per slot based on existing appointments
  */
 function buildSlotUsage(rows) {
   const usage = {};
@@ -206,12 +215,12 @@ function buildSlotUsage(rows) {
 
     const sk = slotKey(dateStr, startTime);
     if (!usage[sk]) usage[sk] = { rooms: {}, equipment: {} };
-
+    // add room usage  
     for (const [rtype, units] of Object.entries(req.rooms)) {
       const rr = normalizeResourceKey(rtype);
       usage[sk].rooms[rr] = (usage[sk].rooms[rr] || 0) + Number(units);
     }
-
+    // add equipment usage
     for (const [etype, units] of Object.entries(req.equipment)) {
       const ee = normalizeResourceKey(etype);
       usage[sk].equipment[ee] = (usage[sk].equipment[ee] || 0) + Number(units);
@@ -220,7 +229,7 @@ function buildSlotUsage(rows) {
 
   return usage;
 }
-
+// checks if adding new appointment exceeds capacity
 function hasCapacity(requirements, currentUsage, roomCaps, eqCaps) {
   for (const [rtype, needed] of Object.entries(requirements.rooms)) {
     const rr = normalizeResourceKey(rtype);
@@ -242,6 +251,7 @@ function hasCapacity(requirements, currentUsage, roomCaps, eqCaps) {
 /**
  * GET /api/reservations/availability
  * query: reasonKey, startDate, endDate
+ * GET Availability 
  */
 router.get("/availability", async (req, res) => {
   try {
