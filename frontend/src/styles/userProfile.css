@@ -1,0 +1,70 @@
+.profilePage {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+  
+  .profileTitle {
+    margin-bottom: 16px;
+  }
+  
+  .topRow {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  
+  .reservationsRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  
+  .card {
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  
+  .profileImg {
+    width: 100%;
+    max-width: 260px;
+    border-radius: 12px;
+    display: block;
+  }
+  
+  .bioInput {
+    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    margin-top: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .primaryBtn {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    cursor: pointer;
+  }
+  
+  .resList {
+    padding-left: 18px;
+    margin: 0;
+  }
+  
+  .resItem {
+    margin-bottom: 10px;
+  }
+  
+  .resTime,
+  .hint {
+    opacity: 0.8;
+  }
+  
+  .errorBox {
+    padding: 24px;
+    color: #ffb3b3;
+  }

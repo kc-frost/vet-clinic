@@ -12,6 +12,8 @@ import Reservation from "../pages/public/Reservation";
 
 import ViewAppointments from "../pages/public/ViewAppointments";
 
+import UserProfile from "../pages/public/UserProfile.tsx";
+
 
 export default function AppRouter() {
   return (
@@ -24,6 +26,7 @@ export default function AppRouter() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/viewappointments" element={<ViewAppointments />} />
+          <Route path="/UserProfile" element={<UserProfile />} />
         </Route>
 
         {/* Staff routes, separate layout w/ no public header/footer) */}
@@ -31,6 +34,7 @@ export default function AppRouter() {
           {/* If user goes to /staff, send them to /staff/inventory */}
           <Route index element={<Navigate to="inventory" replace />} />
           <Route path="inventory" element={<Inventory />} />
+
         </Route>
 
         {/* Catches any unknown URL redirected home */}
