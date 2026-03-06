@@ -1,11 +1,18 @@
-export type StaffPosition = "Veterinarian" | "VetAssistant" | "ServiceRepresentative";
+export type StaffRole = "VET" | "PET_GROOMER";
 
-export type Staff = {
-  staffID: number;
-  name: string;
-  StaffNumber: string | null;
-  email: string | null;
-  position: StaffPosition;
-};
+export interface Staff {
+	staffID: number;
+	name: string;
+	StaffNumber: string | null;
+	email: string | null;
+	position: string;
+	role: StaffRole;
+}
 
-export type StaffCreate = Omit<Staff, "staffID">;
+export interface StaffCreate {
+	name: string;
+	StaffNumber: string | null;
+	email: string | null;
+	position: string;
+	role: StaffRole;
+}

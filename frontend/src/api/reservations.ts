@@ -1,32 +1,69 @@
 import { api } from "./client";
-import type { AvailabilityQuery, AvailabilityResponse, ReasonKey } from "../types/reservation";
+import type {
+	AvailabilityResponse,
+	CreateReservationPayload,
+	CreateReservationResponse,
+	PetProfile,
+	ReasonKey,
+	UserProfile,
+} from "../types/reservation";
 
-export type CreateReservationPayload = {
+// GET /api/reservations/availability
+// builds a query string and returns available time slots for a given reasonKey
+// required params:
+//  reasonKey: appointment type key used by backend scheduling rules
+//  userID: used to prevent overlaps with the user's existing appointments
+// optional params:
+//  startDate: YYYY-MM-DD (defaults to today on backend if omitted)
+//  days: number of days to scan (backend clamps this)
+export async function getAvailability(params: {
 	reasonKey: ReasonKey;
-	appointmentDate: string; // YYYY-MM-DD
-	startTime: string;       // HH:mm
-	userEmail?: string | null;
-	vetID?: number | null;
-	petID?: number | null;
-};
+	userID: number;
+	startDate?: string;
+	days?: number;
+}) {
+	// URLSearchParams is the standard way to build ?key=value&key=value safely
+	const q = new URLSearchParams();
+	q.set("reasonKey", params.reasonKey);
+	q.set("userID", String(params.userID));
+	if (params.startDate) q.set("startDate", params.startDate);
+	if (params.days) q.set("days", String(params.days));
 
-export async function getAvailabilityByReason(
-	query: AvailabilityQuery
-): Promise<AvailabilityResponse> {
-	const params = new URLSearchParams({
-		reasonKey: query.reasonKey,
-		startDate: query.startDate,
-		endDate: query.endDate,
+	return api<AvailabilityResponse>(`/reservations/availability?${q.toString()}`, {
+		method: "GET",
 	});
-
-	return api<AvailabilityResponse>(`/reservations/availability?${params.toString()}`);
 }
 
-export async function createReservation(
-	payload: CreateReservationPayload
-): Promise<{ message: string; reservationId?: string | number }> {
-	return api<{ message: string; reservationId?: string | number }>("/reservations", {
+// POST /api/reservations/book
+// creates an appointment booking using the reservation payload
+export async function createReservation(payload: CreateReservationPayload) {
+	return api<CreateReservationResponse>("/reservations/book", {
 		method: "POST",
 		body: payload,
 	});
+}
+
+// GET /api/reservations/profile?userID=
+// returns customer profile fields used to autofill the reservation sections
+export async function getReservationProfile(userID: number) {
+	const q = new URLSearchParams();
+	q.set("userID", String(userID));
+
+	return api<UserProfile>(`/reservations/profile?${q.toString()}`, {
+		method: "GET",
+	});
+}
+
+// GET /api/reservations/pets?userID=
+// returns the user's saved pets for the reservation section dropdown
+export async function getPetsForUser(userID: number) {
+	const q = new URLSearchParams();
+	q.set("userID", String(userID));
+
+	const resp = await api<{ userID: number; pets: PetProfile[] }>(`/reservations/pets?${q.toString()}`, {
+		method: "GET",
+	});
+
+	// the api returns { userID, pets }, but the UI only needs the pets array
+	return resp.pets;
 }

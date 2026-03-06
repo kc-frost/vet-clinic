@@ -1,123 +1,206 @@
-export type ReasonKey =
-	| "wellness_exam"
-	| "vaccination"
-	| "fracture"
-	| "surgery_consult";
+    export type ReasonKey =
+        | "WELLNESS_EXAM"
+        | "VACCINATION"
+        | "DENTAL_CLEANING"
+        | "FRACTURE"
+        | "GROOMING"
+        | "EMERGENCY_TRAUMA"
+        | "ULTRASOUND";
 
-export type ReasonOption = {
-	label: string;
-	key: ReasonKey;
-};
+    export type ReasonOption = {
+        value: ReasonKey;
+        label: string;
+        description: string;
+    };
 
-export const REASON_OPTIONS: ReasonOption[] = [
-	{ label: "Wellness Exam", key: "wellness_exam" },
-	{ label: "Vaccination", key: "vaccination" },
-	{ label: "Fracture Concern", key: "fracture" },
-	{ label: "Surgery Consult", key: "surgery_consult" },
-];
+    export const REASON_OPTIONS: ReasonOption[] = [
+        {
+            value: "WELLNESS_EXAM",
+            label: "Wellness Exam",
+            description: "General checkup and routine exam.",
+        },
+        {
+            value: "VACCINATION",
+            label: "Vaccination",
+            description: "Routine vaccines and boosters.",
+        },
+        {
+            value: "DENTAL_CLEANING",
+            label: "Dental Cleaning",
+            description: "Professional cleaning and dental care.",
+        },
+        {
+            value: "FRACTURE",
+            label: "Fracture / X-Ray",
+            description: "Injury evaluation, imaging, and treatment planning.",
+        },
+        {
+            value: "ULTRASOUND",
+            label: "Ultrasound",
+            description: "Ultrasound imaging and diagnostics.",
+        },
+        {
+            value: "GROOMING",
+            label: "Grooming",
+            description: "Bathing, trimming, and grooming services.",
+        },
+        {
+            value: "EMERGENCY_TRAUMA",
+            label: "Emergency / Trauma",
+            description: "Urgent care for injuries and emergencies.",
+        },
+    ];
 
+    export type CurrentUser = {
+        userID: number;
+        email: string;
+        isAdmin: boolean;
+    };
 
-export type PetType = "Dog" | "Cat" | "Other";
-export type PetSex = "Male" | "Female" | "Unknown";
-export type YesNoUnknown = "Yes" | "No" | "Unknown";
-export type HeartwormStatus = "Yes" | "No" | "Unsure" | "Not Applicable";
+    export type UserProfile = {
+        userID: number;
+        email: string;
+        legalFirstName: string;
+        legalLastName: string;
+        phone: string;
+        addressLine1: string;
+        city: string;
+        state: string;
+        zipCode: string;
+    };
 
-export type ReservationFormData = {
-	// Owner/ContactInfo
-	legalFirstName: string;
-	legalLastName: string;
-	email: string;
-	phone: string;
-	addressLine1: string;
-	city: string;
-	state: string; // 2 letter state code selected from dropdown, like TX
-	zipCode: string; // 12345 or 12345-6789
+    export type PetProfile = {
+        petID: number;
+        petName: string;
+        petType: string;
+        breed: string;
+        petSex: string;
+        spayedNeutered: string;
+        age: number | null;
+        weight: number | null;
+        height: number | null;
+        behavior: string;
+        currentMedications: string;
+        knownAllergies: string;
+        pastInjuriesConditions: string;
+        vaccinationsUpToDate: string;
+        heartwormPreventionCurrent: string;
+    };
 
-	// Pet Information
-	petName: string;
-	petType: PetType;
-	breed: string;
-	petSex: PetSex;
-	spayedNeutered: YesNoUnknown;
-	petAge: number | ""; // use "" for controlled input empty state
+    export type AvailableSlot = {
+        slotId: string;
+        date: string;
+        startTime: string;
+        endTime: string;
+        startDateTime: string;
+        endDateTime: string;
+        staffID: number;
+        roomNumber: number;
+    };
 
-	// Appointment Details
-	reasonForVisit: ReasonKey | "";
-	reasonDetails: string;
-	appointmentDate: string; // YYYY-MM-DD
-	appointmentTimeSlot: string; // could be interpreted as slotId or "HH:mm-HH:mm"
+    export type AvailabilityResponse = {
+        ok: boolean;
+        reasonKey: ReasonKey;
+        durationMinutes: number;
+        timezone: string;
+        range: {
+            startDate: string;
+            days: number;
+        };
+        slots: AvailableSlot[];
+    };
 
-	// Medical / Safety
-	currentMedications: string;
-	knownAllergies: string;
-	pastInjuriesConditions: string;
-	vaccinationsUpToDate: "Yes" | "No" | "Unsure" | "";
-	heartwormPreventionCurrent: HeartwormStatus | "";
+    export type CreateReservationPayload = {
+        userID: number;
+        reasonKey: ReasonKey;
+        appointmentDate: string;
+        startTime: string;
+        enablePetProfiles: boolean;
+        petID: number | null;
+        formData: ReservationFormData;
+    };
 
-	// Insurance (optional)
-	insuranceProvider: string;
-	insuranceMemberId: string;
+    export type CreateReservationResponse = {
+        ok: boolean;
+        appointmentId: number;
+        reasonKey: ReasonKey;
+        date: string;
+        durationMinutes: number;
+        staffID: number;
+        roomNumber: number;
+    };
 
-	// Final consent
-	consentToFormInfo: boolean;
-};
+    export type ReservationFormData = {
+        // owner/contact snapshot fields
+        legalFirstName: string;
+        legalLastName: string;
+        email: string;
+        phone: string;
+        addressLine1: string;
+        city: string;
+        state: string;
+        zipCode: string;
 
-// Field-level errors keyed by form field name
-export type ReservationFormErrors = Partial<
-	Record<keyof ReservationFormData, string>
->;
+        // pet snapshot fields
+        petName: string;
+        petType: string;
+        breed: string;
+        petSex: string;
+        spayedNeutered: string;
+        petAge: string;
 
-// Availability contracts
-export type AvailabilityQuery = {
-	reasonKey: ReasonKey;
-	startDate: string; // YYYY-MM-DD
-	endDate: string; // YYYY-MM-DD
-};
+        // appointment details
+        reasonKey: ReasonKey | "";
+        appointmentDate: string;
+        startTime: string;
+        reasonDetails: string;
 
-export type AvailableSlot = {
-	slotId: string; // preferred backend id for submission
-	date: string; // YYYY-MM-DD
-	startTime: string; // HH:mm
-	endTime: string; // HH:mm
-	displayLabel: string; // ex, "11:00 AM - 12:00 PM"
-};
+        // medical/safety snapshot fields
+        currentMedications: string;
+        knownAllergies: string;
+        pastInjuriesConditions: string;
+        vaccinationsUpToDate: string;
+        heartwormPreventionCurrent: string;
 
-export type AvailabilityResponse = {
-	reasonKey: ReasonKey;
-	slots: AvailableSlot[];
-};
+        // insurance, optional
+        insuranceProvider: string;
+        insuranceMemberId: string;
 
-// Initial/default form state
-export const INITIAL_RESERVATION_FORM: ReservationFormData = {
-	legalFirstName: "",
-	legalLastName: "",
-	email: "",
-	phone: "",
-	addressLine1: "",
-	city: "",
-	state: "",
-	zipCode: "",
+        // final consent
+        consentToFormInfo: boolean;
+    };
 
-	petName: "",
-	petType: "Dog",
-	breed: "",
-	petSex: "Unknown",
-	spayedNeutered: "Unknown",
-	petAge: "",
+    export type ReservationFormErrors = Partial<Record<keyof ReservationFormData, string>>;
 
-	reasonForVisit: "",
-	reasonDetails: "",
-	appointmentDate: "",
-	appointmentTimeSlot: "",
+    export const INITIAL_RESERVATION_FORM: ReservationFormData = {
+        legalFirstName: "",
+        legalLastName: "",
+        email: "",
+        phone: "",
+        addressLine1: "",
+        city: "",
+        state: "",
+        zipCode: "",
 
-	currentMedications: "",
-	knownAllergies: "",
-	pastInjuriesConditions: "",
-	vaccinationsUpToDate: "",
-	heartwormPreventionCurrent: "",
+        petName: "",
+        petType: "",
+        breed: "",
+        petSex: "",
+        spayedNeutered: "",
+        petAge: "",
 
-	insuranceProvider: "",
-	insuranceMemberId: "",
+        reasonKey: "",
+        appointmentDate: "",
+        startTime: "",
+        reasonDetails: "",
 
-	consentToFormInfo: false,
-};
+        currentMedications: "",
+        knownAllergies: "",
+        pastInjuriesConditions: "",
+        vaccinationsUpToDate: "",
+        heartwormPreventionCurrent: "",
+
+        insuranceProvider: "",
+        insuranceMemberId: "",
+        consentToFormInfo: false,
+    };

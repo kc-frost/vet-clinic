@@ -9,26 +9,25 @@ import Register from "../pages/public/Register";
 
 import Inventory from "../pages/staff/Inventory";
 import Reservation from "../pages/public/Reservation";
-
 import ViewAppointments from "../pages/public/ViewAppointments";
-
+import UserProfile from "../pages/public/UserProfile";
 
 export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public site routes w/  public header/footer */}
+        {/* Public site routes w/ public header/footer */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/reservation" element={<Reservation />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/viewappointments" element={<ViewAppointments />} />
+          <Route path="/userprofile" element={<UserProfile />} />
         </Route>
 
-        {/* Staff routes, separate layout w/ no public header/footer) */}
+        {/* Staff routes, separate layout */}
         <Route path="/staff" element={<StaffLayout />}>
-          {/* If user goes to /staff, send them to /staff/inventory */}
           <Route index element={<Navigate to="inventory" replace />} />
           <Route path="inventory" element={<Inventory />} />
         </Route>

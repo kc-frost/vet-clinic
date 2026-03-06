@@ -1,25 +1,23 @@
-import type {
-	ReservationFormData,
-	ReservationFormErrors,
-} from "../../types/reservation";
+import type { ReservationFormData, ReservationFormErrors } from "../../types/reservation";
+import { REASON_OPTIONS } from "../../types/reservation";
 
-type ReviewConfirmStepProps = {
+interface Props {
 	formData: ReservationFormData;
 	errors: ReservationFormErrors;
-	onFieldChange: <K extends keyof ReservationFormData>(
-		field: K,
-		value: ReservationFormData[K]
-	) => void;
+	onFieldChange: <K extends keyof ReservationFormData>(field: K, value: ReservationFormData[K]) => void;
 	onSubmit: () => void;
 	isSubmitting: boolean;
 	isSubmitted: boolean;
 	submitMessage: string;
 	onCreateNewAppointment: () => void;
-};
+}
 
-function labelForReason(reason: ReservationFormData["reasonForVisit"]): string {
-	if (!reason) return "—";
-	return reason;
+// maps the stored reasonKey value to the human-friendly label shown in the dropdown
+// if the key is missing or not found, it falls back to showing the raw key
+function reasonLabel(reasonKey: ReservationFormData["reasonKey"]) {
+	if (!reasonKey) return "—";
+	const opt = REASON_OPTIONS.find((o) => o.value === reasonKey);
+	return opt ? opt.label : reasonKey;
 }
 
 export default function ReviewConfirmStep({
@@ -31,91 +29,131 @@ export default function ReviewConfirmStep({
 	isSubmitted,
 	submitMessage,
 	onCreateNewAppointment,
-}: ReviewConfirmStepProps) {
-	if (isSubmitted) {
-		return (
-			<div className="submit-success-card">
-				<h2>Appointment Submitted</h2>
-				<p>{submitMessage || "Your appointment request has been submitted."}</p>
-				<button type="button" onClick={onCreateNewAppointment}>
-					Create New Appointment
-				</button>
-			</div>
-		);
-	}
-
+}: Props) {
 	return (
 		<div>
 			<h2>Review & Confirm</h2>
-			<p>Please review your information before submitting.</p>
+			<p>Review your details and confirm your reservation.</p>
 
-			<div className="review-section">
-				<h3>Owner Details</h3>
-				<p><strong>Name:</strong> {formData.legalFirstName} {formData.legalLastName}</p>
-				<p><strong>Email:</strong> {formData.email}</p>
-				<p><strong>Phone:</strong> {formData.phone}</p>
-				<p><strong>Address:</strong> {formData.addressLine1}, {formData.city}, {formData.state} {formData.zipCode}</p>
-			</div>
+			{/* this is a read-only summary view
+			   it pulls values from formData and shows placeholders ("—") when something is empty */}
 
-			<div className="review-section">
-				<h3>Pet Information</h3>
-				<p><strong>Pet Name:</strong> {formData.petName}</p>
-				<p><strong>Type:</strong> {formData.petType}</p>
-				<p><strong>Breed:</strong> {formData.breed}</p>
-				<p><strong>Sex:</strong> {formData.petSex}</p>
-				<p><strong>Spayed/Neutered:</strong> {formData.spayedNeutered}</p>
-				<p><strong>Age:</strong> {formData.petAge === "" ? "—" : formData.petAge}</p>
-			</div>
+			<div className="review-box">
+				<h3>Owner</h3>
+				<p>
+					<strong>Name:</strong> {formData.legalFirstName} {formData.legalLastName}
+				</p>
+				<p>
+					<strong>Email:</strong> {formData.email}
+				</p>
+				<p>
+					<strong>Phone:</strong> {formData.phone}
+				</p>
+				<p>
+					<strong>Address:</strong> {formData.addressLine1}, {formData.city}, {formData.state} {formData.zipCode}
+				</p>
 
-			<div className="review-section">
+				<hr />
+
+				<h3>Pet</h3>
+				<p>
+					<strong>Name:</strong> {formData.petName}
+				</p>
+				<p>
+					<strong>Type:</strong> {formData.petType}
+				</p>
+				<p>
+					<strong>Breed:</strong> {formData.breed}
+				</p>
+				<p>
+					<strong>Sex:</strong> {formData.petSex}
+				</p>
+				<p>
+					<strong>Spayed/Neutered:</strong> {formData.spayedNeutered}
+				</p>
+				<p>
+					<strong>Age:</strong> {formData.petAge || "—"}
+				</p>
+
+				<hr />
+
 				<h3>Appointment</h3>
-				<p><strong>Reason:</strong> {labelForReason(formData.reasonForVisit)}</p>
-				<p><strong>Date:</strong> {formData.appointmentDate || "—"}</p>
-				<p><strong>Time Slot:</strong> {formData.appointmentTimeSlot || "—"}</p>
-				<p><strong>Notes:</strong> {formData.reasonDetails || "None"}</p>
-			</div>
+				<p>
+					<strong>Reason:</strong> {reasonLabel(formData.reasonKey)}
+				</p>
+				<p>
+					<strong>Date:</strong> {formData.appointmentDate || "—"}
+				</p>
+				<p>
+					<strong>Start time:</strong> {formData.startTime || "—"}
+				</p>
 
-			<div className="review-section">
+				{/* reasonDetails is optional, so only show it if the user typed something */}
+				{formData.reasonDetails ? (
+					<p>
+						<strong>Notes:</strong> {formData.reasonDetails}
+					</p>
+				) : null}
+
+				<hr />
+
 				<h3>Medical History</h3>
-				<p><strong>Past Injuries/Conditions:</strong> {formData.pastInjuriesConditions || "—"}</p>
-				<p><strong>Current Medications:</strong> {formData.currentMedications || "—"}</p>
-				<p><strong>Known Allergies:</strong> {formData.knownAllergies || "—"}</p>
-				<p><strong>Vaccinations Up To Date:</strong> {formData.vaccinationsUpToDate || "—"}</p>
-				<p><strong>Heartworm Prevention:</strong> {formData.heartwormPreventionCurrent || "—"}</p>
+				<p>
+					<strong>Current medications:</strong> {formData.currentMedications || "—"}
+				</p>
+				<p>
+					<strong>Known allergies:</strong> {formData.knownAllergies || "—"}
+				</p>
+				<p>
+					<strong>Past injuries / conditions:</strong> {formData.pastInjuriesConditions || "—"}
+				</p>
+				<p>
+					<strong>Vaccinations up to date:</strong> {formData.vaccinationsUpToDate || "—"}
+				</p>
+				<p>
+					<strong>Heartworm prevention current:</strong> {formData.heartwormPreventionCurrent || "—"}
+				</p>
+
+				<hr />
+
+				<h3>Insurance</h3>
+				<p>
+					<strong>Provider:</strong> {formData.insuranceProvider || "—"}
+				</p>
+				<p>
+					<strong>Member ID:</strong> {formData.insuranceMemberId || "—"}
+				</p>
 			</div>
 
-			<div className="review-section">
-				<h3>Insurance (Optional)</h3>
-				<p><strong>Provider:</strong> {formData.insuranceProvider || "Not provided"}</p>
-				<p><strong>Member/Policy ID:</strong> {formData.insuranceMemberId || "Not provided"}</p>
-			</div>
-
+			{/* final confirmation checkbox
+			   this is the only editable control on this step */}
 			<div className="form-row">
-				<label className="checkbox-row" htmlFor="consentToFormInfo">
+				<label>
 					<input
-						id="consentToFormInfo"
 						type="checkbox"
 						checked={formData.consentToFormInfo}
 						onChange={(e) => onFieldChange("consentToFormInfo", e.target.checked)}
 					/>
-					<span>
-						I confirm the information above is accurate and I consent to submit this appointment request. *
-					</span>
+					I confirm the information above is accurate.
 				</label>
-				{errors.consentToFormInfo ? (
-					<p className="field-error">{errors.consentToFormInfo}</p>
-				) : null}
+
+				{errors.consentToFormInfo ? <p className="field-error">{errors.consentToFormInfo}</p> : null}
 			</div>
 
-			<div className="form-row">
-				<button
-					type="button"
-					onClick={onSubmit}
-					disabled={isSubmitting}
-				>
-					{isSubmitting ? "Submitting..." : "Submit Appointment"}
+			{/* submitMessage is used for both error messages and the success message after submit */}
+			{submitMessage ? <p className={isSubmitted ? "success-text" : "field-error"}>{submitMessage}</p> : null}
+
+			{/* if submit succeeded, show "create new appointment"
+			   otherwise show the submit button and disable it while submitting */}
+			{isSubmitted ? (
+				<button type="button" className="next-button" onClick={onCreateNewAppointment}>
+					Create New Appointment
 				</button>
-			</div>
+			) : (
+				<button type="button" className="next-button" onClick={onSubmit} disabled={isSubmitting}>
+					{isSubmitting ? "Submitting..." : "Submit Reservation"}
+				</button>
+			)}
 		</div>
 	);
 }

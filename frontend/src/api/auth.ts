@@ -1,38 +1,59 @@
 import { api } from "./client";
 
-export type LoginRequest = {
+// shape returned by /api/auth/me (and also embedded in login/register responses)
+export type AuthUser = {
+	userID: number;
 	email: string;
-	password: string;
+	isAdmin: boolean;
 };
 
-export type RegisterRequest = {
-	email: string;
-	password: string;
+// POST /api/auth/login response shape
+// message is a short status string like "logged in"
+// user contains the session user fields the frontend cares about
+export type LoginResponse = {
+	message: string;
+	user: AuthUser;
 };
 
-export type AuthResponse = {
-	ok?: boolean;
-	message?: string;
-        userID?: number;
-	//Add later if backend returns in future user/token/etc.
+// POST /api/auth/register response shape
+// message is a short status string like "registered"
+// user contains the new user fields and is also used to seed the session
+export type RegisterResponse = {
+	message: string;
+	user: AuthUser;
 };
 
-export function login(data: LoginRequest) {
-	return api<AuthResponse>("/auth/login", {
+// POST /api/auth/register
+// sends credentials to the backend and expects a RegisterResponse back
+// adminCode is optional and is only used if the backend has ADMIN_CODE configured
+export async function register(email: string, password: string, adminCode?: string) {
+	return api<RegisterResponse>("/auth/register", {
 		method: "POST",
-		body: data,
+		body: { email, password, adminCode },
 	});
 }
 
-export function register(data: RegisterRequest) {
-	return api<AuthResponse>("/auth/register", {
+// POST /api/auth/login
+// sends credentials to the backend and expects a LoginResponse back
+// backend will attach session cookies if express-session is enabled
+export async function login(email: string, password: string) {
+	return api<LoginResponse>("/auth/login", {
 		method: "POST",
-		body: data,
+		body: { email, password },
 	});
 }
 
-export function logout() {
-	return api<void>("/auth/logout", {
-		method: "POST",
+// POST /api/auth/logout
+// backend destroys/ rids of the session so /api/auth/me returns 401 afterward
+export async function logout() {
+	return api<{ message: string }>("/auth/logout", { method: "POST" });
+}
+
+// GET /api/auth/me
+// used on page load to detect if the browser currently has a valid session
+// if the user is not logged in, the backend returns 401 and api() should throw
+export async function getCurrentUser() {
+	return api<AuthUser>("/auth/me", {
+		method: "GET",
 	});
 }

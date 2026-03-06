@@ -1,119 +1,114 @@
-import type {
-	ReservationFormData,
-	ReservationFormErrors,
-} from "../../types/reservation";
+import type { ChangeEvent } from "react";
+import type { PetProfile, ReservationFormData, ReservationFormErrors } from "../../types/reservation";
 
-type PetInformationStepProps = {
+interface Props {
 	formData: ReservationFormData;
 	errors: ReservationFormErrors;
-	onFieldChange: <K extends keyof ReservationFormData>(
-		field: K,
-		value: ReservationFormData[K]
-	) => void;
-};
+	onChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
 
-export default function PetInformationStep({formData, errors, onFieldChange}: PetInformationStepProps) {
+	pets: PetProfile[];
+	selectedPetId: number | null;
+	onSelectPet: (petID: number | null) => void;
+}
+
+export default function PetInformationStep({
+	formData,
+	errors,
+	onChange,
+	pets,
+	selectedPetId,
+	onSelectPet,
+}: Props) {
+	// the select uses a string value, so null becomes "NEW"
+	const selectValue = selectedPetId === null ? "NEW" : String(selectedPetId);
+
 	return (
 		<div>
 			<h2>Pet Information</h2>
-			<p>Please provide your pet’s details.</p>
+			<p>Tell us about the pet coming in for the appointment.</p>
 
-			<div className="form-row">
-				<label htmlFor="petName">Pet Name *</label>
-				<input
-					id="petName"
-					type="text"
-					value={formData.petName}
-					onChange={(e) => onFieldChange("petName", e.target.value)}
-				/>
-				{errors.petName ? <p className="field-error">{errors.petName}</p> : null}
-			</div>
+			<div className="form-group">
+				<label>Saved Pets (optional)</label>
 
-			<div className="form-grid two-col">
-				<div className="form-row">
-					<label htmlFor="petType">Pet Type *</label>
-					<select
-						id="petType"
-						value={formData.petType}
-						onChange={(e) =>
-							onFieldChange("petType", e.target.value as ReservationFormData["petType"])
-						}
-					>
-						<option value="Dog">Dog</option>
-						<option value="Cat">Cat</option>
-						<option value="Other">Other</option>
-					</select>
-					{errors.petType ? <p className="field-error">{errors.petType}</p> : null}
-				</div>
-
-				<div className="form-row">
-					<label htmlFor="breed">Breed *</label>
-					<input
-						id="breed"
-						type="text"
-						value={formData.breed}
-						onChange={(e) => onFieldChange("breed", e.target.value)}
-						placeholder="If unknown, type 'Unknown'"
-					/>
-					{errors.breed ? <p className="field-error">{errors.breed}</p> : null}
-				</div>
-			</div>
-
-			<div className="form-grid two-col">
-				<div className="form-row">
-					<label htmlFor="petSex">Sex *</label>
-					<select
-						id="petSex"
-						value={formData.petSex}
-						onChange={(e) =>
-							onFieldChange("petSex", e.target.value as ReservationFormData["petSex"])
-						}
-					>
-						<option value="Male">Male</option>
-						<option value="Female">Female</option>
-						<option value="Unknown">Unknown</option>
-					</select>
-					{errors.petSex ? <p className="field-error">{errors.petSex}</p> : null}
-				</div>
-
-				<div className="form-row">
-					<label htmlFor="spayedNeutered">Spayed / Neutered *</label>
-					<select
-						id="spayedNeutered"
-						value={formData.spayedNeutered}
-						onChange={(e) =>
-							onFieldChange(
-								"spayedNeutered",
-								e.target.value as ReservationFormData["spayedNeutered"]
-							)
-						}
-					>
-						<option value="Yes">Yes</option>
-						<option value="No">No</option>
-						<option value="Unknown">Unknown</option>
-					</select>
-					{errors.spayedNeutered ? (
-						<p className="field-error">{errors.spayedNeutered}</p>
-					) : null}
-				</div>
-			</div>
-
-			<div className="form-row">
-				<label htmlFor="petAge">Pet Age (years) *</label>
-				<input
-					id="petAge"
-					type="number"
-					min={0}
-					max={80}
-					step={1}
-					value={formData.petAge}
+				{/* this dropdown is optional
+				   if the user picks a saved pet, Reservation.tsx can autofill the fields below */}
+				<select
+					value={selectValue}
 					onChange={(e) => {
-						const raw = e.target.value;
-						onFieldChange("petAge", raw === "" ? "" : Number(raw));
+						// select values come in as strings
+						const v = e.target.value;
+
+						// "NEW" means "not using a saved pet profile"
+						if (v === "NEW") onSelectPet(null);
+						else onSelectPet(Number(v));
 					}}
-					placeholder="Best guess if unknown"
-				/>
-				{errors.petAge ? <p className="field-error">{errors.petAge}</p> : null}
+				>
+					<option value="NEW">New pet / not saved</option>
+					{pets.map((p) => (
+						<option key={p.petID} value={String(p.petID)}>
+							{p.petName || `Pet #${p.petID}`}
+						</option>
+					))}
+				</select>
+
+				<p className="helper-text">Selecting a saved pet will autofill fields below.</p>
+			</div>
+
+			{/* from here down, inputs are controlled by formData */}
+			{/* name=... is what lets the shared onChange handler update the correct field */}
+
+			<div className="form-group">
+				<label>Pet Name</label>
+				<input name="petName" value={formData.petName} onChange={onChange} />
+				{errors.petName && <p className="error-text">{errors.petName}</p>}
+			</div>
+
+			<div className="form-group">
+				<label>Pet Type</label>
+				<select name="petType" value={formData.petType} onChange={onChange}>
+					<option value="">Select</option>
+					<option value="DOG">Dog</option>
+					<option value="CAT">Cat</option>
+					<option value="OTHER">Other</option>
+				</select>
+				{errors.petType && <p className="error-text">{errors.petType}</p>}
+			</div>
+
+			<div className="form-group">
+				<label>Breed</label>
+				<input name="breed" value={formData.breed} onChange={onChange} />
+				{errors.breed && <p className="error-text">{errors.breed}</p>}
+			</div>
+
+			<div className="form-group">
+				<label>Sex</label>
+				<select name="petSex" value={formData.petSex} onChange={onChange}>
+					<option value="">Select</option>
+					<option value="MALE">Male</option>
+					<option value="FEMALE">Female</option>
+					<option value="UNKNOWN">Unknown</option>
+				</select>
+				{errors.petSex && <p className="error-text">{errors.petSex}</p>}
+			</div>
+
+			<div className="form-group">
+				<label>Spayed / Neutered</label>
+				<select name="spayedNeutered" value={formData.spayedNeutered} onChange={onChange}>
+					<option value="">Select</option>
+					<option value="YES">Yes</option>
+					<option value="NO">No</option>
+					<option value="UNKNOWN">Unknown</option>
+				</select>
+				{errors.spayedNeutered && <p className="error-text">{errors.spayedNeutered}</p>}
+			</div>
+
+			<div className="form-group">
+				<label>Age</label>
+
+				{/* kept as a text input because the form state stores it as a string */}
+				<input name="petAge" value={formData.petAge} onChange={onChange} />
+
+				{errors.petAge && <p className="error-text">{errors.petAge}</p>}
 			</div>
 		</div>
 	);

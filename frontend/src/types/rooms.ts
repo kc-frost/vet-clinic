@@ -1,9 +1,13 @@
-export type RoomType = "CheckupRoom" | "XrayRoom" | "SurgeryRoom";
+export type RoomType = "EXAM" | "IMAGING" | "SURGERY" | "GROOMING";
 
-export type Room = {
-  roomNumber: number;
-  roomType: RoomType;
-  capacity: number;
-};
+export interface Room {
+	roomNumber: number;
+	roomType: RoomType;
+	capacity: number;
+}
 
-export type RoomCreate = Omit<Room, "roomNumber">;
+export interface RoomCreate {
+	roomNumber: number;
+	roomType: RoomType;
+	capacity: number;
+}

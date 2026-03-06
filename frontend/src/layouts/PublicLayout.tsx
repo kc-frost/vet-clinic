@@ -23,6 +23,7 @@ export default function PublicLayout() {
             <NavButton to="/reservation" className="nav-btn">Create Appointment</NavButton>
             <NavButton to="/login" className="nav-btn">Login</NavButton>
             <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
+            <NavButton to="/userprofile" className="nav-btn">My Profile</NavButton>
           </div>
         </nav>
       </header>

@@ -14,6 +14,8 @@ import equipmentRoutes from "./routes/equipment.js";
 import appointmentsRoutes from "./routes/appointments.js";   // view page
 import reservationsRoutes from "./routes/reservations.js";   // form flow
 
+import profileRoutes from "./routes/profile.js";
+
 dotenv.config();
 
 const app = express();
@@ -38,9 +40,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/medicine", medicineRoutes);
 app.use("/api/equipment", equipmentRoutes);
 
+
 // split responsibilities
 app.use("/api/appointments", appointmentsRoutes);   // list/delete for view page
 app.use("/api/reservations", reservationsRoutes);   // availability/create for form
+
+app.use("/api/profile", profileRoutes);
 
 const port = process.env.PORT || 3001;
 app.listen(port, "127.0.0.1", () => {

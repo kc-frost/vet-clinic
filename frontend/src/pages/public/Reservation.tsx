@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import "../../styles/reservation.css";
 import {
 	INITIAL_RESERVATION_FORM,
 	REASON_OPTIONS,
-	type AvailabilityResponse,
 	type AvailableSlot,
+	type CurrentUser,
+	type PetProfile,
 	type ReasonKey,
 	type ReservationFormData,
 	type ReservationFormErrors,
@@ -14,770 +15,662 @@ import PetInformationStep from "../../components/reservation/PetInformationStep"
 import MedicalHistoryStep from "../../components/reservation/MedicalHistoryStep";
 import InsuranceStep from "../../components/reservation/InsuranceStep";
 import ReviewConfirmStep from "../../components/reservation/ReviewConfirmStep";
-import { createReservation, getAvailabilityByReason } from "../../api/reservations";
+import { getCurrentUser } from "../../api/auth";
+import { createReservation, getAvailability, getPetsForUser, getReservationProfile } from "../../api/reservations";
 
-
-//type for rendering stepper UI. Denotes what the state of a form section is
-type StepStatus = "complete" | "current" | "locked";
-
-//type structure for each step in the navigation
 type Step = {
-	id: number;
-	label: string;
+	id: string;
+	title: string;
 };
 
-//form is split into 6 steps, each step renders its own component based on which step user is on
+// reservation form sections shown in the progress bar
+// step.id is used to decide which JSX block renders below
 const STEPS: Step[] = [
-	{ id: 1, label: "Owner Details" },
-	{ id: 2, label: "Pet Information" },
-	{ id: 3, label: "Appointment" },
-	{ id: 4, label: "Medical History" },
-	{ id: 5, label: "Insurance" },
-	{ id: 6, label: "Review & Confirm" },
+	{ id: "owner", title: "Owner" },
+	{ id: "pet", title: "Pet" },
+	{ id: "medical", title: "Medical" },
+	{ id: "appointment", title: "Appointment" },
+	{ id: "insurance", title: "Insurance" },
+	{ id: "review", title: "Review" },
 ];
 
-//used for state validation in step 1
-const US_STATE_CODES = [
-	"AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
-	"HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
-	"MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
-	"NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
-	"SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
-];
-
-/**
- * DEV toggle:
- * true  bypass validations and backend availability fetch
- * false  normal production behavior
- */
-const DEV_BYPASS_VALIDATION = false;
-
-//determines the visual state of each form section navigation button
-function getStepStatus(
-	stepId: number,
-	currentStep: number,
-	furthestCompletedStep: number
-): StepStatus {
-	if (stepId === currentStep) return "current";
-	if (stepId <= furthestCompletedStep) return "complete";
-	return "locked";
+function isBlank(v: string) {
+	return !v || v.trim() === "";
 }
 
-//converts a date object into this format, YYYY-MM-DD, which the backend expects.
-function formatDateForInput(date: Date): string {
-	const y = date.getFullYear();
-	const m = String(date.getMonth() + 1).padStart(2, "0");
-	const d = String(date.getDate()).padStart(2, "0");
-	return `${y}-${m}-${d}`;
+function is2LetterState(v: string) {
+	return /^[A-Za-z]{2}$/.test(v.trim());
 }
 
-//helper func that adds days to an existing date object. Used to create range of dates
-//used when requesting availability from date range from backend.
-function addDays(date: Date, days: number): Date {
-	const next = new Date(date);
-	next.setDate(next.getDate() + days);
-	return next;
+function isZip(v: string) {
+	return /^\d{5}(-\d{4})?$/.test(v.trim());
 }
 
-//basic email validation
-function isValidEmail(emailRaw: string): boolean {
-	const email = emailRaw.trim();
-	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+// accepts common US-style phone formats:
+//  5125551234
+//  (512) 555-1234
+//  512-555-1234
+//  +1 512 555 1234
+function isPhone(v: string) {
+	return /^\+?\d[\d\s().-]{7,}$/.test(v.trim());
 }
 
-//phone number field validator and canonicalizer
-//accepted inputs are exactly 10 digits or exactly ###-###-####
-//if valid, returns and makes sure it's stored as ###-###-####. 
-function canonicalizePhone(phoneRaw: string): { ok: boolean; formatted: string } {
-	const raw = String(phoneRaw).trim();
-
-	//only takes exactly 10 digits
-	if (/^[0-9]{10}$/.test(raw)) {
-		return {
-			ok: true,
-			formatted: `${raw.slice(0, 3)}-${raw.slice(3, 6)}-${raw.slice(6, 10)}`,
-		};
-	}
-
-	//only takes string formatted exactly as ###-###-####
-	if (/^[0-9]{3}-[0-9]{3}-[0-9]{4}$/.test(raw)) {
-		const digits = raw.replace(/-/g, "");
-		return {
-			ok: true,
-			formatted: `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`,
-		};
-	}
-
-	return { ok: false, formatted: "" };
+function labelForReason(reasonKey: ReasonKey | "") {
+	if (!reasonKey) return "—";
+	const opt = REASON_OPTIONS.find((o) => o.value === reasonKey);
+	return opt ? opt.label : reasonKey;
 }
-
-//validates zip code to 77777 or 77777+4 extra digit code
-function isValidZip(zipRaw: string): boolean {
-	const zip = zipRaw.trim();
-	return /^\d{5}(-\d{4})?$/.test(zip);
-}
-
-//availability slotID has start/end times inside the string. So this pulls the startTime out of the 
-//string. Parameter passed in strings look like slot_YYYY-MM-DD_HHMM_HHMM
-//returns the first HHMM
-function extractStartTimeFromSlotId(slotId: string): string {
-	// expected: slot_YYYY-MM-DD_HHMM_HHMM
-	const parts = String(slotId || "").split("_");
-	if (parts.length < 4) return "";
-	const hhmm = parts[2]; // start time segment
-	if (!/^\d{4}$/.test(hhmm)) return "";
-	return `${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)}`;
-}
-
-
 
 export default function Reservation() {
-    //the step the user is currently on
-	const [currentStep, setCurrentStep] = useState<number>(1);
-	const [furthestCompletedStep, setFurthestCompletedStep] = useState<number>(1);
+	// current logged-in user
+	// loaded from GET /api/auth/me (getCurrentUser)
+	// used for:
+	//  userID in requests
+	//  email shown in Owner section (readOnly input)
+	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
-    //all form data lives in this one object, and each step edits its own relevant fields 
+	// guards the initial auth request
+	// while true, the UI shows Loading...
+	const [isLoadingUser, setIsLoadingUser] = useState(true);
+
+	// error message for GET /api/auth/me failures
+	// shown if user is not authenticated or backend is unreachable
+	const [userLoadError, setUserLoadError] = useState<string>("");
+
+	// list of saved pets for the logged in user
+	// loaded from GET /api/reservations/pets?userID=#
+	// used to populate the dropdown in PetInformationStep
+	const [pets, setPets] = useState<PetProfile[]>([]);
+
+	// selected saved pet id
+	// null means "new pet / not saved"
+	// when a saved pet is selected, pet fields are autofilled into formData
+	const [selectedPetId, setSelectedPetId] = useState<number | null>(null);
+
+	// all reservation form input values live here
+	// each form section reads and writes to this object
 	const [formData, setFormData] = useState<ReservationFormData>(INITIAL_RESERVATION_FORM);
 
-    //errors are stored per field, and are keyed by the field key.
+	// validation errors keyed by form field name
+	// each validateX() function returns an object that gets set here
 	const [errors, setErrors] = useState<ReservationFormErrors>({});
 
-    //these hold the availability responses from the backend for the Appointment Creation Step 
-	const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
-	const [availabilityLoading, setAvailabilityLoading] = useState<boolean>(false);
-	const [availabilityError, setAvailabilityError] = useState<string>("");
+	// current section index inside STEPS
+	// changing this changes which section is rendered
+	const [stepIndex, setStepIndex] = useState(0);
 
-    //submits state. this prevents double submits and lets us show submit message
-	const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-	const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+	// derived current step object
+	// used for:
+	//  rendering the correct section JSX
+	//  rendering progress text
+	const step = STEPS[stepIndex];
+
+	// available time slots returned by the backend
+	// loaded from GET /api/reservations/availability?reasonKey=...&userID=...&days=...
+	const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
+
+	// while true, the slots dropdown shows "Loading slots..." and is disabled
+	const [slotsLoading, setSlotsLoading] = useState(false);
+
+	// error message for slot fetch
+	// shown under the slot dropdown
+	const [slotsError, setSlotsError] = useState<string>("");
+
+	// UI-only identifier of the selected slot
+	// this is NOT submitted to the backend
+	// when selectedSlotId changes, the code writes slot.date + slot.startTime into formData
+	const [selectedSlotId, setSelectedSlotId] = useState<string>("");
+
+	// submission state for POST /api/reservations/book
+	const [isSubmitting, setIsSubmitting] = useState(false);
+
+	// turns true after a successful submit
+	// used to:
+	//  lock out Back/Next buttons
+	//  show "Create New Appointment" button
+	const [isSubmitted, setIsSubmitted] = useState(false);
+
+	// user-visible submit result message
+	// either a success message or an error message string
 	const [submitMessage, setSubmitMessage] = useState<string>("");
 
-    //step bounds for next and previous buttons
-	const canGoNext = useMemo(() => currentStep < STEPS.length, [currentStep]);
-	const canGoPrev = useMemo(() => currentStep > 1, [currentStep]);
+	// EFFECT 1
+	// loads the current logged-in user once when the page mounts
+	// alive is a cancellation flag:
+	//  if the component unmounts before the async request finishes,
+	//  alive becomes false, and we skip setState calls
+	//  this avoids React warnings about updating state on an unmounted component
+	useEffect(() => {
+		let alive = true;
 
-    //this component requests 90 days of availability from backend. So these are the date objects
-	const today = useMemo(() => new Date(), []);
-	const startDate = useMemo(() => formatDateForInput(today), [today]);
-	const endDate = useMemo(() => formatDateForInput(addDays(today, 90)), [today]);
+		(async () => {
+			try {
+				setIsLoadingUser(true);
+				setUserLoadError("");
 
-    // groups backend slots by date so we can populate the "date" dropdown first
-	const slotsByDate = useMemo(() => {
-		const map: Record<string, AvailableSlot[]> = {};
-		if (!availability) return map;
+				const me = await getCurrentUser();
+				if (!alive) return;
 
-		for (const slot of availability.slots) {
-			if (!map[slot.date]) map[slot.date] = [];
-			map[slot.date].push(slot);
+				setCurrentUser(me);
+
+				// email is tied to the account
+				// this mirrors it into the form so the Owner section can display it
+				setFormData((prev) => ({ ...prev, email: me.email }));
+			} catch (err: any) {
+				if (!alive) return;
+				setUserLoadError(err?.message || "failed to load current user");
+			} finally {
+				if (!alive) return;
+				setIsLoadingUser(false);
+			}
+		})();
+
+		return () => {
+			alive = false;
+		};
+	}, []);
+
+	// EFFECT 2
+	// after currentUser is known, pull the saved reservation profile + saved pets
+	// profile is used to prefill contact fields (owner section)
+	// pets are used for the pet dropdown (pet section)
+	// alive is the same cancellation flag pattern as above
+	useEffect(() => {
+		let alive = true;
+
+		(async () => {
+			if (!currentUser) return;
+
+			// GET /api/reservations/profile?userID=#
+			try {
+				const profile = await getReservationProfile(currentUser.userID);
+				if (!alive) return;
+
+				setFormData((prev) => ({
+					...prev,
+
+					// only fill blanks
+					// if the user typed something already, keep their edits
+					legalFirstName: isBlank(prev.legalFirstName) ? profile.legalFirstName : prev.legalFirstName,
+					legalLastName: isBlank(prev.legalLastName) ? profile.legalLastName : prev.legalLastName,
+					phone: isBlank(prev.phone) ? profile.phone : prev.phone,
+					addressLine1: isBlank(prev.addressLine1) ? profile.addressLine1 : prev.addressLine1,
+					city: isBlank(prev.city) ? profile.city : prev.city,
+					state: isBlank(prev.state) ? profile.state : prev.state,
+					zipCode: isBlank(prev.zipCode) ? profile.zipCode : prev.zipCode,
+
+					// keep auth email as the source of truth
+					email: currentUser.email,
+				}));
+			} catch {
+				// profile is optional
+				// if it fails, the form still works, it just stays blank
+			}
+
+			// GET /api/reservations/pets?userID=#
+			try {
+				const list = await getPetsForUser(currentUser.userID);
+				if (!alive) return;
+				setPets(list);
+			} catch {
+				// pets are optional
+				// if it fails, the Pet section still works with "New pet"
+			}
+		})();
+
+		return () => {
+			alive = false;
+		};
+	}, [currentUser?.userID]);
+
+	// EFFECT 3
+	// when a reason is selected, fetch availability slots for that reason
+	// alive is the cancellation flag pattern again
+	useEffect(() => {
+		let alive = true;
+
+		(async () => {
+			if (!currentUser) return;
+			if (!formData.reasonKey) return;
+
+			setSlotsLoading(true);
+			setSlotsError("");
+
+			try {
+				const resp = await getAvailability({
+					reasonKey: formData.reasonKey as ReasonKey,
+					userID: currentUser.userID,
+					days: 30,
+				});
+				if (!alive) return;
+				setAvailableSlots(resp.slots || []);
+			} catch (err: any) {
+				if (!alive) return;
+				setAvailableSlots([]);
+				setSlotsError(err?.message || "failed to fetch availability");
+			} finally {
+				if (!alive) return;
+				setSlotsLoading(false);
+			}
+		})();
+
+		return () => {
+			alive = false;
+		};
+	}, [currentUser?.userID, formData.reasonKey]);
+
+	// clears errors[field] when the user edits that field again
+	function clearFieldError<K extends keyof ReservationFormData>(field: K) {
+		setErrors((prev) => {
+			if (!prev[field]) return prev;
+			const next = { ...prev };
+			delete next[field];
+			return next;
+		});
+	}
+
+	// updates one field in formData and removes its error
+	function onFieldChange<K extends keyof ReservationFormData>(field: K, value: ReservationFormData[K]) {
+		setFormData((prev) => ({ ...prev, [field]: value }));
+		clearFieldError(field);
+	}
+
+	// shared change handler for inputs/selects/textareas
+	// input name must match a key in ReservationFormData
+	function onInputChange(e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
+		const { name, value, type } = e.target;
+
+		if (type === "checkbox") {
+			const checked = (e.target as HTMLInputElement).checked;
+			onFieldChange(name as keyof ReservationFormData, checked as any);
+			return;
 		}
-		return map;
-	}, [availability]);
 
-    //list of dates for date dropdown
-	const availableDates = useMemo(
-		() => Object.keys(slotsByDate).sort(),
-		[slotsByDate]
-	);
+		onFieldChange(name as keyof ReservationFormData, value as any);
+	}
 
-    //list of time slots for the currently selected date
-	const currentDateSlots = useMemo(() => {
-		if (!formData.appointmentDate) return [];
-		return slotsByDate[formData.appointmentDate] || [];
-	}, [formData.appointmentDate, slotsByDate]);
+	// selects a saved pet or "new pet"
+	// saved pet selection fills both pet fields and medical history fields
+	function onSelectPet(petID: number | null) {
+		setSelectedPetId(petID);
 
-    //clears the appointment date/time selection whenever reason changes, or when no availability exists
-	function clearAppointmentSelection() {
+		if (petID === null) {
+			// reset pet-related fields to blank for a new pet entry
+			setFormData((prev) => ({
+				...prev,
+				petName: "",
+				petType: "",
+				breed: "",
+				petSex: "",
+				spayedNeutered: "",
+				petAge: "",
+				currentMedications: "",
+				knownAllergies: "",
+				pastInjuriesConditions: "",
+				vaccinationsUpToDate: "",
+				heartwormPreventionCurrent: "",
+			}));
+			return;
+		}
+
+		const p = pets.find((x) => x.petID === petID);
+		if (!p) return;
+
 		setFormData((prev) => ({
 			...prev,
-			appointmentDate: "",
-			appointmentTimeSlot: "",
+			petName: p.petName || "",
+			petType: p.petType || "",
+			breed: p.breed || "",
+			petSex: p.petSex || "",
+			spayedNeutered: p.spayedNeutered || "",
+			petAge: p.age === null ? "" : String(p.age),
+			currentMedications: p.currentMedications || "",
+			knownAllergies: p.knownAllergies || "",
+			pastInjuriesConditions: p.pastInjuriesConditions || "",
+			vaccinationsUpToDate: p.vaccinationsUpToDate || "",
+			heartwormPreventionCurrent: p.heartwormPreventionCurrent || "",
 		}));
 	}
 
-    //resets the entire form so a user can submit another appointment starting new from the beginning
-	function resetReservationForm() {
-		setFormData(INITIAL_RESERVATION_FORM);
-		setErrors({});
-		setAvailability(null);
-		setAvailabilityError("");
-		setAvailabilityLoading(false);
-		setCurrentStep(1);
-		setFurthestCompletedStep(1);
-		setIsSubmitting(false);
-		setIsSubmitted(false);
-		setSubmitMessage("");
+	// resets slot selection when the reason changes
+	// reasonKey drives which slot list is fetched from the backend
+	function onReasonChange(nextReason: ReasonKey | "") {
+		setSelectedSlotId("");
+		setAvailableSlots([]);
+
+		setFormData((prev) => ({
+			...prev,
+			reasonKey: nextReason,
+			appointmentDate: "",
+			startTime: "",
+		}));
+
+		// clear reason/slot errors since the user is making a new selection
+		setErrors((prev) => {
+			const next = { ...prev };
+			delete next.reasonKey;
+			delete next.appointmentDate;
+			delete next.startTime;
+			return next;
+		});
 	}
 
-    //calls backend to get availability for a given reason and date range
-	async function fetchAvailabilityForReason(reasonKey: ReasonKey) {
-		setAvailabilityLoading(true);
-		setAvailabilityError("");
+	// stores slotId for the dropdown, but writes slot data into formData
+	// backend submit uses appointmentDate + startTime, not slotId
+	function onSlotChange(slotId: string) {
+		setSelectedSlotId(slotId);
+
+		const slot = availableSlots.find((s) => s.slotId === slotId);
+		if (!slot) {
+			setFormData((prev) => ({ ...prev, appointmentDate: "", startTime: "" }));
+			return;
+		}
+
+		setFormData((prev) => ({
+			...prev,
+			appointmentDate: slot.date,
+			startTime: slot.startTime,
+		}));
+
+		clearFieldError("appointmentDate");
+		clearFieldError("startTime");
+	}
+
+	// validation helpers
+	// each one returns an object where keys are fields and values are error messages
+	function validateOwner(data: ReservationFormData) {
+		const e: ReservationFormErrors = {};
+
+		if (isBlank(data.legalFirstName)) e.legalFirstName = "required";
+		if (isBlank(data.legalLastName)) e.legalLastName = "required";
+		if (isBlank(data.email)) e.email = "required";
+
+		if (isBlank(data.phone)) e.phone = "required";
+		else if (!isPhone(data.phone)) e.phone = "invalid phone";
+
+		if (isBlank(data.addressLine1)) e.addressLine1 = "required";
+		if (isBlank(data.city)) e.city = "required";
+
+		if (isBlank(data.state)) e.state = "required";
+		else if (!is2LetterState(data.state)) e.state = "use 2 letter state";
+
+		if (isBlank(data.zipCode)) e.zipCode = "required";
+		else if (!isZip(data.zipCode)) e.zipCode = "invalid zip";
+
+		return e;
+	}
+
+	function validatePet(data: ReservationFormData) {
+		const e: ReservationFormErrors = {};
+
+		if (isBlank(data.petName)) e.petName = "required";
+		if (isBlank(data.petType)) e.petType = "required";
+		if (isBlank(data.breed)) e.breed = "required";
+		if (isBlank(data.petSex)) e.petSex = "required";
+		if (isBlank(data.spayedNeutered)) e.spayedNeutered = "required";
+
+		if (!isBlank(data.petAge)) {
+			const n = Number(data.petAge);
+			if (!Number.isFinite(n) || n < 0) e.petAge = "invalid";
+		}
+
+		return e;
+	}
+
+	function validateAppointment(data: ReservationFormData) {
+		const e: ReservationFormErrors = {};
+
+		if (!data.reasonKey) e.reasonKey = "required";
+		if (isBlank(data.appointmentDate)) e.appointmentDate = "required";
+		if (isBlank(data.startTime)) e.startTime = "required";
+
+		return e;
+	}
+
+	function validateConsent(data: ReservationFormData) {
+		const e: ReservationFormErrors = {};
+		if (!data.consentToFormInfo) e.consentToFormInfo = "required";
+		return e;
+	}
+
+	// runs validation only for the current section
+	// called by Next and by Submit
+	function validateCurrentStep() {
+		let e: ReservationFormErrors = {};
+
+		if (step.id === "owner") e = validateOwner(formData);
+		else if (step.id === "pet") e = validatePet(formData);
+		else if (step.id === "appointment") e = validateAppointment(formData);
+		else if (step.id === "review") e = validateConsent(formData);
+
+		setErrors(e);
+		return Object.keys(e).length === 0;
+	}
+
+	function goNext() {
+		if (!validateCurrentStep()) return;
+		setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
+	}
+
+	function goBack() {
+		setStepIndex((i) => Math.max(i - 1, 0));
+	}
+
+	// sends the final booking request
+	// payload includes:
+	//  userID for ownership/linking
+	//  reasonKey + appointmentDate + startTime for scheduling
+	//  petID for saved pet selection (can be null)
+	//  formData for storing the submitted form details
+	async function onSubmit() {
+		if (!currentUser) return;
+		if (!validateCurrentStep()) return;
+
+		setIsSubmitting(true);
+		setSubmitMessage("");
 
 		try {
-			const res = await getAvailabilityByReason({
-				reasonKey,
-				startDate,
-				endDate,
-			});
-			setAvailability(res);
-		} catch (err) {
-			const message =
-				err instanceof Error ? err.message : "Failed to load availability";
-			setAvailabilityError(message);
-			setAvailability(null);
+			const payload = {
+				userID: currentUser.userID,
+				reasonKey: formData.reasonKey as ReasonKey,
+				appointmentDate: formData.appointmentDate,
+				startTime: formData.startTime,
+				enablePetProfiles: true,
+				petID: selectedPetId,
+				formData,
+			};
+
+			const resp = await createReservation(payload);
+
+			setIsSubmitted(true);
+			setSubmitMessage(
+				`Appointment confirmed for ${labelForReason(resp.reasonKey)} on ${resp.date} (${resp.durationMinutes} min).`
+			);
+		} catch (err: any) {
+			setSubmitMessage(err?.message || "submission failed");
 		} finally {
-			setAvailabilityLoading(false);
+			setIsSubmitting(false);
 		}
 	}
 
-    //whenever "reason for visit" changes, re-fetches available slots from backend
-	//also clears the old selected date and time so we don't let the user keep a stale date
-	useEffect(() => {
-		if (DEV_BYPASS_VALIDATION) {
-			return;
-		}
+	// clears appointment-specific state to allow another booking
+	// keeps owner fields so the user does not re-enter contact info
+	function onCreateNewAppointment() {
+		setIsSubmitted(false);
+		setSubmitMessage("");
+		setStepIndex(0);
+		setSelectedPetId(null);
+		setSelectedSlotId("");
+		setAvailableSlots([]);
 
-		if (!formData.reasonForVisit) {
-			setAvailability(null);
-			setAvailabilityError("");
-			clearAppointmentSelection();
-			return;
-		}
-
-		clearAppointmentSelection();
-		fetchAvailabilityForReason(formData.reasonForVisit as ReasonKey);
-	}, [formData.reasonForVisit]);
-
-	function setField<K extends keyof ReservationFormData>(
-		field: K,
-		value: ReservationFormData[K]
-	) {
-		setFormData((prev) => ({ ...prev, [field]: value }));
-		setErrors((prev) => ({ ...prev, [field]: "" }));
+		setErrors({});
+		setFormData((prev) => ({
+			...INITIAL_RESERVATION_FORM,
+			email: prev.email,
+			legalFirstName: prev.legalFirstName,
+			legalLastName: prev.legalLastName,
+			phone: prev.phone,
+			addressLine1: prev.addressLine1,
+			city: prev.city,
+			state: prev.state,
+			zipCode: prev.zipCode,
+		}));
 	}
 
-	function validateStep1(): boolean {
-		const nextErrors: ReservationFormErrors = {};
-
-		if (!formData.legalFirstName.trim()) {
-			nextErrors.legalFirstName = "First name is required.";
-		}
-
-		if (!formData.legalLastName.trim()) {
-			nextErrors.legalLastName = "Last name is required.";
-		}
-
-		if (!formData.email.trim()) {
-			nextErrors.email = "Email is required.";
-		} else if (!isValidEmail(formData.email)) {
-			nextErrors.email = "Please enter a valid email address.";
-		}
-
-        if (!formData.phone.trim()) {
-            nextErrors.phone = "Phone number is required.";
-        } else {
-            const phone = canonicalizePhone(formData.phone);
-
-            if (!phone.ok) {
-                nextErrors.phone = "Phone number must be 10 digits (e.g. 7773334444 or 777-777-7777).";
-            } else {
-                //stores canonical format for consistency
-                if (formData.phone !== phone.formatted) {
-                    setFormData((prev) => ({ ...prev, phone: phone.formatted }));
-                }
-            }
-}
-
-		if (!formData.addressLine1.trim()) {
-			nextErrors.addressLine1 = "Address line 1 is required.";
-		}
-
-		if (!formData.city.trim()) {
-			nextErrors.city = "City is required.";
-		}
-
-		if (!formData.state.trim()) {
-			nextErrors.state = "State is required.";
-		} else if (!US_STATE_CODES.includes(formData.state)) {
-			nextErrors.state = "Please select a valid state code.";
-		}
-
-		if (!formData.zipCode.trim()) {
-			nextErrors.zipCode = "ZIP code is required.";
-		} else if (!isValidZip(formData.zipCode)) {
-			nextErrors.zipCode =
-				"ZIP must be 5 digits or 5+4 format (e.g. 12345 or 12345-6789).";
-		}
-
-		setErrors((prev) => ({ ...prev, ...nextErrors }));
-		return Object.keys(nextErrors).length === 0;
-	}
-
-	function validateStep2(): boolean {
-		const nextErrors: ReservationFormErrors = {};
-
-		if (!formData.petName.trim()) {
-			nextErrors.petName = "Pet name is required.";
-		}
-
-		if (!formData.petType) {
-			nextErrors.petType = "Pet type is required.";
-		}
-
-		if (!formData.breed.trim()) {
-			nextErrors.breed = "Breed is required. If unknown, type 'Unknown'.";
-		}
-
-		if (!formData.petSex) {
-			nextErrors.petSex = "Pet sex is required.";
-		}
-
-		if (!formData.spayedNeutered) {
-			nextErrors.spayedNeutered = "Please select spayed/neutered status.";
-		}
-
-		if (formData.petAge === "") {
-			nextErrors.petAge = "Pet age is required (best guess is okay).";
-		} else if (
-			typeof formData.petAge !== "number" ||
-			Number.isNaN(formData.petAge)
-		) {
-			nextErrors.petAge = "Pet age must be a valid number.";
-		} else if (formData.petAge < 0) {
-			nextErrors.petAge = "Pet age cannot be negative.";
-		} else if (formData.petAge > 80) {
-			nextErrors.petAge = "Please enter a realistic pet age.";
-		}
-
-		setErrors((prev) => ({ ...prev, ...nextErrors }));
-		return Object.keys(nextErrors).length === 0;
-	}
-
-	function validateStep3(): boolean {
-		const nextErrors: ReservationFormErrors = {};
-
-		if (!formData.reasonForVisit) {
-			nextErrors.reasonForVisit = "Please select a reason for visit.";
-		}
-		if (!formData.appointmentDate) {
-			nextErrors.appointmentDate = "Please select an appointment date.";
-		}
-		if (!formData.appointmentTimeSlot) {
-			nextErrors.appointmentTimeSlot =
-				"Please select an appointment time slot.";
-		}
-
-		setErrors((prev) => ({ ...prev, ...nextErrors }));
-		return Object.keys(nextErrors).length === 0;
-	}
-
-	function validateStep4(): boolean {
-		const nextErrors: ReservationFormErrors = {};
-
-		const past = formData.pastInjuriesConditions.trim();
-		const meds = formData.currentMedications.trim();
-		const allergies = formData.knownAllergies.trim();
-
-		if (!past) {
-			nextErrors.pastInjuriesConditions =
-				"Past injuries/conditions is required. Type 'None' if not applicable.";
-		} else if (past.length > 500) {
-			nextErrors.pastInjuriesConditions =
-				"Past injuries/conditions must be 500 characters or fewer.";
-		}
-
-		if (!meds) {
-			nextErrors.currentMedications =
-				"Current medications is required. Type 'None' if not applicable.";
-		} else if (meds.length > 500) {
-			nextErrors.currentMedications =
-				"Current medications must be 500 characters or fewer.";
-		}
-
-		if (!allergies) {
-			nextErrors.knownAllergies =
-				"Known allergies is required. Type 'None' if not applicable.";
-		} else if (allergies.length > 500) {
-			nextErrors.knownAllergies =
-				"Known allergies must be 500 characters or fewer.";
-		}
-
-		if (!formData.vaccinationsUpToDate) {
-			nextErrors.vaccinationsUpToDate = "Please select vaccination status.";
-		}
-
-		if (!formData.heartwormPreventionCurrent) {
-			nextErrors.heartwormPreventionCurrent =
-				"Please select heartworm prevention status.";
-		}
-
-		setErrors((prev) => ({ ...prev, ...nextErrors }));
-		return Object.keys(nextErrors).length === 0;
-	}
-
-	function validateStep5(): boolean {
-		const nextErrors: ReservationFormErrors = {};
-
-		const provider = formData.insuranceProvider.trim();
-		const memberId = formData.insuranceMemberId.trim();
-
-		if (provider.length > 120) {
-			nextErrors.insuranceProvider =
-				"Insurance provider must be 120 characters or fewer.";
-		}
-
-		if (memberId.length > 120) {
-			nextErrors.insuranceMemberId =
-				"Member/Policy ID must be 120 characters or fewer.";
-		}
-
-		setErrors((prev) => ({ ...prev, ...nextErrors }));
-		return Object.keys(nextErrors).length === 0;
-	}
-
-	function validateStep6(): boolean {
-		const nextErrors: ReservationFormErrors = {};
-
-		if (!formData.consentToFormInfo) {
-			nextErrors.consentToFormInfo =
-				"You must confirm consent before submitting.";
-		}
-
-		setErrors((prev) => ({ ...prev, ...nextErrors }));
-		return Object.keys(nextErrors).length === 0;
-	}
-
-	function validateCurrentStep(step: number): boolean {
-		if (step === 1) return validateStep1();
-		if (step === 2) return validateStep2();
-		if (step === 3) return validateStep3();
-		if (step === 4) return validateStep4();
-		if (step === 5) return validateStep5();
-		if (step === 6) return validateStep6();
-		return true;
-	}
-
-	function canProceedFromStep(step: number): boolean {
-		if (DEV_BYPASS_VALIDATION) return true;
-		return validateCurrentStep(step);
-	}
-
-    async function handleSubmitAppointment() {
-    if (isSubmitting || isSubmitted) return;
-
-    const isValid = validateStep6();
-    if (!isValid) return;
-
-    setIsSubmitting(true);
-    setSubmitMessage("");
-
-    try {
-        // Convert UI slotId -> backend startTime
-        const startTime = extractStartTimeFromSlotId(formData.appointmentTimeSlot);
-
-        if (!startTime) {
-        setSubmitMessage("Invalid appointment time slot format.");
-        return;
-        }
-
-        // Build payload expected by backend /api/reservations
-        const payload = {
-        reasonKey: formData.reasonForVisit as ReasonKey,
-        appointmentDate: formData.appointmentDate,
-        startTime,
-        userEmail: formData.email?.trim() || null,
-        vetID: null,
-        petID: null,
-        };
-
-        const res = await createReservation(payload);
-
-        setIsSubmitted(true);
-        setSubmitMessage(
-        res.message || "Your appointment request has been submitted successfully."
-        );
-    } catch (err) {
-        const msg =
-        err instanceof Error ? err.message : "Failed to submit appointment.";
-        setSubmitMessage(msg);
-    } finally {
-        setIsSubmitting(false);
-    }
-    }
-
-	function handleNext() {
-		if (isSubmitted) return;
-		if (!canGoNext) return;
-
-		const currentIsValid = canProceedFromStep(currentStep);
-		if (!currentIsValid) return;
-
-		const nextStep = currentStep + 1;
-		setCurrentStep(nextStep);
-		setFurthestCompletedStep((prev) => Math.max(prev, nextStep));
-	}
-
-	function handlePrev() {
-		if (isSubmitted) return;
-		if (!canGoPrev) return;
-		setCurrentStep((prev) => prev - 1);
-	}
-
-	function handleStepClick(targetStep: number) {
-		if (isSubmitted) return;
-		if (targetStep > furthestCompletedStep) return;
-
-		if (targetStep <= currentStep) {
-			setCurrentStep(targetStep);
-			return;
-		}
-
-		if (DEV_BYPASS_VALIDATION) {
-			setCurrentStep(targetStep);
-			return;
-		}
-
-		for (let step = currentStep; step < targetStep; step++) {
-			const isValid = validateCurrentStep(step);
-			if (!isValid) {
-				setCurrentStep(step);
-				return;
-			}
-		}
-
-		setCurrentStep(targetStep);
-	}
-
-	function renderStepContent() {
-		if (currentStep === 1) {
-			return (
-				<OwnerDetailsStep
-					formData={formData}
-					errors={errors}
-					onFieldChange={setField}
-					stateCodes={US_STATE_CODES}
-				/>
-			);
-		}
-
-		if (currentStep === 2) {
-			return (
-				<PetInformationStep
-					formData={formData}
-					errors={errors}
-					onFieldChange={setField}
-				/>
-			);
-		}
-
-		if (currentStep === 3) {
-			return (
-				<div>
-					<h2>Appointment</h2>
-					<p>Select a reason first. Availability is filtered by reason.</p>
-
-					<div className="form-row">
-						<label htmlFor="reasonForVisit">Reason for Visit *</label>
-						<select
-							id="reasonForVisit"
-							value={formData.reasonForVisit}
-							onChange={(e) =>
-								setField(
-									"reasonForVisit",
-									e.target.value as ReservationFormData["reasonForVisit"]
-								)
-							}
-						>
-							<option value="">Select a reason</option>
-							{REASON_OPTIONS.map((opt) => (
-								<option key={opt.key} value={opt.key}>
-									{opt.label}
-								</option>
-							))}
-						</select>
-						{errors.reasonForVisit ? (
-							<p className="field-error">{errors.reasonForVisit}</p>
-						) : null}
-					</div>
-
-					{!formData.reasonForVisit ? (
-						<div className="availability-placeholder">
-							Please select a reason for visit to load available appointments.
-						</div>
-					) : (
-						<>
-							{availabilityLoading ? <p>Loading available appointments...</p> : null}
-							{availabilityError ? (
-								<p className="field-error">{availabilityError}</p>
-							) : null}
-
-							<div className="form-row">
-								<label htmlFor="appointmentDate">Appointment Date *</label>
-								<select
-									id="appointmentDate"
-									value={formData.appointmentDate}
-									onChange={(e) => {
-										setField("appointmentDate", e.target.value);
-										setField("appointmentTimeSlot", "");
-									}}
-									disabled={availabilityLoading || availableDates.length === 0}
-								>
-									<option value="">
-										{availableDates.length === 0
-											? "No dates available"
-											: "Select a date"}
-									</option>
-									{availableDates.map((dateValue) => (
-										<option key={dateValue} value={dateValue}>
-											{dateValue}
-										</option>
-									))}
-								</select>
-								{errors.appointmentDate ? (
-									<p className="field-error">{errors.appointmentDate}</p>
-								) : null}
-							</div>
-
-							<div className="form-row">
-								<label htmlFor="appointmentTimeSlot">Appointment Time *</label>
-								<select
-									id="appointmentTimeSlot"
-									value={formData.appointmentTimeSlot}
-									onChange={(e) => setField("appointmentTimeSlot", e.target.value)}
-									disabled={!formData.appointmentDate || currentDateSlots.length === 0}
-								>
-									<option value="">
-										{!formData.appointmentDate
-											? "Select a date first"
-											: currentDateSlots.length === 0
-											? "No times available for this date"
-											: "Select a time"}
-									</option>
-									{currentDateSlots.map((slot) => (
-										<option key={slot.slotId} value={slot.slotId}>
-											{slot.displayLabel}
-										</option>
-									))}
-								</select>
-								{errors.appointmentTimeSlot ? (
-									<p className="field-error">{errors.appointmentTimeSlot}</p>
-								) : null}
-							</div>
-						</>
-					)}
-				</div>
-			);
-		}
-
-		if (currentStep === 4) {
-			return (
-				<MedicalHistoryStep
-					formData={formData}
-					errors={errors}
-					onFieldChange={setField}
-				/>
-			);
-		}
-
-		if (currentStep === 5) {
-			return (
-				<InsuranceStep
-					formData={formData}
-					errors={errors}
-					onFieldChange={setField}
-				/>
-			);
-		}
-
-		if (currentStep === 6) {
-			return (
-				<ReviewConfirmStep
-					formData={formData}
-					errors={errors}
-					onFieldChange={setField}
-					onSubmit={handleSubmitAppointment}
-					isSubmitting={isSubmitting}
-					isSubmitted={isSubmitted}
-					submitMessage={submitMessage}
-					onCreateNewAppointment={resetReservationForm}
-				/>
-			);
-		}
-
+	// UI text for the step progress line
+	const progressText = useMemo(() => {
+		return `Step ${stepIndex + 1} of ${STEPS.length}: ${step.title}`;
+	}, [stepIndex, step.title]);
+
+	if (isLoadingUser) {
 		return (
-			<div>
-				<h2>{STEPS[currentStep - 1].label}</h2>
-				<p>Step content</p>
+			<div className="reservation-page">
+				<h1>Make a Reservation</h1>
+				<p>Loading...</p>
+			</div>
+		);
+	}
+
+	if (userLoadError) {
+		return (
+			<div className="reservation-page">
+				<h1>Make a Reservation</h1>
+				<p className="error-text">{userLoadError}</p>
+			</div>
+		);
+	}
+
+	if (!currentUser) {
+		return (
+			<div className="reservation-page">
+				<h1>Make a Reservation</h1>
+				<p className="error-text">not logged in</p>
 			</div>
 		);
 	}
 
 	return (
-		<main className="reservation-page">
-			<section className="reservation-container">
-				<header className="reservation-header">
-					<h1>Create Appointment</h1>
-					<p>
-						Step {currentStep} of {STEPS.length}
-					</p>
-					{DEV_BYPASS_VALIDATION ? (
-						<p className="dev-bypass-note">
-							Dev mode: validation/backend availability bypass enabled
-						</p>
-					) : null}
-				</header>
+		<div className="reservation-page">
+			<h1>Make a Reservation</h1>
+			<p className="step-progress">{progressText}</p>
 
-				<nav className="reservation-steps" aria-label="Appointment form steps">
-					{STEPS.map((step) => {
-						const status = getStepStatus(
-							step.id,
-							currentStep,
-							furthestCompletedStep
-						);
-						const isLocked = step.id > furthestCompletedStep;
+			<div className="step-indicator">
+				{STEPS.map((s, idx) => (
+					<div
+						key={s.id}
+						className={`step ${idx === stepIndex ? "active" : ""} ${idx < stepIndex ? "completed" : ""}`}
+					>
+						{s.title}
+					</div>
+				))}
+			</div>
 
-						return (
-							<button
-								key={step.id}
-								type="button"
-								className={`step-btn step-${status}`}
-								onClick={() => handleStepClick(step.id)}
-								disabled={isLocked || isSubmitted}
-								aria-current={status === "current" ? "step" : undefined}
-								title={
-									isLocked
-										? "Complete previous steps first"
-										: `Go to ${step.label}`
-								}
+			<div className="form-container">
+				{step.id === "owner" ? (
+					<OwnerDetailsStep formData={formData} errors={errors} onChange={onInputChange} />
+				) : null}
+
+				{step.id === "pet" ? (
+					<PetInformationStep
+						formData={formData}
+						errors={errors}
+						onChange={onInputChange}
+						pets={pets}
+						selectedPetId={selectedPetId}
+						onSelectPet={onSelectPet}
+					/>
+				) : null}
+
+				{step.id === "medical" ? (
+					<MedicalHistoryStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
+				) : null}
+
+				{step.id === "appointment" ? (
+					<div>
+						<h2>Appointment Details</h2>
+						<p>Select a reason and an available time slot.</p>
+
+						<div className="form-row">
+							<label>Reason for visit</label>
+							<select
+								name="reasonKey"
+								value={formData.reasonKey}
+								onChange={(e) => onReasonChange(e.target.value as any)}
 							>
-								<span className="step-circle">
-									{status === "complete" ? "✓" : step.id}
-								</span>
-								<span className="step-label">{step.label}</span>
-							</button>
-						);
-					})}
-				</nav>
+								<option value="">Select a reason</option>
+								{REASON_OPTIONS.map((opt) => (
+									<option key={opt.value} value={opt.value}>
+										{opt.label}
+									</option>
+								))}
+							</select>
+							{errors.reasonKey ? <p className="field-error">{errors.reasonKey}</p> : null}
+						</div>
 
-				<section className="reservation-content">{renderStepContent()}</section>
+						<div className="form-row">
+							<label>Available slots</label>
+							<select
+								value={selectedSlotId}
+								onChange={(e) => onSlotChange(e.target.value)}
+								disabled={!formData.reasonKey || slotsLoading}
+							>
+								<option value="">
+									{slotsLoading
+										? "Loading slots..."
+										: !formData.reasonKey
+											? "Select a reason first"
+											: availableSlots.length
+												? "Select a slot"
+												: "No slots available"}
+								</option>
+								{availableSlots.map((s) => (
+									<option key={s.slotId} value={s.slotId}>
+										{s.date} {s.startTime} - {s.endTime}
+									</option>
+								))}
+							</select>
+							{slotsError ? <p className="field-error">{slotsError}</p> : null}
+							{errors.startTime || errors.appointmentDate ? <p className="field-error">select a time slot</p> : null}
+						</div>
 
-				<footer className="reservation-footer">
-					<button
-						type="button"
-						onClick={handlePrev}
-						disabled={!canGoPrev || isSubmitted}
-					>
-						Previous
-					</button>
-					<button
-						type="button"
-						onClick={handleNext}
-						disabled={!canGoNext || isSubmitted}
-					>
-						Next
-					</button>
-				</footer>
-			</section>
-		</main>
+						<div className="form-row">
+							<label>Notes (optional)</label>
+							<textarea name="reasonDetails" value={formData.reasonDetails} onChange={onInputChange} rows={4} />
+						</div>
+					</div>
+				) : null}
+
+				{step.id === "insurance" ? (
+					<InsuranceStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
+				) : null}
+
+				{step.id === "review" ? (
+					<ReviewConfirmStep
+						formData={formData}
+						errors={errors}
+						onFieldChange={onFieldChange}
+						onSubmit={onSubmit}
+						isSubmitting={isSubmitting}
+						isSubmitted={isSubmitted}
+						submitMessage={submitMessage}
+						onCreateNewAppointment={onCreateNewAppointment}
+					/>
+				) : null}
+
+				<div className="navigation-buttons">
+					{stepIndex > 0 && !isSubmitted ? (
+						<button type="button" onClick={goBack} className="back-button">
+							Back
+						</button>
+					) : null}
+
+					{stepIndex < STEPS.length - 1 && !isSubmitted ? (
+						<button type="button" onClick={goNext} className="next-button">
+							Next
+						</button>
+					) : null}
+				</div>
+			</div>
+		</div>
 	);
 }
