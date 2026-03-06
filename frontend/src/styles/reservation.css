@@ -1,115 +1,158 @@
 /* reservation page shell */
-/* this matches the current Reservation.tsx structure and restores the wizard look */
+/* this version matches the current Reservation.tsx and step component class names */
 
 .reservation-page {
 	min-height: calc(100vh - 80px);
-	display: flex;
-	flex-direction: column;
-	justify-content: flex-start;
-	padding: 24px;
+	padding: 28px 20px 40px 20px;
 	background: linear-gradient(180deg, #eaf3fb 0%, #dfeefc 100%);
 	color: #123a63;
 }
 
 .reservation-page > h1 {
-	width: min(1100px, 100%);
-	margin: 0 auto 6px auto;
-	color: #123a63;
+	width: min(1360px, 100%);
+	margin: 0 auto 8px auto;
+	font-size: 50px;
+	line-height: 1.05;
+	font-weight: 900;
+	color: #1e3e6a;
+	letter-spacing: -0.02em;
 }
 
 .step-progress {
-	width: min(1100px, 100%);
+	width: min(1360px, 100%);
 	margin: 0 auto 18px auto;
-	color: #2f5d8a;
-	font-weight: 600;
+	font-size: 18px;
+	font-weight: 700;
+	color: #3d5f89;
 }
 
-/* step indicator */
-/* keep the wizard row clean and readable */
+/* step wizard row */
 .step-indicator {
-	width: min(1100px, 100%);
-	margin: 0 auto 20px auto;
+	width: min(1360px, 100%);
+	margin: 0 auto 24px auto;
 	display: grid;
 	grid-template-columns: repeat(6, minmax(0, 1fr));
-	gap: 8px;
+	gap: 14px;
 }
 
 .step {
-	border: 1px solid #c8d8ea;
-	background: #edf3fa;
-	color: #7a8ea5;
-	border-radius: 10px;
-	padding: 10px 8px;
+	min-height: 84px;
+	border-radius: 16px;
+	border: 1px solid #c6d6e7;
+	background: #eaf0f7;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 	text-align: center;
-	font-size: 13px;
-	font-weight: 700;
+	padding: 14px 10px;
+	font-weight: 800;
+	font-size: 15px;
+	color: #71859e;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 	transition: all 0.15s ease;
 }
 
+.step::before {
+	content: "";
+	width: 38px;
+	height: 38px;
+	border-radius: 999px;
+	display: grid;
+	place-items: center;
+	margin-bottom: 10px;
+	background: #c4cfdb;
+	color: #4f647e;
+	font-weight: 900;
+	font-size: 17px;
+	line-height: 1;
+}
+
+.step:nth-child(1)::before { content: "1"; }
+.step:nth-child(2)::before { content: "2"; }
+.step:nth-child(3)::before { content: "3"; }
+.step:nth-child(4)::before { content: "4"; }
+.step:nth-child(5)::before { content: "5"; }
+.step:nth-child(6)::before { content: "6"; }
+
 .step.completed {
-	border-color: #2d7b57;
-	background: #e3f3eb;
-	color: #1b5139;
+	border-color: #7eaa84;
+	background: #dfeadf;
+	color: #294f37;
+}
+
+.step.completed::before {
+	content: "✓";
+	background: #4f885e;
+	color: #ffffff;
 }
 
 .step.active {
-	border-color: #2f6ea8;
-	background: #dcecff;
-	color: #123a63;
-	box-shadow: 0 4px 12px rgba(24, 71, 121, 0.12);
+	border-color: #85a6d4;
+	background: #dbe7f7;
+	color: #244a78;
 }
 
-/* main form card */
+.step.active::before {
+	background: #4d79b9;
+	color: #ffffff;
+}
+
+/* main card */
 .form-container {
-	width: min(1100px, 100%);
+	width: min(1360px, 100%);
 	margin: 0 auto;
-	background: #f3f8fe;
-	border: 1px solid #b8d1ec;
-	border-radius: 14px;
-	padding: 20px;
-	box-shadow: 0 10px 30px rgba(24, 71, 121, 0.08);
+	background: #f3f7fc;
+	border: 1px solid #bfd0e3;
+	border-radius: 18px;
+	padding: 26px 26px 20px 26px;
+	box-shadow: 0 12px 30px rgba(25, 53, 85, 0.08);
+}
+
+.form-container > div:first-child {
+	border: 1px solid #cad8e8;
+	border-radius: 16px;
+	background: #f7fbff;
+	padding: 22px 22px 18px 22px;
+	min-height: 420px;
 }
 
 .form-container h2 {
-	color: #123a63;
-	margin-top: 0;
-	margin-bottom: 8px;
+	margin: 0 0 12px 0;
+	font-size: 34px;
+	font-weight: 900;
+	letter-spacing: -0.01em;
+	color: #25436d;
 }
 
 .form-container h3 {
-	color: #1f4f7d;
-	margin-bottom: 6px;
+	margin: 0 0 8px 0;
+	font-size: 22px;
+	font-weight: 800;
+	color: #2b527f;
 }
 
 .form-container p {
-	color: #2a4f75;
+	margin: 0 0 18px 0;
+	font-size: 16px;
+	color: #426386;
 }
 
-/* current step body */
-.form-container > div:first-child {
-	border: 1px solid #c7dbf0;
-	background: #f7fbff;
-	border-radius: 12px;
-	padding: 18px;
-	min-height: 240px;
-}
-
-/* generic form rows used in some step components */
+/* generic form fields */
+/* support both form-row and form-group because your components use both */
 .form-row,
 .form-group {
-	width: 100%;
 	display: flex;
 	flex-direction: column;
-	align-items: stretch;
-	justify-content: flex-start;
-	gap: 6px;
-	margin-bottom: 14px;
+	gap: 8px;
+	margin-bottom: 18px;
 }
 
 .form-row label,
 .form-group label {
-	color: #1d4a74;
-	font-weight: 600;
+	font-size: 16px;
+	font-weight: 800;
+	color: #284a74;
 }
 
 .form-row input,
@@ -120,12 +163,12 @@
 .form-group textarea {
 	width: 100%;
 	box-sizing: border-box;
-	border: 1px solid #b7cfe8;
-	background: #eef5fd;
-	color: #123a63;
-	border-radius: 8px;
-	padding: 10px;
-	font-size: 14px;
+	padding: 12px 14px;
+	border-radius: 12px;
+	border: 1px solid #b9cae0;
+	background: #edf3fa;
+	color: #1c385b;
+	font-size: 16px;
 	outline: none;
 	transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
@@ -134,7 +177,7 @@
 .form-row textarea::placeholder,
 .form-group input::placeholder,
 .form-group textarea::placeholder {
-	color: #6f88a3;
+	color: #7188a2;
 }
 
 .form-row input:focus,
@@ -143,9 +186,9 @@
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-	border-color: #2f6ea8;
-	background: #f4f9ff;
-	box-shadow: 0 0 0 3px rgba(47, 110, 168, 0.15);
+	border-color: #6f93c0;
+	background: #f8fbff;
+	box-shadow: 0 0 0 3px rgba(78, 121, 185, 0.16);
 }
 
 .form-row input:disabled,
@@ -156,136 +199,82 @@
 .form-group textarea:disabled,
 .form-row input[readonly],
 .form-group input[readonly] {
-	background: #e6eef7;
-	color: #7a8ea5;
+	background: #e3ebf5;
+	color: #6b7f98;
 	cursor: not-allowed;
 }
 
-/* bring back the two-column medical section on desktop */
+.form-row textarea,
+.form-group textarea {
+	min-height: 110px;
+	resize: vertical;
+}
+
+/* two column layout for the medical selects */
 .form-grid.two-col {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 14px;
+	gap: 16px;
 	align-items: start;
 }
 
-/* helper and error text */
-.helper-text,
-.form-note {
-	margin: 2px 0 0 0;
-	color: #5f7f9f;
-	font-size: 13px;
-}
-
-.error-text,
-.field-error {
-	margin: 0;
-	color: #b42318;
-	font-size: 13px;
-	font-weight: 500;
-}
-
-.success-text {
-	margin: 10px 0 0 0;
-	color: #1f6b47;
-	font-size: 14px;
+/* checkbox row */
+.checkbox-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	color: #284a74;
+	font-size: 15px;
 	font-weight: 600;
 }
 
-/* review box */
-.review-box,
+.checkbox-row input[type="checkbox"] {
+	width: 16px;
+	height: 16px;
+	margin-top: 3px;
+	accent-color: #4d79b9;
+}
+
+/* errors */
+.field-error,
+.error-text {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+	color: #b42318;
+}
+
+/* availability helper box */
+.availability-placeholder {
+	border: 1px dashed #90afd0;
+	background: #ebf3fc;
+	border-radius: 10px;
+	padding: 12px 14px;
+	margin: 8px 0 14px 0;
+	color: #365b83;
+}
+
+/* review sections */
 .review-section {
 	background: #edf5fe;
-	border: 1px solid #c8dbef;
-	border-radius: 10px;
-	padding: 12px;
-	margin-bottom: 12px;
+	border: 1px solid #cadbed;
+	border-radius: 12px;
+	padding: 14px;
+	margin-bottom: 14px;
 }
 
-.review-box p,
 .review-section p {
 	margin: 6px 0;
+	font-size: 15px;
+	color: #2e537b;
 }
 
-.review-box hr,
-.review-section hr {
-	border: none;
-	border-top: 1px solid #c8dbef;
-	margin: 14px 0;
-}
-
-/* checkbox area on review page */
-.form-row label input[type="checkbox"] {
-	margin-right: 8px;
-	accent-color: #2f6ea8;
-}
-
-/* navigation buttons */
-.navigation-buttons {
-	margin-top: 16px;
-	display: flex;
-	justify-content: space-between;
-	gap: 12px;
-}
-
-.back-button,
-.next-button {
-	border: 1px solid #2f6ea8;
-	background: #2f6ea8;
-	color: #ffffff;
-	border-radius: 8px;
-	padding: 10px 16px;
-	font-weight: 700;
-	cursor: pointer;
-	transition: all 0.15s ease;
-}
-
-.back-button:hover:not(:disabled),
-.next-button:hover:not(:disabled) {
-	background: #255b8c;
-	border-color: #255b8c;
-}
-
-.back-button:disabled,
-.next-button:disabled {
-	border-color: #b7c9dc;
-	background: #d9e5f2;
-	color: #7f95ac;
-	cursor: not-allowed;
-}
-
-/* when only one nav button is present do not stretch the layout weirdly */
-.navigation-buttons:has(.next-button):not(:has(.back-button)),
-.navigation-buttons:has(.back-button):not(:has(.next-button)) {
-	justify-content: flex-end;
-}
-
-/* create new appointment / submit button inside review step */
-.form-container .next-button {
-	align-self: flex-start;
-	min-width: 220px;
-}
-
-/* fallback for browsers that do not support :has */
-.navigation-buttons .back-button + .next-button {
-	margin-left: auto;
-}
-
-/* loading and simple states */
-.availability-placeholder {
-	border: 1px dashed #8fb4da;
-	background: #eaf3fd;
-	border-radius: 8px;
-	padding: 12px;
-	margin: 8px 0 14px 0;
-	color: #2f5d8a;
-}
-
+/* success card after submit */
 .submit-success-card {
 	background: #e8f6ee;
 	border: 1px solid #9ed0b2;
-	border-radius: 12px;
-	padding: 16px;
+	border-radius: 14px;
+	padding: 18px;
 }
 
 .submit-success-card h2 {
@@ -301,9 +290,9 @@
 	border: 1px solid #2d7b57;
 	background: #2d7b57;
 	color: #ffffff;
-	border-radius: 8px;
-	padding: 8px 14px;
-	font-weight: 600;
+	border-radius: 10px;
+	padding: 10px 16px;
+	font-weight: 700;
 	cursor: pointer;
 }
 
@@ -312,38 +301,109 @@
 	border-color: #246245;
 }
 
+/* next back row */
+.navigation-buttons {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	margin-top: 18px;
+}
+
+.back-button,
+.next-button {
+	border: 1px solid #3e72ad;
+	background: #3e72ad;
+	color: #ffffff;
+	border-radius: 10px;
+	padding: 12px 18px;
+	font-size: 15px;
+	font-weight: 800;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.back-button:hover:not(:disabled),
+.next-button:hover:not(:disabled) {
+	background: #315f92;
+	border-color: #315f92;
+	transform: translateY(-1px);
+}
+
+.back-button:disabled,
+.next-button:disabled {
+	border-color: #b9cadd;
+	background: #dce6f1;
+	color: #8094aa;
+	cursor: not-allowed;
+	transform: none;
+}
+
+/* keep single visible button aligned nicely */
+.navigation-buttons .next-button:last-child {
+	margin-left: auto;
+}
+
 /* responsive */
-@media (max-width: 1024px) {
+@media (max-width: 1100px) {
+	.reservation-page > h1,
+	.step-progress,
+	.step-indicator,
+	.form-container {
+		width: min(100%, 980px);
+	}
+
 	.step-indicator {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 700px) {
+	.reservation-page {
+		padding: 18px 14px 26px 14px;
+	}
+
+	.reservation-page > h1 {
+		font-size: 36px;
+	}
+
+	.step-progress {
+		font-size: 16px;
+	}
+
+	.step-indicator {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+	}
+
+	.form-container {
+		padding: 16px;
+	}
+
+	.form-container > div:first-child {
+		padding: 16px;
+		min-height: 0;
+	}
+
+	.form-container h2 {
+		font-size: 28px;
 	}
 
 	.form-grid.two-col {
 		grid-template-columns: 1fr;
 	}
-}
-
-@media (max-width: 640px) {
-	.reservation-page {
-		padding: 14px;
-	}
-
-	.form-container {
-		padding: 14px;
-	}
-
-	.step-indicator {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
 
 	.navigation-buttons {
 		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.navigation-buttons .next-button:last-child {
+		margin-left: 0;
 	}
 
 	.back-button,
-	.next-button,
-	.form-container .next-button {
+	.next-button {
 		width: 100%;
-		min-width: 0;
 	}
 }
