@@ -10,7 +10,7 @@ export default function Login() {
 	async function handleLogin(email: string, password: string) {
 		setIsSubmitting(true);
 		try {
-			await login({ email, password });
+			await login(email, password);
 			navigate("/staff/inventory");
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Login failed. Please check your credentials and try again.";
