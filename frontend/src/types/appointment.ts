@@ -1,9 +1,13 @@
 export type Appointment = {
   appointmentID: number;
+  userID: number;
   userEmail: string;
-  equipmentRequired: string;
-  vetID: number;
-  petID: number;
-  reason: string;
+  staffID: number;
+  roomNumber: number;
+  petID: number | null;
+  reasonKey: string;
   date: string;
+  durationMinutes: number;
+  endDateTime: string;
+  equipmentUsed: string;
 };

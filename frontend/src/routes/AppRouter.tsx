@@ -29,7 +29,6 @@ export default function AppRouter() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/viewappointments" element={<ViewAppointments />} />
 
           {/* Logged-in user routes */}
           <Route element={<RequireAuth />}>
@@ -44,8 +43,9 @@ export default function AppRouter() {
             <Route index element={<Navigate to="inventory" replace />} />
             <Route path="inventory" element={<Inventory />} />
 
-            {/* NEW PAGE */}
             <Route path="users" element={<ViewAllUsers />} />
+            <Route path="appointments" element={<ViewAppointments />} />
+
 
           </Route>
         </Route>

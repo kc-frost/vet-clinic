@@ -1,76 +1,78 @@
-// other imports
 import { useState, useEffect, useMemo } from "react";
-
-// types
 import type { Appointment } from "../../types/appointment";
-
-// api funcs
 import { getAppointments, deleteAppointment } from "../../api/appointments";
-
-// styles and images
 import trashIcon from "../../assets/trashcan1.png";
 import "../../styles/appointments.css";
 
-// Error message helper
+//turn unknown thrown values into a readable message
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : "Unknown error";
 }
 
-// Safe parser for MySQL DATETIME strings like "2026-02-14 14:30:00"
+//convert mysql datetime text into a js Date object
 function parseMySqlDateTime(s: string) {
-  // Converts "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DDTHH:MM:SS"
   return new Date(s.replace(" ", "T"));
 }
 
-export default function Appointments() {
-  // tracks whether data from db is being loaded
+//make reason keys like wellness_exam display nicely as Wellness Exam
+function formatReason(reasonKey: string) {
+  return reasonKey
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export default function ViewAppointments() {
+  //tracks whether the page is currently loading appointments
   const [loading, setLoading] = useState(false);
+
+  //stores any fetch or delete error that should be shown on the page
   const [pageError, setPageError] = useState("");
 
-  // appointments state to store appointments gotten from db
+  //stores the appointments returned from the backend
   const [appointments, setAppointments] = useState<Appointment[]>([]);
 
-  // Runs after page load
   useEffect(() => {
+    //prevents state updates if component unmounts before request finishes
     let cancelled = false;
 
+    //loads all appointments from the backend
     async function load() {
       setLoading(true);
       setPageError("");
 
       try {
         const data = await getAppointments();
+
+        //only update state if component is still mounted
         if (!cancelled) setAppointments(data);
       } catch (err) {
+        //show readable error on page
         if (!cancelled) setPageError(errMsg(err));
       } finally {
+        //stop loading if component is still mounted
         if (!cancelled) setLoading(false);
       }
     }
 
     load();
+
+    //cleanup in case user leaves page mid request
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Filter appointments before current date and sort descending
+  //sort appointments by start datetime so they display in chronological order
   const visibleAppointments = useMemo(() => {
-    const now = new Date();
-    return [...appointments]
-      .filter((appt) => {
-        // convert date from sql to typescript format to compare
-        const apptDate = parseMySqlDateTime(appt.date);
-        return apptDate.getTime() >= now.getTime();
-      })
-      .sort(
-        (a, b) =>
-          parseMySqlDateTime(a.date).getTime() -
-          parseMySqlDateTime(b.date).getTime() 
-      );
+    return [...appointments].sort(
+      (a, b) =>
+        parseMySqlDateTime(a.date).getTime() -
+        parseMySqlDateTime(b.date).getTime()
+    );
   }, [appointments]);
 
-  // Deletes appointment when you click the trash can, then reloads page
+  //delete one appointment then reload the list
   async function deleteAppt(appointmentID: number) {
     try {
       await deleteAppointment(appointmentID);
@@ -85,49 +87,71 @@ export default function Appointments() {
     <div className="centered">
       <h1>View All Appointments</h1>
 
-      {/*Show error message, also a loading message for when data is loading. */}
+      {/* show error if fetch or delete failed */}
       {pageError && <p className="error">{pageError}</p>}
+
+      {/* simple loading text while appointments are being fetched */}
       {loading && <p>Loading...</p>}
 
       <div className="appointments-box">
         <table className="appointments-table">
           <thead>
             <tr>
-              <th>🗓️ Date</th>
-              <th>#️⃣ Appointment ID</th>
-              <th>📝 Appointment Type</th>
-              <th>📧 User Email</th>
-              <th>💉 Equipment</th>
-              <th>🔧 Action</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Appointment ID</th>
+              <th>Type</th>
+              <th>User Email</th>
+              <th>Equipment Used</th>
+              <th>Action</th>
             </tr>
           </thead>
 
           <tbody>
             {visibleAppointments.map((a) => {
-              const dateObj = parseMySqlDateTime(a.date);
-              // Grab appointment data, place in a row
+              //parse start and end datetime strings for display
+              const startObj = parseMySqlDateTime(a.date);
+              const endObj = parseMySqlDateTime(a.endDateTime);
+
               return (
                 <tr key={a.appointmentID}>
-                  <td>{dateObj.toLocaleString()}</td>
+                  {/* start date and time */}
+                  <td>{startObj.toLocaleString()}</td>
+
+                  {/* computed appointment end date and time */}
+                  <td>{endObj.toLocaleString()}</td>
+
+                  {/* appointment primary key */}
                   <td>{a.appointmentID}</td>
-                  <td>{a.reason}</td>
-                  <td>{a.userEmail}</td>
-                  <td>{a.equipmentRequired}</td>
+
+                  {/* display friendly appointment type */}
+                  <td>{formatReason(a.reasonKey)}</td>
+
+                  {/* user email tied to this appointment */}
+                  <td>{a.userEmail || "—"}</td>
+
+                  {/* equipment or consumables used by this appointment */}
+                  <td>{a.equipmentUsed || "—"}</td>
+
                   <td>
-                    {/* delete button */}
-                  <button onClick={() => deleteAppt(a.appointmentID)} className="btn danger appt-trash" aria-label="Delete appointment" title="Delete">
-                    <img src={trashIcon} alt="" className="trash-icon" />
-                    <p> Delete </p>
-                  </button>
+                    <button
+                      onClick={() => deleteAppt(a.appointmentID)}
+                      className="btn danger appt-trash"
+                      aria-label="Delete appointment"
+                      title="Delete"
+                    >
+                      <img src={trashIcon} alt="" className="trash-icon" />
+                      <p>Delete</p>
+                    </button>
                   </td>
                 </tr>
               );
             })}
 
-            {/* If no appointments, show this. */}
+            {/* show empty state when nothing is returned */}
             {!loading && visibleAppointments.length === 0 && (
               <tr>
-                <td colSpan={5}>No upcoming appointments.</td>
+                <td colSpan={7}>No appointments found.</td>
               </tr>
             )}
           </tbody>
