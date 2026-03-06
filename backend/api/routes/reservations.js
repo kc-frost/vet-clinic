@@ -1070,7 +1070,7 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 			currentMedications,
 			knownAllergies,
 			pastInjuriesConditions,
-			vaccinationsUpTo_date,
+			vaccinationsUpToDate,
 			heartwormPreventionCurrent
 		) values (?,?,?,?,?,?,?,?,?,?,?,?)`,
 		[
