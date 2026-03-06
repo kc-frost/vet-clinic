@@ -34,10 +34,10 @@ export async function getAvailability(params: {
 	});
 }
 
-// POST /api/reservations/book
+// POST /api/reservations
 // creates an appointment booking using the reservation payload
 export async function createReservation(payload: CreateReservationPayload) {
-	return api<CreateReservationResponse>("/reservations/book", {
+	return api<CreateReservationResponse>("/reservations", {
 		method: "POST",
 		body: payload,
 	});
