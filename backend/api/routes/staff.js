@@ -75,32 +75,26 @@ router.delete("/:id", requireAdmin, (req, res) => {
 
 router.get("/users", requireAdmin, async (req, res) => {
 	try {
-	  const [rows] = await pool.query(`
-		SELECT 
-		  u.userID,
-		  u.email,
-		  DATEDIFF(NOW(), u.created_at) AS days_registered,
-  
-		  COUNT(r.reservationID) AS total_reservations,
-  
-		  SUM(CASE WHEN r.start_time < NOW() THEN 1 ELSE 0 END) AS past_reservations,
-  
-		  SUM(CASE WHEN r.start_time >= NOW() THEN 1 ELSE 0 END) AS upcoming_reservations
-  
-		FROM users u
-		LEFT JOIN reservations r
-		  ON u.userID = r.userID
-  
-		GROUP BY u.userID, u.email, u.created_at
-		ORDER BY u.userID;
-	  `)
-  
-	  res.json(rows)
-  
+		const [rows] = await pool.query(`
+			SELECT
+				c.userID,
+				c.email,
+				DATEDIFF(NOW(), c.createdAt) AS days_registered,
+				COUNT(a.appointmentID) AS total_reservations,
+				COALESCE(SUM(CASE WHEN a.date < NOW() THEN 1 ELSE 0 END), 0) AS past_reservations,
+				COALESCE(SUM(CASE WHEN a.date >= NOW() THEN 1 ELSE 0 END), 0) AS upcoming_reservations
+			FROM customer c
+			LEFT JOIN appointment a
+				ON c.userID = a.userID
+			GROUP BY c.userID, c.email, c.createdAt
+			ORDER BY c.userID;
+		`);
+
+		res.json(rows);
 	} catch (err) {
-	  console.error(err)
-	  res.status(500).json({ error: "Failed to fetch users" })
+		console.error("view all users error:", err);
+		res.status(500).json({ error: "failed to load users" });
 	}
-  })
+})
 
 export default router;
