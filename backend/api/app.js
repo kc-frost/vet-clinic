@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import session from "express-session";
 import { pool } from "./db.js";
 
 import inventoryRoutes from "./routes/inventory.js";
@@ -11,16 +12,36 @@ import authRoutes from "./routes/auth.js";
 import medicineRoutes from "./routes/medicine.js";
 import equipmentRoutes from "./routes/equipment.js";
 
-import appointmentsRoutes from "./routes/appointments.js";   // view page
-import reservationsRoutes from "./routes/reservations.js";   // form flow
-
+import appointmentsRoutes from "./routes/appointments.js";
+import reservationsRoutes from "./routes/reservations.js";
 import profileRoutes from "./routes/profile.js";
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+app.set("trust proxy", 1);
+
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
+  credentials: true,
+}));
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use(session({
+  name: "vet.sid",
+  secret: process.env.SESSION_SECRET || "dev_secret_change_me",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false,
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+  },
+}));
 
 app.get("/api/db-test", async (req, res) => {
   try {
@@ -40,11 +61,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/medicine", medicineRoutes);
 app.use("/api/equipment", equipmentRoutes);
 
-
-// split responsibilities
-app.use("/api/appointments", appointmentsRoutes);   // list/delete for view page
-app.use("/api/reservations", reservationsRoutes);   // availability/create for form
-
+app.use("/api/appointments", appointmentsRoutes);
+app.use("/api/reservations", reservationsRoutes);
 app.use("/api/profile", profileRoutes);
 
 const port = process.env.PORT || 3001;

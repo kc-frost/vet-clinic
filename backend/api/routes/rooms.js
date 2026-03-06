@@ -1,5 +1,6 @@
 import express from "express";
 import { pool } from "../db.js";
+import { requireAdmin } from "../lib/authMiddleware.js";
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ const VALID_ROOM_TYPES = new Set(["EXAM", "IMAGING", "SURGERY", "GROOMING"]);
 // GET /api/rooms
 // returns all rooms from the rooms table
 // response rows include: roomNumber, roomType, capacity
-router.get("/", async (req, res) => {
+router.get("/", requireAdmin, async (req, res) => {
 	try {
 		// pool.query returns [rows, fields]
 		// ordering by roomNumber keeps the admin table consistent
@@ -33,7 +34,7 @@ router.get("/", async (req, res) => {
 //  roomNumber: integer >= 1 (primary key, not auto increment)
 //  roomType: one of EXAM, IMAGING, SURGERY, GROOMING
 //  capacity: integer >= 1
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
 	try {
 		const { roomNumber, roomType, capacity } = req.body ?? {};
 
@@ -66,7 +67,7 @@ router.post("/", async (req, res) => {
 // 405 means:
 //  the server understood the request
 //  but this method is not allowed on this route right now
-router.delete("/:roomNumber", (req, res) => {
+router.delete("/:roomNumber", requireAdmin, (req, res) => {
 	res.status(405).send("Delete is disabled for this sprint.");
 });
 

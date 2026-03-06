@@ -1,25 +1,38 @@
+// inventory.js
+// Express router responsible for handling inventory related
+// API endpoints for the veterinary clinic system.
+
 import express from "express";
 import { pool } from "../db.js";
+import { requireAdmin } from "../lib/authMiddleware.js";
 
 const router = express.Router();
 
 // GET /api/inventory
-router.get("/", async (req, res) => {
+// Returns the full inventory list.
+// This route is restricted to administrators only.
+router.get("/", requireAdmin, async (req, res) => {
 	try {
+		// Query the database for all inventory items
+		// sorted alphabetically by display name.
 		const [rows] = await pool.query(
 			`SELECT itemID, itemType, itemKey, displayName, isConsumable, quantity, itemDescription
 			 FROM inventory
 			 ORDER BY displayName ASC`
 		);
+		// Send the inventory list back to the client.
+
 		res.json(rows);
 	} catch (err) {
+		// Log the error to the server console.
 		console.error("GET /api/inventory error:", err);
+		// Return a generic server error to the client.
 		res.status(500).send("Server error fetching inventory.");
 	}
 });
 
 // POST /api/inventory
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
 	try {
 		const {
 			itemKey,
@@ -60,7 +73,7 @@ router.post("/", async (req, res) => {
 
 // PATCH /api/inventory/:itemID
 // only quantity (restock/capacity edit) is supported by UI
-router.patch("/:itemID", async (req, res) => {
+router.patch("/:itemID", requireAdmin, async (req, res) => {
 	try {
 		const itemID = Number(req.params.itemID);
 		if (!Number.isInteger(itemID) || itemID < 1) return res.status(400).send("Invalid itemID.");
@@ -81,7 +94,7 @@ router.patch("/:itemID", async (req, res) => {
 });
 
 // DELETE disabled for this sprint
-router.delete("/:itemID", (req, res) => {
+router.delete("/:itemID", requireAdmin, (req, res) => {
 	res.status(405).send("Delete is disabled for this sprint.");
 });
 

@@ -1,5 +1,6 @@
 import express from "express";
 import { pool } from "../db.js";
+import { requireAdmin } from "../lib/authMiddleware.js";
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ const VALID_ROLES = new Set(["VET", "PET_GROOMER"]);
 // GET /api/staff
 // returns all staff rows from the staff table
 // response rows include: staffID, name, StaffNumber, email, position, role
-router.get("/", async (req, res) => {
+router.get("/", requireAdmin, async (req, res) => {
 	try {
 		// ordering by name keeps the admin table predictable for humans
 		const [rows] = await pool.query(
@@ -34,7 +35,7 @@ router.get("/", async (req, res) => {
 //  role: required string, must be VET or PET_GROOMER
 //  StaffNumber: optional (can be null)
 //  email: optional (can be null)
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
 	try {
 		const { name, StaffNumber = null, email = null, position, role } = req.body ?? {};
 
@@ -68,8 +69,38 @@ router.post("/", async (req, res) => {
 // 405 means:
 //  the server understood the request
 //  but this method is not allowed on this route right now
-router.delete("/:id", (req, res) => {
+router.delete("/:id", requireAdmin, (req, res) => {
 	res.status(405).send("Delete is disabled for this sprint.");
 });
+
+router.get("/users", requireAdmin, async (req, res) => {
+	try {
+	  const [rows] = await pool.query(`
+		SELECT 
+		  u.userID,
+		  u.email,
+		  DATEDIFF(NOW(), u.created_at) AS days_registered,
+  
+		  COUNT(r.reservationID) AS total_reservations,
+  
+		  SUM(CASE WHEN r.start_time < NOW() THEN 1 ELSE 0 END) AS past_reservations,
+  
+		  SUM(CASE WHEN r.start_time >= NOW() THEN 1 ELSE 0 END) AS upcoming_reservations
+  
+		FROM users u
+		LEFT JOIN reservations r
+		  ON u.userID = r.userID
+  
+		GROUP BY u.userID, u.email, u.created_at
+		ORDER BY u.userID;
+	  `)
+  
+	  res.json(rows)
+  
+	} catch (err) {
+	  console.error(err)
+	  res.status(500).json({ error: "Failed to fetch users" })
+	}
+  })
 
 export default router;
