@@ -4,56 +4,50 @@ import "../../styles/userProfile.css";
 import { getCurrentUser, type AuthUser } from "../../api/auth";
 import { api } from "../../api/client";
 import { getPetsForUser } from "../../api/reservations";
+import { getMyAppointments } from "../../api/appointments";
 import type { PetProfile } from "../../types/reservation";
+import type { Appointment } from "../../types/appointment";
 
 // dev bypass toggle
-// true = UI can be worked on without backend/session running
-// false = real mode, reads /api/auth/me + /api/profile + /api/appointments
+// true means ui can be worked on without backend or session
+// false means real mode using live api routes
 const DEV_BYPASS_AUTH = false;
 
-// Basic profile data returned from the profile endpoint
+// profile shape returned from the profile endpoint
 type UserProfileData = {
   userID: number;
   email: string;
   userBio: string;
 };
-//Appointment row shape returned from the backend 
-type AppointmentRow = {
-  appointmentID: number;
-  userID: number;
-  staffID: number;
-  roomNumber: number;
-  reasonKey: string;
-  date: string; // mysql datetime string
-  durationMinutes: number;
-};
-// Simplified reservation shape used only by the UI
+
+// simplified reservation shape used just by this page ui
 type Reservation = {
   id: number;
   startTime: string;
   endTime?: string | null;
   itemName?: string | null;
 };
-// Pet profile shape used on the page
-type Pet = PetProfile & {
-    userID?: number;
-  };
 
-// Development sample data
-// This lets the UI be tested without needing auth/session/backend running
+// pet profile shape used on the page
+type Pet = PetProfile & {
+  userID?: number;
+};
+
+// development sample user
 const DEV_USER: AuthUser = {
-    userID: 1,
-    email: "dev.user@email.com",
-    isAdmin: false,
-  };
-  
-  const DEV_PROFILE: UserProfileData = {
-    userID: 1,
-    email: "dev.user@email.com",
-    userBio: "This is a local test bio for Sprint 3.",
-  };
-  
-  const now = new Date();
+  userID: 1,
+  email: "dev.user@email.com",
+  isAdmin: false,
+};
+
+// development sample profile
+const DEV_PROFILE: UserProfileData = {
+  userID: 1,
+  email: "dev.user@email.com",
+  userBio: "This is a local test bio for Sprint 3.",
+};
+
+const now = new Date();
 
 const yesterday = new Date(now);
 yesterday.setDate(now.getDate() - 1);
@@ -66,22 +60,20 @@ const tomorrow = new Date(now);
 tomorrow.setDate(now.getDate() + 1);
 tomorrow.setHours(9, 30, 0, 0);
 
-
-/**
- * Converts a JS Date into a MySQL-style datetime string.
- * Example: 2026-03-06 14:30:00
- */
+// converts a js date into mysql style datetime text
 function toMysqlDateTime(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-const DEV_APPOINTMENTS: AppointmentRow[] = [
+// development sample appointments
+const DEV_APPOINTMENTS: Appointment[] = [
   {
     appointmentID: 101,
     userID: 1,
     staffID: 1,
     roomNumber: 2,
+    petID: 1,
     reasonKey: "WELLNESS_EXAM",
     date: toMysqlDateTime(yesterday),
     durationMinutes: 30,
@@ -91,6 +83,7 @@ const DEV_APPOINTMENTS: AppointmentRow[] = [
     userID: 1,
     staffID: 2,
     roomNumber: 4,
+    petID: 1,
     reasonKey: "VACCINATION",
     date: toMysqlDateTime(todayAppt),
     durationMinutes: 45,
@@ -100,95 +93,89 @@ const DEV_APPOINTMENTS: AppointmentRow[] = [
     userID: 1,
     staffID: 3,
     roomNumber: 1,
+    petID: 2,
     reasonKey: "FOLLOW_UP",
     date: toMysqlDateTime(tomorrow),
     durationMinutes: 20,
   },
 ];
 
+// development sample pets
 const DEV_PETS: Pet[] = [
-    {
-      petID: 1,
-      userID: 1,
-      petName: "Buddy",
-      petType: "Dog",
-      breed: "Golden Retriever",
-      petSex: "Male",
-      spayedNeutered: "Yes",
-      age: 4,
-      weight: 65,
-      height: 2,
-      behavior: "Friendly",
-      currentMedications: "None",
-      knownAllergies: "Chicken",
-      pastInjuriesConditions: "Sprained leg in 2024",
-      vaccinationsUpToDate: "Yes",
-      heartwormPreventionCurrent: "Yes",
-    },
-    {
-      petID: 2,
-      userID: 1,
-      petName: "Luna",
-      petType: "Cat",
-      breed: "Tabby",
-      petSex: "Female",
-      spayedNeutered: "Yes",
-      age: 2,
-      weight: 10,
-      height: 1,
-      behavior: "Calm",
-      currentMedications: "None",
-      knownAllergies: "None",
-      pastInjuriesConditions: "None",
-      vaccinationsUpToDate: "Yes",
-      heartwormPreventionCurrent: "No",
-    },
-  ];
+  {
+    petID: 1,
+    userID: 1,
+    petName: "Buddy",
+    petType: "Dog",
+    breed: "Golden Retriever",
+    petSex: "Male",
+    spayedNeutered: "Yes",
+    age: 4,
+    weight: 65,
+    height: 2,
+    behavior: "Friendly",
+    currentMedications: "None",
+    knownAllergies: "Chicken",
+    pastInjuriesConditions: "Sprained leg in 2024",
+    vaccinationsUpToDate: "Yes",
+    heartwormPreventionCurrent: "Yes",
+  },
+  {
+    petID: 2,
+    userID: 1,
+    petName: "Luna",
+    petType: "Cat",
+    breed: "Tabby",
+    petSex: "Female",
+    spayedNeutered: "Yes",
+    age: 2,
+    weight: 10,
+    height: 1,
+    behavior: "Calm",
+    currentMedications: "None",
+    knownAllergies: "None",
+    pastInjuriesConditions: "None",
+    vaccinationsUpToDate: "Yes",
+    heartwormPreventionCurrent: "No",
+  },
+];
 
-
-  // DATE HELPERS:
-//Returns the very beginning of the given day (00:00:00.000)   
+// returns the start of the given day
 function startOfDay(d: Date) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 }
-// Returns the very end of the given day (23:59:59.999)
+
+// returns the end of the given day
 function endOfDay(d: Date) {
   const x = new Date(d);
   x.setHours(23, 59, 59, 999);
   return x;
 }
 
-/**
- * Converts a MySQL datetime string into ISO format so JS Date can
- * parse it more reliably.
- *
- * Example:
- * "2026-03-06 14:00:00" -> "2026-03-06T14:00:00.000Z" (depending on timezone parsing)
- */
+// converts mysql datetime text into something js Date parses more reliably
 function mysqlDateTimeToIso(mysqlDt: string) {
-  // mysql tends to send "YYYY-MM-DD HH:mm:ss", so convert it to something Date() reliably parses
   const s = String(mysqlDt || "");
   if (!s) return new Date(NaN).toISOString();
   if (/^\d{4}-\d{2}-\d{2} /.test(s)) return new Date(s.replace(" ", "T")).toISOString();
   return new Date(s).toISOString();
 }
-//Adds a number of minutes to an ISO date string
+
+// adds minutes to an iso date string
 function addMinutes(iso: string, mins: number) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   d.setMinutes(d.getMinutes() + mins);
   return d.toISOString();
 }
-//  API helpers
-// Small wrapper functions used by this page to read/update data.
 
-// Fetches the current user's profile record 
+// fetches the current user's profile record
 async function fetchProfile(userID: number) {
   return api<UserProfileData>(`/profile?userID=${userID}`, { method: "GET" });
 }
-// Updates the current user's biography
+
+// updates the current user's biography
 async function updateProfileBio(userID: number, userBio: string) {
   return api<UserProfileData>(`/profile?userID=${userID}`, {
     method: "PUT",
@@ -196,15 +183,8 @@ async function updateProfileBio(userID: number, userBio: string) {
   });
 }
 
-// Fetches all appointments from the backend
-async function fetchAppointments() {
-  return api<AppointmentRow[]>("/appointments", { method: "GET" });
-}
-/**
- * Converts raw appointment rows into the simpler reservation format
- * used by this page's reservation boxes.
- */
-function mapAppointmentsToReservations(rows: AppointmentRow[]) {
+// converts raw appointment rows into the smaller reservation shape
+function mapAppointmentsToReservations(rows: Appointment[]) {
   return rows.map((a) => {
     const startIso = mysqlDateTimeToIso(a.date);
     const endIso = addMinutes(startIso, Number(a.durationMinutes || 0));
@@ -219,18 +199,8 @@ function mapAppointmentsToReservations(rows: AppointmentRow[]) {
   });
 }
 
-/*
-
- UserProfile page
--------------------------
- Shows:
- - user identification
- - profile picture placeholder
- - editable biography
- - reservation history split into past/today/future
- - saved pet profiles
-
-*/
+// user profile page
+// shows user info editable bio appointment history and pet profiles
 export default function UserProfile() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
 
@@ -244,31 +214,23 @@ export default function UserProfile() {
   const [savingBio, setSavingBio] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-    /*
-   Initial page load
-  -------------------------------
-   In dev mode, use sample data.
-   In real mode:
-   1. fetch current logged-in user
-   2. fetch profile
-   3. fetch appointments and keep only this user's appointments
-   4. fetch pet profiles
-  */
+  // initial page load
+  // dev mode uses local data
+  // real mode loads auth user profile that user's appointments and pets
   useEffect(() => {
     (async () => {
       try {
         setError(null);
 
         if (DEV_BYPASS_AUTH) {
-            setAuthUser(DEV_USER);
-            setProfile(DEV_PROFILE);
-            setBioDraft(DEV_PROFILE.userBio || "");
-            setReservations(mapAppointmentsToReservations(DEV_APPOINTMENTS));
-            setPets(DEV_PETS);
-            return;
-          }
+          setAuthUser(DEV_USER);
+          setProfile(DEV_PROFILE);
+          setBioDraft(DEV_PROFILE.userBio || "");
+          setReservations(mapAppointmentsToReservations(DEV_APPOINTMENTS));
+          setPets(DEV_PETS);
+          return;
+        }
 
-        // real mode
         const me = await getCurrentUser();
         setAuthUser(me);
 
@@ -276,13 +238,13 @@ export default function UserProfile() {
         setProfile(p);
         setBioDraft(p.userBio || "");
 
-        const appts = await fetchAppointments();
-        const mine = appts.filter((a) => Number(a.userID) === Number(me.userID));
-        setReservations(mapAppointmentsToReservations(mine));
+        // this now calls the user owned appointments route
+        // so it no longer depends on the admin all appointments endpoint
+        const appts = await getMyAppointments();
+        setReservations(mapAppointmentsToReservations(appts));
 
         const savedPets = await getPetsForUser(me.userID);
         setPets(savedPets);
-
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
         setError(msg);
@@ -292,11 +254,8 @@ export default function UserProfile() {
     })();
   }, []);
 
-  // Split reservations into past / today / future
-  // This is memoized so it only recalculates when reservations change.
-
+  // split reservations into past today and future buckets
   const { past, today, future } = useMemo(() => {
-    // split reservations by whether they happened before today, during today, or after today
     const now = new Date();
     const start = startOfDay(now).getTime();
     const end = endOfDay(now).getTime();
@@ -307,12 +266,13 @@ export default function UserProfile() {
 
     for (const r of reservations) {
       const t = new Date(r.startTime).getTime();
+
       if (t < start) past.push(r);
       else if (t > end) future.push(r);
       else today.push(r);
     }
 
-    // sort each list so the UI reads nicely
+    // sort so boxes read nicely
     past.sort((a, b) => +new Date(b.startTime) - +new Date(a.startTime));
     today.sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
     future.sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
@@ -320,10 +280,7 @@ export default function UserProfile() {
     return { past, today, future };
   }, [reservations]);
 
-
-  // Save biography
-  // In dev mode, update local state only
-  // In real mode, send a PUT request to the backend
+  // saves the biography text
   async function onSaveBio() {
     if (!authUser || !profile) return;
 
@@ -357,7 +314,7 @@ export default function UserProfile() {
   if (!authUser || !profile) {
     return <div className="profilePage errorBox">No user loaded.</div>;
   }
-  // Main UI
+
   return (
     <div className="profilePage">
       <h1 className="profileTitle">My Profile</h1>
@@ -400,50 +357,35 @@ export default function UserProfile() {
         <h2>Pet Profiles</h2>
 
         <div className="petProfilesRow">
-            {pets.length === 0 ? (
-                <p className="hint">No Pets Registerd.</p>
-            ): (
-                pets.map((pet) => (
-                    <div key={pet.petID} className="petBox">
-                        <h3>{pet.petName}</h3>
+          {pets.length === 0 ? (
+            <p className="hint">No Pets Registerd.</p>
+          ) : (
+            pets.map((pet) => (
+              <div key={pet.petID} className="petBox">
+                <h3>{pet.petName}</h3>
 
-                        <p><b>Type:</b> {pet.petType ?? "N/A"}</p>
-                        <p><b>Breed:</b> {pet.breed ?? "N/A"}</p>
-                        <p><b>Sex:</b> {pet.petSex ?? "N/A"}</p>
-                        <p><b>Age:</b> {pet.age ?? "N/A"}</p>
+                <p><b>Type:</b> {pet.petType ?? "N/A"}</p>
+                <p><b>Breed:</b> {pet.breed ?? "N/A"}</p>
+                <p><b>Sex:</b> {pet.petSex ?? "N/A"}</p>
+                <p><b>Age:</b> {pet.age ?? "N/A"}</p>
 
+                <hr />
 
-                        <hr />
-
-                        <p><b>Medications:</b> {pet.currentMedications ?? "None listed"}</p>
-                        <p><b>Allergies:</b> {pet.knownAllergies ?? "None listed"}</p>
-                        <p><b>Past Conditions:</b> {pet.pastInjuriesConditions ?? "None listed"}</p>
-                        <p><b>Vaccinations:</b> {pet.vaccinationsUpToDate ?? "Unknown"}</p>
-                        <p><b>Heartworm Prevention:</b> {pet.heartwormPreventionCurrent ?? "Unknown"}</p>
-
-
-
-                    </div>
-                ))
-            )}
-
+                <p><b>Medications:</b> {pet.currentMedications ?? "None listed"}</p>
+                <p><b>Allergies:</b> {pet.knownAllergies ?? "None listed"}</p>
+                <p><b>Past Conditions:</b> {pet.pastInjuriesConditions ?? "None listed"}</p>
+                <p><b>Vaccinations:</b> {pet.vaccinationsUpToDate ?? "Unknown"}</p>
+                <p><b>Heartworm Prevention:</b> {pet.heartwormPreventionCurrent ?? "Unknown"}</p>
+              </div>
+            ))
+          )}
         </div>
       </section>
-
     </div>
   );
 }
 
-/*
- ReservationBox
---------------------
- Small reusable component that renders one reservation group:
- - Past Reservations
- - Today
- - Future Reservations
-
-*/
-
+// small reusable reservation box used by the profile page
 function ReservationBox({ title, items }: { title: string; items: Reservation[] }) {
   return (
     <section className="card">

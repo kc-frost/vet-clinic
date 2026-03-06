@@ -1,6 +1,7 @@
 // AppRouter.tsx
-// Main routing configuration for the frontend application.
-// Defines all public routes, protected routes, and staff routes.
+// main routing configuration for the frontend application
+// defines public routes protected routes and admin routes
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ViewAllUsers from "../pages/staff/ViewAllUsers";
 
@@ -24,34 +25,30 @@ export default function AppRouter() {
     <BrowserRouter>
       <Routes>
 
-        {/* PUBLIC ROUTES */}
+        {/* public routes */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Logged-in user routes */}
+          {/* logged in user routes */}
           <Route element={<RequireAuth />}>
             <Route path="/reservation" element={<Reservation />} />
             <Route path="/userprofile" element={<UserProfile />} />
           </Route>
         </Route>
 
-        {/* ADMIN ROUTES */}
+        {/* admin routes */}
         <Route element={<RequireAdmin />}>
           <Route path="/staff" element={<StaffLayout />}>
             <Route index element={<Navigate to="inventory" replace />} />
             <Route path="inventory" element={<Inventory />} />
-
             <Route path="users" element={<ViewAllUsers />} />
             <Route path="appointments" element={<ViewAppointments />} />
-
-
           </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
-
       </Routes>
     </BrowserRouter>
   );

@@ -36,7 +36,7 @@ export default function ViewAppointments() {
     //prevents state updates if component unmounts before request finishes
     let cancelled = false;
 
-    //loads all appointments from the backend
+    //loads all appointments from the admin appointments endpoint
     async function load() {
       setLoading(true);
       setPageError("");
@@ -45,13 +45,19 @@ export default function ViewAppointments() {
         const data = await getAppointments();
 
         //only update state if component is still mounted
-        if (!cancelled) setAppointments(data);
+        if (!cancelled) {
+          setAppointments(data);
+        }
       } catch (err) {
-        //show readable error on page
-        if (!cancelled) setPageError(errMsg(err));
+        //show readable fetch error on page
+        if (!cancelled) {
+          setPageError(errMsg(err));
+        }
       } finally {
         //stop loading if component is still mounted
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -63,7 +69,7 @@ export default function ViewAppointments() {
     };
   }, []);
 
-  //sort appointments by start datetime so they display in chronological order
+  //sort appointments by their starting datetime so they display in chronological order
   const visibleAppointments = useMemo(() => {
     return [...appointments].sort(
       (a, b) =>
@@ -72,10 +78,12 @@ export default function ViewAppointments() {
     );
   }, [appointments]);
 
-  //delete one appointment then reload the list
+  //deletes one appointment then refreshes the table
   async function deleteAppt(appointmentID: number) {
     try {
+      setPageError("");
       await deleteAppointment(appointmentID);
+
       const data = await getAppointments();
       setAppointments(data);
     } catch (err) {
@@ -87,7 +95,7 @@ export default function ViewAppointments() {
     <div className="centered">
       <h1>View All Appointments</h1>
 
-      {/* show error if fetch or delete failed */}
+      {/* show fetch or delete error if one happened */}
       {pageError && <p className="error">{pageError}</p>}
 
       {/* simple loading text while appointments are being fetched */}
@@ -109,28 +117,33 @@ export default function ViewAppointments() {
 
           <tbody>
             {visibleAppointments.map((a) => {
-              //parse start and end datetime strings for display
+              //parse start datetime from the appointment row
               const startObj = parseMySqlDateTime(a.date);
-              const endObj = parseMySqlDateTime(a.endDateTime);
+
+              //use backend provided end datetime when available
+              //otherwise compute it from start plus duration as a fallback
+              const endObj = a.endDateTime
+                ? parseMySqlDateTime(a.endDateTime)
+                : new Date(startObj.getTime() + Number(a.durationMinutes || 0) * 60000);
 
               return (
                 <tr key={a.appointmentID}>
-                  {/* start date and time */}
+                  {/* appointment start date and time */}
                   <td>{startObj.toLocaleString()}</td>
 
-                  {/* computed appointment end date and time */}
+                  {/* appointment computed or returned end date and time */}
                   <td>{endObj.toLocaleString()}</td>
 
                   {/* appointment primary key */}
                   <td>{a.appointmentID}</td>
 
-                  {/* display friendly appointment type */}
+                  {/* display friendly appointment type from reason key */}
                   <td>{formatReason(a.reasonKey)}</td>
 
-                  {/* user email tied to this appointment */}
+                  {/* email of the user that owns the appointment */}
                   <td>{a.userEmail || "—"}</td>
 
-                  {/* equipment or consumables used by this appointment */}
+                  {/* consumables or equipment associated with the appointment */}
                   <td>{a.equipmentUsed || "—"}</td>
 
                   <td>
@@ -148,7 +161,7 @@ export default function ViewAppointments() {
               );
             })}
 
-            {/* show empty state when nothing is returned */}
+            {/* empty state when there are no appointments */}
             {!loading && visibleAppointments.length === 0 && (
               <tr>
                 <td colSpan={7}>No appointments found.</td>

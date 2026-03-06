@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import "../styles/publicLayout.css";
 import NavButton from "../components/NavButton";
 
+// public layout used for the main site header and outlet pages
 export default function PublicLayout() {
   return (
     <>
@@ -12,14 +13,12 @@ export default function PublicLayout() {
           </NavButton>
 
           <div className="nav-right">
-            {/* Dummy buttons for now */}
             <button type="button" className="nav-btn">About</button>
             <button type="button" className="nav-btn">Services</button>
             <button type="button" className="nav-btn">Resources</button>
             <button type="button" className="nav-btn">Contact</button>
 
-            {/* Real nav buttons */}
-            <NavButton to="/viewappointments" className="nav-btn">View Appointments</NavButton>
+            <NavButton to="/staff/appointments" className="nav-btn">View Appointments</NavButton>
             <NavButton to="/reservation" className="nav-btn">Create Appointment</NavButton>
             <NavButton to="/login" className="nav-btn">Login</NavButton>
             <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
