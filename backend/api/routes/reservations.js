@@ -1301,6 +1301,9 @@ router.post("/", async (req, res) => {
 			return {
 				ok: true,
 				appointmentID,
+				reasonKey: rule.reasonKey,
+				date: body.appointmentDate,
+				durationMinutes: rule.durationMinutes,
 				staffID,
 				roomNumber,
 				petID,
@@ -1313,7 +1316,11 @@ router.post("/", async (req, res) => {
 		}
 
 		res.json({
+			ok: true,
 			appointmentId: result.appointmentID,
+			reasonKey: result.reasonKey,
+			date: result.date,
+			durationMinutes: result.durationMinutes,
 			staffID: result.staffID,
 			roomNumber: result.roomNumber,
 			petID: result.petID,
