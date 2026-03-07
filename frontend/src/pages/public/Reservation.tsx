@@ -425,9 +425,13 @@ export default function Reservation() {
 		if (isBlank(data.petSex)) e.petSex = "required";
 		if (isBlank(data.spayedNeutered)) e.spayedNeutered = "required";
 
-		if (!isBlank(data.petAge)) {
+		if (isBlank(data.petAge)) {
+			e.petAge = "required, enter a value from 0 to 120";
+		} else {
 			const n = Number(data.petAge);
-			if (!Number.isFinite(n) || n < 0) e.petAge = "invalid";
+			if (!Number.isFinite(n) || n < 0 || n > 120) {
+				e.petAge = "enter an age from 0 to 120";
+			}
 		}
 
 		return e;

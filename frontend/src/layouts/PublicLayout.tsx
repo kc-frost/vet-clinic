@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "../styles/publicLayout.css";
 import NavButton from "../components/NavButton";
@@ -8,6 +8,7 @@ import { getCurrentUser, type AuthUser } from "../api/auth";
 // admin-only nav buttons are rendered only when the logged in user has admin access
 export default function PublicLayout() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const location = useLocation();
 
   useEffect(() => {
     let alive = true;
@@ -26,7 +27,7 @@ export default function PublicLayout() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [location.pathname]);
 
   const isAdmin = !!currentUser?.isAdmin;
 

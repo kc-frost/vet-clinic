@@ -101,12 +101,17 @@ export default function PetInformationStep({
 				</select>
 				{errors.spayedNeutered && <p className="error-text">{errors.spayedNeutered}</p>}
 			</div>
-
+            
 			<div className="form-group">
 				<label>Age</label>
 
 				{/* kept as a text input because the form state stores it as a string */}
-				<input name="petAge" value={formData.petAge} onChange={onChange} />
+				<input
+					name="petAge"
+					value={formData.petAge}
+					onChange={onChange}
+					placeholder="if you don't know the exact age, type your best guess"
+				/>
 
 				{errors.petAge && <p className="error-text">{errors.petAge}</p>}
 			</div>

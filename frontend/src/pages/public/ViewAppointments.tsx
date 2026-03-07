@@ -78,13 +78,17 @@ export default function ViewAppointments() {
     };
   }, []);
 
-  //sort appointments by their starting datetime so they display in chronological order
+  //sort appointments by their starting datetime and hide appointments already in the past
   const visibleAppointments = useMemo(() => {
-    return [...appointments].sort(
-      (a, b) =>
-        parseMySqlDateTime(a.date).getTime() -
-        parseMySqlDateTime(b.date).getTime()
-    );
+    const now = Date.now();
+
+    return [...appointments]
+      .filter((a) => parseMySqlDateTime(a.date).getTime() >= now)
+      .sort(
+        (a, b) =>
+          parseMySqlDateTime(a.date).getTime() -
+          parseMySqlDateTime(b.date).getTime()
+      );
   }, [appointments]);
 
   //deletes one appointment then refreshes the table
