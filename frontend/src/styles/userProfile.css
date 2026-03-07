@@ -56,7 +56,7 @@
 }
 
 .resItem {
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .resTime,
@@ -72,25 +72,93 @@
   margin-bottom: 16px;
 }
 
+.profileActionMessage {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid #333;
+  border-radius: 12px;
+}
+
+.reservationActionRow {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.miniDangerBtn,
+.miniPrimaryBtn,
+.dangerBtn,
+.successBtn {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #333;
+  cursor: pointer;
+}
+
+.miniDangerBtn,
+.dangerBtn {
+  background: #c94141;
+  color: white;
+}
+
+.miniPrimaryBtn {
+  background: #4d79b9;
+  color: white;
+}
+
+.successBtn {
+  background: #2f8f4e;
+  color: white;
+}
+
+.rescheduleSection {
+  margin-top: 24px;
+}
+
+.rescheduleCalendarWrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.rescheduleButtons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
 .petSection {
-    margin-top: 30px;
+  margin-top: 30px;
+}
+
+.petProfilesRow {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 15px;
+}
+
+.petBox {
+  width: 260px;
+  border: 2px solid #ccc;
+  border-radius: 12px;
+  padding: 16px;
+  background: white;
+}
+
+.petBox h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .topRow {
+    grid-template-columns: 1fr;
   }
-  
-  .petProfilesRow {
-    display: flex;
-    gap: 20px;           /* space between boxes */
-    flex-wrap: wrap;     /* allows wrapping if screen gets smaller */
-    margin-top: 15px;
+
+  .reservationsRow {
+    grid-template-columns: 1fr;
   }
-  
-  .petBox {
-    width: 260px;
-    border: 2px solid #ccc;
-    border-radius: 12px;
-    padding: 16px;
-    background: white;
-  }
-  
-  .petBox h3 {
-    margin-top: 0;
-  }
+}

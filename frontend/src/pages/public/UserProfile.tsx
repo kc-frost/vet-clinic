@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "../../styles/userProfile.css";
 
 import { getCurrentUser, type AuthUser } from "../../api/auth";
 import { api } from "../../api/client";
-import { getPetsForUser } from "../../api/reservations";
-import { getMyAppointments } from "../../api/appointments";
-import type { PetProfile } from "../../types/reservation";
+import { getAvailability, getPetsForUser } from "../../api/reservations";
+import { getMyAppointments, cancelMyAppointment, rescheduleMyAppointment } from "../../api/appointments";
+import SlotCalendar from "../../components/calendar/SlotCalendar";
+
+import type { PetProfile, ReasonKey } from "../../types/reservation";
 import type { Appointment } from "../../types/appointment";
 
 // dev bypass toggle
@@ -20,12 +22,17 @@ type UserProfileData = {
   userBio: string;
 };
 
-// simplified reservation shape used just by this page ui
+// simplified reservation shape used by this page
+// now includes raw fields we need for cancel and reschedule
 type Reservation = {
   id: number;
   startTime: string;
   endTime?: string | null;
   itemName?: string | null;
+  reasonKey: string;
+  appointmentDateRaw: string;
+  startTimeRaw: string;
+  canModify: boolean;
 };
 
 // pet profile shape used on the page
@@ -64,6 +71,18 @@ tomorrow.setHours(9, 30, 0, 0);
 function toMysqlDateTime(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// turns a Date into yyyy-mm-dd
+function toDateOnly(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// turns a Date into hh:mm
+function toTimeOnly(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // development sample appointments
@@ -170,6 +189,20 @@ function addMinutes(iso: string, mins: number) {
   return d.toISOString();
 }
 
+// turns mysql datetime into date only text
+function mysqlDateOnly(mysqlDt: string) {
+  const s = String(mysqlDt || "");
+  const datePart = s.split(" ")[0] || "";
+  return datePart;
+}
+
+// turns mysql datetime into hh:mm text
+function mysqlTimeOnly(mysqlDt: string) {
+  const s = String(mysqlDt || "");
+  const timePart = s.split(" ")[1] || "";
+  return timePart.slice(0, 5);
+}
+
 // fetches the current user's profile record
 async function fetchProfile(userID: number) {
   return api<UserProfileData>(`/profile?userID=${userID}`, { method: "GET" });
@@ -185,22 +218,30 @@ async function updateProfileBio(userID: number, userBio: string) {
 
 // converts raw appointment rows into the smaller reservation shape
 function mapAppointmentsToReservations(rows: Appointment[]) {
+  const nowMs = Date.now();
+
   return rows.map((a) => {
     const startIso = mysqlDateTimeToIso(a.date);
     const endIso = addMinutes(startIso, Number(a.durationMinutes || 0));
     const itemName = `${a.reasonKey || "APPOINTMENT"} (Room ${a.roomNumber})`;
+    const startMs = new Date(startIso).getTime();
 
     return {
       id: Number(a.appointmentID),
       startTime: startIso,
       endTime: endIso,
       itemName,
+      reasonKey: a.reasonKey,
+      appointmentDateRaw: mysqlDateOnly(a.date),
+      startTimeRaw: mysqlTimeOnly(a.date),
+      canModify: startMs >= nowMs,
     };
   });
 }
 
 // user profile page
-// shows user info editable bio appointment history and pet profiles
+// shows user info editable bio appointment history pet profiles
+// and now allows canceling or rescheduling upcoming appointments
 export default function UserProfile() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
 
@@ -214,6 +255,44 @@ export default function UserProfile() {
   const [savingBio, setSavingBio] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // active reschedule state
+  // when a reservation is chosen for reschedule, the calendar panel appears at the bottom
+  const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null);
+  const [rescheduleSlots, setRescheduleSlots] = useState<any[]>([]);
+  const [rescheduleSlotsLoading, setRescheduleSlotsLoading] = useState(false);
+  const [rescheduleSlotsError, setRescheduleSlotsError] = useState("");
+  const [rescheduleSelectedSlotId, setRescheduleSelectedSlotId] = useState("");
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleStartTime, setRescheduleStartTime] = useState("");
+  const [rescheduleBusy, setRescheduleBusy] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string>("");
+
+  const rescheduleSectionRef = useRef<HTMLDivElement | null>(null);
+
+  async function loadAllProfileData() {
+    if (DEV_BYPASS_AUTH) {
+      setAuthUser(DEV_USER);
+      setProfile(DEV_PROFILE);
+      setBioDraft(DEV_PROFILE.userBio || "");
+      setReservations(mapAppointmentsToReservations(DEV_APPOINTMENTS));
+      setPets(DEV_PETS);
+      return;
+    }
+
+    const me = await getCurrentUser();
+    setAuthUser(me);
+
+    const p = await fetchProfile(me.userID);
+    setProfile(p);
+    setBioDraft(p.userBio || "");
+
+    const appts = await getMyAppointments();
+    setReservations(mapAppointmentsToReservations(appts));
+
+    const savedPets = await getPetsForUser(me.userID);
+    setPets(savedPets);
+  }
+
   // initial page load
   // dev mode uses local data
   // real mode loads auth user profile that user's appointments and pets
@@ -221,30 +300,7 @@ export default function UserProfile() {
     (async () => {
       try {
         setError(null);
-
-        if (DEV_BYPASS_AUTH) {
-          setAuthUser(DEV_USER);
-          setProfile(DEV_PROFILE);
-          setBioDraft(DEV_PROFILE.userBio || "");
-          setReservations(mapAppointmentsToReservations(DEV_APPOINTMENTS));
-          setPets(DEV_PETS);
-          return;
-        }
-
-        const me = await getCurrentUser();
-        setAuthUser(me);
-
-        const p = await fetchProfile(me.userID);
-        setProfile(p);
-        setBioDraft(p.userBio || "");
-
-        // this now calls the user owned appointments route
-        // so it no longer depends on the admin all appointments endpoint
-        const appts = await getMyAppointments();
-        setReservations(mapAppointmentsToReservations(appts));
-
-        const savedPets = await getPetsForUser(me.userID);
-        setPets(savedPets);
+        await loadAllProfileData();
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
         setError(msg);
@@ -253,6 +309,20 @@ export default function UserProfile() {
       }
     })();
   }, []);
+
+  // when rescheduleTarget becomes active, scroll the new calendar panel into view
+  useEffect(() => {
+    if (!rescheduleTarget) return;
+
+    const id = window.setTimeout(() => {
+      rescheduleSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+
+    return () => window.clearTimeout(id);
+  }, [rescheduleTarget?.id]);
 
   // split reservations into past today and future buckets
   const { past, today, future } = useMemo(() => {
@@ -305,6 +375,141 @@ export default function UserProfile() {
     }
   }
 
+  // loads available slots for the selected appointment reason
+  // this is used only for reschedule mode
+  async function beginReschedule(reservation: Reservation) {
+    if (!authUser) return;
+
+    try {
+      setActionMessage("");
+      setRescheduleTarget(reservation);
+      setRescheduleSlots([]);
+      setRescheduleSlotsError("");
+      setRescheduleSlotsLoading(true);
+      setRescheduleSelectedSlotId("");
+      setRescheduleDate("");
+      setRescheduleStartTime("");
+
+      if (DEV_BYPASS_AUTH) {
+        const fakeSlots = [
+          {
+            slotId: `slot_${toDateOnly(tomorrow)}_0900_0920`,
+            date: toDateOnly(tomorrow),
+            startTime: "09:00",
+            endTime: "09:20",
+          },
+          {
+            slotId: `slot_${toDateOnly(tomorrow)}_0930_0950`,
+            date: toDateOnly(tomorrow),
+            startTime: "09:30",
+            endTime: "09:50",
+          },
+        ];
+        setRescheduleSlots(fakeSlots);
+        return;
+      }
+
+      const resp = await getAvailability({
+        reasonKey: reservation.reasonKey as ReasonKey,
+        userID: authUser.userID,
+        days: 90,
+      });
+
+      setRescheduleSlots(resp.slots || []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load reschedule slots";
+      setRescheduleSlots([]);
+      setRescheduleSlotsError(msg);
+    } finally {
+      setRescheduleSlotsLoading(false);
+    }
+  }
+
+  // if user clicks a new date while rescheduling, old selected time is no longer valid
+  function onRescheduleDateBrowse(nextDate: string) {
+    setRescheduleSelectedSlotId("");
+    setRescheduleDate(nextDate);
+    setRescheduleStartTime("");
+  }
+
+  // store the newly chosen date/time for the reschedule flow
+  function onRescheduleSlotSelect(value: { date: string; startTime: string; slotId?: string }) {
+    setRescheduleSelectedSlotId(value.slotId || "");
+    setRescheduleDate(value.date);
+    setRescheduleStartTime(value.startTime);
+  }
+
+  // close the reschedule panel and forget any in-progress selection
+  function cancelReschedule() {
+    setRescheduleTarget(null);
+    setRescheduleSlots([]);
+    setRescheduleSlotsError("");
+    setRescheduleSelectedSlotId("");
+    setRescheduleDate("");
+    setRescheduleStartTime("");
+  }
+
+  // cancel one upcoming appointment and refresh the page data
+  async function onCancelAppointment(reservation: Reservation) {
+    try {
+      setActionMessage("");
+
+      if (DEV_BYPASS_AUTH) {
+        setReservations((prev) => prev.filter((r) => r.id !== reservation.id));
+        setActionMessage("appointment canceled");
+        if (rescheduleTarget?.id === reservation.id) {
+          cancelReschedule();
+        }
+        return;
+      }
+
+      await cancelMyAppointment(reservation.id);
+      await loadAllProfileData();
+
+      if (rescheduleTarget?.id === reservation.id) {
+        cancelReschedule();
+      }
+
+      setActionMessage("appointment canceled");
+    } catch (e) {
+      setActionMessage(e instanceof Error ? e.message : "failed to cancel appointment");
+    }
+  }
+
+  // confirms the reschedule
+  // backend handles this as delete old appointment plus create new one
+  async function confirmReschedule() {
+    if (!rescheduleTarget) return;
+    if (!rescheduleDate || !rescheduleStartTime) {
+      setActionMessage("choose a new date and time first");
+      return;
+    }
+
+    try {
+      setActionMessage("");
+      setRescheduleBusy(true);
+
+      if (DEV_BYPASS_AUTH) {
+        setActionMessage("appointment rescheduled");
+        cancelReschedule();
+        return;
+      }
+
+      await rescheduleMyAppointment(rescheduleTarget.id, {
+        appointmentDate: rescheduleDate,
+        startTime: rescheduleStartTime,
+      });
+
+      await loadAllProfileData();
+      cancelReschedule();
+      setActionMessage("appointment rescheduled");
+    } catch (e) {
+      setActionMessage(e instanceof Error ? e.message : "failed to reschedule appointment");
+    } finally {
+      setRescheduleBusy(false);
+    }
+  }
+
   if (loading) return <div className="profilePage">Loading profile...</div>;
 
   if (error) {
@@ -318,6 +523,8 @@ export default function UserProfile() {
   return (
     <div className="profilePage">
       <h1 className="profileTitle">My Profile</h1>
+
+      {actionMessage ? <div className="profileActionMessage">{actionMessage}</div> : null}
 
       <div className="topRow">
         <section className="card">
@@ -348,10 +555,73 @@ export default function UserProfile() {
       </section>
 
       <div className="reservationsRow">
-        <ReservationBox title="Past Reservations" items={past} />
-        <ReservationBox title="Today" items={today} />
-        <ReservationBox title="Future Reservations" items={future} />
+        <ReservationBox
+          title="Past Reservations"
+          items={past}
+          onCancel={onCancelAppointment}
+          onReschedule={beginReschedule}
+        />
+        <ReservationBox
+          title="Today"
+          items={today}
+          onCancel={onCancelAppointment}
+          onReschedule={beginReschedule}
+        />
+        <ReservationBox
+          title="Future Reservations"
+          items={future}
+          onCancel={onCancelAppointment}
+          onReschedule={beginReschedule}
+        />
       </div>
+
+      {rescheduleTarget ? (
+        <section className="card rescheduleSection" ref={rescheduleSectionRef}>
+          <h2>Choose a new date and time</h2>
+          <p className="hint">
+            Rescheduling appointment #{rescheduleTarget.id}. The rest of the appointment stays the same. Only the date and time will change.
+          </p>
+
+          <div className="rescheduleCalendarWrap">
+            <SlotCalendar
+              slots={rescheduleSlots}
+              value={
+                rescheduleDate && rescheduleStartTime
+                  ? {
+                      date: rescheduleDate,
+                      startTime: rescheduleStartTime,
+                      slotId: rescheduleSelectedSlotId || undefined,
+                    }
+                  : null
+              }
+              onSelectSlot={onRescheduleSlotSelect}
+              onBrowseDateChange={onRescheduleDateBrowse}
+              isLoading={rescheduleSlotsLoading}
+              errorText={rescheduleSlotsError}
+            />
+          </div>
+
+          <div className="rescheduleButtons">
+            <button
+              type="button"
+              className="dangerBtn"
+              onClick={cancelReschedule}
+              disabled={rescheduleBusy}
+            >
+              Cancel Rescheduling
+            </button>
+
+            <button
+              type="button"
+              className="successBtn"
+              onClick={confirmReschedule}
+              disabled={rescheduleBusy || !rescheduleDate || !rescheduleStartTime}
+            >
+              {rescheduleBusy ? "Rescheduling..." : "Reschedule Appointment"}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="card petSection">
         <h2>Pet Profiles</h2>
@@ -386,7 +656,18 @@ export default function UserProfile() {
 }
 
 // small reusable reservation box used by the profile page
-function ReservationBox({ title, items }: { title: string; items: Reservation[] }) {
+// today and future reservations show cancel and reschedule actions when allowed
+function ReservationBox({
+  title,
+  items,
+  onCancel,
+  onReschedule,
+}: {
+  title: string;
+  items: Reservation[];
+  onCancel: (reservation: Reservation) => void;
+  onReschedule: (reservation: Reservation) => void;
+}) {
   return (
     <section className="card">
       <h2>{title}</h2>
@@ -398,6 +679,26 @@ function ReservationBox({ title, items }: { title: string; items: Reservation[] 
             <li key={r.id} className="resItem">
               <div className="resName"><b>{r.itemName ?? "Reservation"}</b></div>
               <div className="resTime">{new Date(r.startTime).toLocaleString()}</div>
+
+              {r.canModify ? (
+                <div className="reservationActionRow">
+                  <button
+                    type="button"
+                    className="miniDangerBtn"
+                    onClick={() => onCancel(r)}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    className="miniPrimaryBtn"
+                    onClick={() => onReschedule(r)}
+                  >
+                    Reschedule
+                  </button>
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
