@@ -10,8 +10,8 @@ export default function Home() {
           <h1 className="title">Happy Healthy Pets!</h1>
 
           <p className="subtitle">
-            Welcome to our clinic management prototype. Users/Staff can log in to view and manage
-            inventory items. Later features will expand appointments and reservations.
+            Welcome to our clinic management prototype. Users can create appointments and view their profile.
+            Admins can view all future appointments, inventory, and all users stats.
           </p>
 
 
