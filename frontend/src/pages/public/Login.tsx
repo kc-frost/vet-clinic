@@ -11,7 +11,7 @@ export default function Login() {
 		setIsSubmitting(true);
 		try {
 			await login(email, password);
-			navigate("/staff/inventory");
+			navigate("/");
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Login failed. Please check your credentials and try again.";
 			throw new Error(message);
