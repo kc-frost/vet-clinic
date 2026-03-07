@@ -3,7 +3,7 @@
   max-width: 100%;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 420px 620px;
+  grid-template-columns: 520px 620px;
   gap: 18px;
   align-items: start;
   justify-content: center;
@@ -12,7 +12,6 @@
 .slotCalLeft,
 .slotCalRight {
   min-width: 0;
-  overflow: hidden;
   border: 1px solid #333;
   border-radius: 12px;
   padding: 12px;
@@ -20,11 +19,13 @@
 }
 
 .slotCalLeft {
-  width: 420px;
+  width: 520px;
+  overflow: visible;
 }
 
 .slotCalRight {
   width: 620px;
+  overflow: hidden;
 }
 
 .slotCalHeader {
@@ -59,7 +60,7 @@
 
 .slotCalDayPicker {
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .slotCalDayPicker .rdp-root,
@@ -82,8 +83,14 @@
   display: none;
 }
 
+.slotCalDayPicker .rdp-month {
+  width: 100%;
+}
+
 .slotCalDayPicker .rdp-month_grid {
   width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .slotCalDayPicker .rdp-weekdays,
@@ -91,13 +98,17 @@
   width: 100%;
 }
 
+.slotCalDayPicker .rdp-weekday,
 .slotCalDayPicker .rdp-day {
+  width: calc(100% / 7);
+  min-width: 0;
   text-align: center;
 }
 
 .slotCalDayPicker .rdp-day_button {
-  width: 44px;
-  height: 44px;
+  width: 56px;
+  height: 56px;
+  max-width: 100%;
   border-radius: 10px;
 }
 
@@ -201,7 +212,7 @@
   opacity: 0.9;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1240px) {
   .slotCal {
     width: 100%;
     grid-template-columns: 1fr;
@@ -213,7 +224,19 @@
     width: 100%;
   }
 
+  .slotCalDayPicker .rdp-day_button {
+    width: 48px;
+    height: 48px;
+  }
+
   .slotCalTimesGrid {
     max-height: 320px;
+  }
+}
+
+@media (max-width: 640px) {
+  .slotCalDayPicker .rdp-day_button {
+    width: 40px;
+    height: 40px;
   }
 }
