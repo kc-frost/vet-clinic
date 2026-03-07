@@ -1,0 +1,63 @@
+.usersPage {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 22px 24px 32px 24px;
+}
+
+.usersHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.usersHeader h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #163b63;
+}
+
+.usersError,
+.usersLoading {
+  margin: 0 0 14px 0;
+}
+
+.usersError {
+  color: #b42318;
+}
+
+.usersShell {
+  background-color: #ffffff;
+  border: 2px solid #d9e4ef;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(27, 55, 88, 0.12);
+  overflow-x: auto;
+}
+
+.usersTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+.usersTable th {
+  color: #4c5d71;
+  background-color: #f3f6fa;
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.usersTable td {
+  border-bottom: 1px solid #e4ebf3;
+  text-align: left;
+  vertical-align: top;
+  padding: 14px 12px;
+}
+
+.usersTable tr:hover {
+  background-color: #eef6ff;
+}

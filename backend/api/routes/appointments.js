@@ -501,7 +501,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 }
 
 // GET /api/appointments
-// admin only list of all appointments with more display data
+// admin only list of all appointments with more data to display
 router.get("/", requireAdmin, async (req, res) => {
 	try {
 		const [rows] = await pool.query(`
@@ -510,7 +510,9 @@ router.get("/", requireAdmin, async (req, res) => {
 				a.userID,
 				c.email AS userEmail,
 				a.staffID,
+				s.name AS staffName,
 				a.roomNumber,
+				r.roomType,
 				a.petID,
 				a.reasonKey,
 				a.date,
@@ -527,6 +529,10 @@ router.get("/", requireAdmin, async (req, res) => {
 			FROM appointment a
 			LEFT JOIN customer c
 				ON c.userID = a.userID
+			LEFT JOIN staff s
+				ON s.staffID = a.staffID
+			LEFT JOIN rooms r
+				ON r.roomNumber = a.roomNumber
 			LEFT JOIN appointment_consumable ac
 				ON ac.appointmentID = a.appointmentID
 			LEFT JOIN inventory i
@@ -536,7 +542,9 @@ router.get("/", requireAdmin, async (req, res) => {
 				a.userID,
 				c.email,
 				a.staffID,
+				s.name,
 				a.roomNumber,
+				r.roomType,
 				a.petID,
 				a.reasonKey,
 				a.date,

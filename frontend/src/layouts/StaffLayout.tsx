@@ -1,11 +1,6 @@
 import { Outlet } from "react-router-dom";
-import { Link } from "react-router-dom";
 
+// admin navigation is handled by the main public header
 export default function StaffLayout() {
-  return (
-    <>
-      <Link to="/staff/users">View All Users</Link>
-      <Outlet />
-    </>
-  );
+  return <Outlet />;
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Appointment } from "../../types/appointment";
 import { getAppointments, deleteAppointment } from "../../api/appointments";
 import trashIcon from "../../assets/trashcan1.png";
@@ -22,7 +23,22 @@ function formatReason(reasonKey: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+//format a datetime for display without seconds
+function formatDateTimeNoSeconds(value: string) {
+  const d = parseMySqlDateTime(value);
+
+  return d.toLocaleString([], {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function ViewAppointments() {
+  const navigate = useNavigate();
+
   //tracks whether the page is currently loading appointments
   const [loading, setLoading] = useState(false);
 
@@ -33,28 +49,22 @@ export default function ViewAppointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
-    //prevents state updates if component unmounts before request finishes
     let cancelled = false;
 
-    //loads all appointments from the admin appointments endpoint
     async function load() {
       setLoading(true);
       setPageError("");
 
       try {
         const data = await getAppointments();
-
-        //only update state if component is still mounted
         if (!cancelled) {
           setAppointments(data);
         }
       } catch (err) {
-        //show readable fetch error on page
         if (!cancelled) {
           setPageError(errMsg(err));
         }
       } finally {
-        //stop loading if component is still mounted
         if (!cancelled) {
           setLoading(false);
         }
@@ -63,7 +73,6 @@ export default function ViewAppointments() {
 
     load();
 
-    //cleanup in case user leaves page mid request
     return () => {
       cancelled = true;
     };
@@ -92,24 +101,33 @@ export default function ViewAppointments() {
   }
 
   return (
-    <div className="centered">
-      <h1>View All Appointments</h1>
+    <div className="appointmentsPage">
+      <div className="appointmentsHeader">
+        <button
+          type="button"
+          className="pageHomeBtn"
+          onClick={() => navigate("/")}
+        >
+          ← Home
+        </button>
 
-      {/* show fetch or delete error if one happened */}
-      {pageError && <p className="error">{pageError}</p>}
+        <h1>View All Appointments</h1>
+      </div>
 
-      {/* simple loading text while appointments are being fetched */}
-      {loading && <p>Loading...</p>}
+      {pageError && <p className="appointmentsError">{pageError}</p>}
+      {loading && <p className="appointmentsLoading">Loading...</p>}
 
-      <div className="appointments-box">
+      <div className="appointmentsShell">
         <table className="appointments-table">
           <thead>
             <tr>
               <th>Start</th>
               <th>End</th>
-              <th>Appointment ID</th>
+              <th>Appt. ID</th>
               <th>Type</th>
               <th>User Email</th>
+              <th>Staff</th>
+              <th>Room</th>
               <th>Equipment Used</th>
               <th>Action</th>
             </tr>
@@ -117,35 +135,29 @@ export default function ViewAppointments() {
 
           <tbody>
             {visibleAppointments.map((a) => {
-              //parse start datetime from the appointment row
-              const startObj = parseMySqlDateTime(a.date);
-
-              //use backend provided end datetime when available
-              //otherwise compute it from start plus duration as a fallback
               const endObj = a.endDateTime
-                ? parseMySqlDateTime(a.endDateTime)
-                : new Date(startObj.getTime() + Number(a.durationMinutes || 0) * 60000);
+                ? a.endDateTime
+                : new Date(
+                    parseMySqlDateTime(a.date).getTime() +
+                      Number(a.durationMinutes || 0) * 60000
+                  ).toISOString();
 
               return (
                 <tr key={a.appointmentID}>
-                  {/* appointment start date and time */}
-                  <td>{startObj.toLocaleString()}</td>
-
-                  {/* appointment computed or returned end date and time */}
-                  <td>{endObj.toLocaleString()}</td>
-
-                  {/* appointment primary key */}
+                  <td>{formatDateTimeNoSeconds(a.date)}</td>
+                  <td>{formatDateTimeNoSeconds(String(endObj).replace("T", " "))}</td>
                   <td>{a.appointmentID}</td>
-
-                  {/* display friendly appointment type from reason key */}
                   <td>{formatReason(a.reasonKey)}</td>
-
-                  {/* email of the user that owns the appointment */}
                   <td>{a.userEmail || "—"}</td>
-
-                  {/* consumables or equipment associated with the appointment */}
-                  <td>{a.equipmentUsed || "—"}</td>
-
+                  <td className="staffCell">
+                    <div>{a.staffID ?? "—"}</div>
+                    <div className="cellSubText">{a.staffName || "—"}</div>
+                  </td>
+                  <td className="roomCell">
+                    <div>{a.roomNumber ?? "—"}</div>
+                    <div className="cellSubText">{a.roomType || "—"}</div>
+                  </td>
+                  <td className="equipmentCell">{a.equipmentUsed || "—"}</td>
                   <td>
                     <button
                       onClick={() => deleteAppt(a.appointmentID)}
@@ -161,10 +173,9 @@ export default function ViewAppointments() {
               );
             })}
 
-            {/* empty state when there are no appointments */}
             {!loading && visibleAppointments.length === 0 && (
               <tr>
-                <td colSpan={7}>No appointments found.</td>
+                <td colSpan={9}>No appointments found.</td>
               </tr>
             )}
           </tbody>

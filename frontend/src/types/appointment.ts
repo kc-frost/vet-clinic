@@ -1,4 +1,4 @@
-// shared appointment shape used by both the admin appointments page
+// shared appointment shape used by the admin appointments page
 // and the normal user profile appointment history
 
 export type Appointment = {
@@ -16,4 +16,8 @@ export type Appointment = {
   userEmail?: string;
   endDateTime?: string;
   equipmentUsed?: string;
+
+  // extra admin display fields
+  staffName?: string;
+  roomType?: string;
 };

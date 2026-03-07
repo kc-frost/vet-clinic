@@ -1,26 +1,101 @@
-/* Page Styling*/
+.appointmentsPage {
+  max-width: 1700px;
+  margin: 0 auto;
+  padding: 22px 24px 32px 24px;
+}
 
-.centered {
+.appointmentsHeader {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
-/* applied ONLY to .centered's direct children */
-.centered > h1 {
-  margin-left: 50px;
+.appointmentsHeader h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #163b63;
 }
 
-.appointments-box {
-  background-color: #FFFFFF;
-  min-height: calc(100vh - 120px);
-  border: 3px solid #DBDBDB;
-  border-radius: 8px;
-  padding: 15px;
-  margin: 10px 70px;
+.pageHomeBtn {
+  width: fit-content;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #7fa3cb;
+  background: #e8f1fb;
+  color: #163b63;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pageHomeBtn:hover {
+  background: #dbeaf9;
+}
+
+.appointmentsError,
+.appointmentsLoading {
+  margin: 0 0 14px 0;
+}
+
+.appointmentsError {
+  color: #b42318;
+}
+
+.appointmentsShell {
+  background-color: #ffffff;
+  border: 2px solid #d9e4ef;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(27, 55, 88, 0.12);
+  overflow-x: auto;
+}
+
+.appointments-table {
+  border-collapse: collapse;
   width: 100%;
-  max-width: 90%;
-  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+  min-width: 1280px;
+}
+
+.appointments-table tr:hover {
+  background-color: #eef6ff;
+}
+
+.appointments-table th {
+  color: #4c5d71;
+  background-color: #f3f6fa;
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.appointments-table td {
+  border-bottom: 1px solid #e4ebf3;
+  text-align: left;
+  vertical-align: top;
+  padding: 14px 12px;
+}
+
+.staffCell,
+.roomCell {
+  min-width: 110px;
+}
+
+.cellSubText {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #60758d;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.equipmentCell {
+  min-width: 300px;
+  max-width: 380px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .appt-trash {
@@ -30,20 +105,23 @@
   gap: 5px;
   width: 50px;
   height: 50px;
-  background-color: red;
-  transition: width 1s, color 1s, background-color 1s, opacity 0.5s;
+  background-color: #f23d2a;
+  transition: width 0.25s ease, opacity 0.25s ease;
   border-radius: 8px;
   line-height: 50px;
   text-align: center;
   vertical-align: middle;
-  margin:auto;
+  margin: auto;
   margin-bottom: 10px;
-  overflow:hidden;  /* keeps text within the box */
+  overflow: hidden;
+  border: none;
+  color: white;
 }
 
 .appt-trash p {
   opacity: 0;
-  transition: opacity 0.8s;
+  transition: opacity 0.2s ease;
+  margin: 0;
 }
 
 .appt-trash:hover p {
@@ -51,48 +129,13 @@
 }
 
 .appt-trash:hover {
-  background-color: red;
-  width: 100px;
-  opacity: 1;
-}
-
-/* Table Styling */
-/*
-TR = "Table Row"
-TH = "Table Header
-TD = "Table Data"
-*/
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-tr:hover {
-  background-color: #D6EEEE;
-}
-
-
-th {
-  color: #585858;
-  background-color:#f3f3f3;
-  padding: 10px;
-  text-align: left;
-  vertical-align: middle;
-  border-radius: 8px;
-}
-
-td {
-  border-radius: 8px;
-  border-bottom: 1px solid #ddd;
-  text-align: left;
-  vertical-align: middle;
-  padding: 15px;
+  width: 108px;
 }
 
 .trash-icon {
   width: 24px;
   height: 24px;
-  padding: .5px;
+  padding: 0.5px;
   pointer-events: none;
+  flex-shrink: 0;
 }
