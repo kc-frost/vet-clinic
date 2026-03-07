@@ -18,9 +18,25 @@ function getUserIdFromSessionOrQuery(req) {
   return n;
 }
 
+// normalizes one customer row into a stable profile payload for the frontend
+function mapProfileRow(r) {
+  return {
+    userID: Number(r.userID),
+    email: String(r.email || ""),
+    userBio: String(r.userBio || ""),
+    legalFirstName: String(r.legalFirstName || ""),
+    legalLastName: String(r.legalLastName || ""),
+    phone: String(r.phone || ""),
+    addressLine1: String(r.addressLine1 || ""),
+    city: String(r.city || ""),
+    state: String(r.state || ""),
+    zipCode: String(r.zipCode || ""),
+    isAdmin: Boolean(r.isAdmin),
+  };
+}
+
 // GET /api/profile?userID=#
-// returns basic profile info for the user profile page
-// reads from customer table: userID, email, userBio
+// returns profile/contact info for the user profile page
 router.get("/", async (req, res) => {
   try {
     const userID = getUserIdFromSessionOrQuery(req);
@@ -31,7 +47,20 @@ router.get("/", async (req, res) => {
 
     // parameterized query so userID is safely injected into the sql statement
     const [rows] = await pool.execute(
-      "select userID, email, userBio from customer where userID = ?",
+      `select
+        userID,
+        email,
+        userBio,
+        legalFirstName,
+        legalLastName,
+        phone,
+        addressLine1,
+        city,
+        state,
+        zipCode,
+        isAdmin
+      from customer
+      where userID = ?`,
       [userID]
     );
 
@@ -40,13 +69,7 @@ router.get("/", async (req, res) => {
       return;
     }
 
-    // normalize types so frontend always gets clean strings/numbers
-    const r = rows[0];
-    res.json({
-      userID: Number(r.userID),
-      email: String(r.email || ""),
-      userBio: String(r.userBio || ""),
-    });
+    res.json(mapProfileRow(rows[0]));
   } catch (err) {
     console.error("profile get error", err);
     res.status(500).json({ error: "failed to fetch profile" });
@@ -75,7 +98,20 @@ router.put("/", async (req, res) => {
 
     // reselect and return what is currently stored so frontend stays in sync
     const [rows] = await pool.execute(
-      "select userID, email, userBio from customer where userID = ?",
+      `select
+        userID,
+        email,
+        userBio,
+        legalFirstName,
+        legalLastName,
+        phone,
+        addressLine1,
+        city,
+        state,
+        zipCode,
+        isAdmin
+      from customer
+      where userID = ?`,
       [userID]
     );
 
@@ -84,12 +120,7 @@ router.put("/", async (req, res) => {
       return;
     }
 
-    const r = rows[0];
-    res.json({
-      userID: Number(r.userID),
-      email: String(r.email || ""),
-      userBio: String(r.userBio || ""),
-    });
+    res.json(mapProfileRow(rows[0]));
   } catch (err) {
     console.error("profile put error", err);
     res.status(500).json({ error: "failed to update profile" });

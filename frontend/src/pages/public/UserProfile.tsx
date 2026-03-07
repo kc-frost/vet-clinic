@@ -20,6 +20,14 @@ type UserProfileData = {
   userID: number;
   email: string;
   userBio: string;
+  legalFirstName: string;
+  legalLastName: string;
+  phone: string;
+  addressLine1: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  isAdmin: boolean;
 };
 
 // simplified reservation shape used by this page
@@ -52,6 +60,14 @@ const DEV_PROFILE: UserProfileData = {
   userID: 1,
   email: "dev.user@email.com",
   userBio: "This is a local test bio for Sprint 3.",
+  legalFirstName: "Dev",
+  legalLastName: "User",
+  phone: "512-555-1234",
+  addressLine1: "123 Demo Street",
+  city: "Austin",
+  state: "TX",
+  zipCode: "78701",
+  isAdmin: false,
 };
 
 const now = new Date();
@@ -235,7 +251,7 @@ function mapAppointmentsToReservations(rows: Appointment[]) {
 
 // user profile page
 // shows user info editable bio appointment history pet profiles
-// and now allows canceling or rescheduling upcoming appointments
+// and lets the user cancel or reschedule upcoming appointments
 export default function UserProfile() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
 
@@ -522,9 +538,16 @@ export default function UserProfile() {
 
       <div className="topRow">
         <section className="card">
-          <h2>User Identification</h2>
+          <h2>User Info</h2>
           <p><b>User ID:</b> {profile.userID}</p>
           <p><b>Email:</b> {profile.email}</p>
+          <p><b>First Name:</b> {profile.legalFirstName || "—"}</p>
+          <p><b>Last Name:</b> {profile.legalLastName || "—"}</p>
+          <p><b>Address:</b> {profile.addressLine1 || "—"}</p>
+          <p><b>City:</b> {profile.city || "—"}</p>
+          <p><b>State:</b> {profile.state || "—"}</p>
+          <p><b>ZIP Code:</b> {profile.zipCode || "—"}</p>
+          <p><b>Is Admin:</b> {profile.isAdmin ? "Yes" : "No"}</p>
         </section>
 
         <section className="card">
