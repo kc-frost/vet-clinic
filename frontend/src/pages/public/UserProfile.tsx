@@ -79,12 +79,6 @@ function toDateOnly(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// turns a Date into hh:mm
-function toTimeOnly(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 // development sample appointments
 const DEV_APPOINTMENTS: Appointment[] = [
   {
