@@ -467,6 +467,128 @@ router.get("/pets", async (req, res) => {
 	}
 });
 
+// updates one existing pet profile for the logged in user
+// used by the user profile page for editable mini pet profile cards
+router.patch("/pets/:petID", async (req, res) => {
+	try {
+		const userID = resolveUserIdFromRequest(req, req.query.userID);
+		const petID = Number(req.params.petID);
+
+		if (!userID) {
+			res.status(400).json({ error: "missing userID" });
+			return;
+		}
+
+		if (!Number.isFinite(petID) || petID <= 0) {
+			res.status(400).json({ error: "invalid petID" });
+			return;
+		}
+
+		const body = req.body || {};
+
+		const petName = String(body.petName || "");
+		const petType = String(body.petType || "");
+		const breed = String(body.breed || "");
+		const petSex = String(body.petSex || "");
+		const spayedNeutered = String(body.spayedNeutered || "");
+		const age =
+			body.age === "" || body.age === null || body.age === undefined
+				? null
+				: Number(body.age);
+		const currentMedications = String(body.currentMedications || "");
+		const knownAllergies = String(body.knownAllergies || "");
+		const pastInjuriesConditions = String(body.pastInjuriesConditions || "");
+		const vaccinationsUpToDate = String(body.vaccinationsUpToDate || "");
+		const heartwormPreventionCurrent = String(body.heartwormPreventionCurrent || "");
+
+		const [result] = await pool.execute(
+			`update pet set
+				petName = ?,
+				petType = ?,
+				breed = ?,
+				petSex = ?,
+				spayedNeutered = ?,
+				age = ?,
+				currentMedications = ?,
+				knownAllergies = ?,
+				pastInjuriesConditions = ?,
+				vaccinationsUpToDate = ?,
+				heartwormPreventionCurrent = ?
+			where petID = ? and userID = ?`,
+			[
+				petName,
+				petType,
+				breed,
+				petSex,
+				spayedNeutered,
+				age,
+				currentMedications,
+				knownAllergies,
+				pastInjuriesConditions,
+				vaccinationsUpToDate,
+				heartwormPreventionCurrent,
+				petID,
+				userID,
+			]
+		);
+
+		if (!result.affectedRows) {
+			res.status(404).json({ error: "pet not found" });
+			return;
+		}
+
+		const [rows] = await pool.execute(
+			`select
+				petID,
+				petName,
+				petType,
+				breed,
+				petSex,
+				spayedNeutered,
+				age,
+				weight,
+				height,
+				behavior,
+				currentMedications,
+				knownAllergies,
+				pastInjuriesConditions,
+				vaccinationsUpToDate,
+				heartwormPreventionCurrent
+			from pet
+			where petID = ? and userID = ?`,
+			[petID, userID]
+		);
+
+		if (!rows.length) {
+			res.status(404).json({ error: "pet not found" });
+			return;
+		}
+
+		const p = rows[0];
+		res.json({
+			petID: Number(p.petID),
+			petName: p.petName || "",
+			petType: p.petType || "",
+			breed: p.breed || "",
+			petSex: p.petSex || "",
+			spayedNeutered: p.spayedNeutered || "",
+			age: p.age === null || p.age === undefined ? null : Number(p.age),
+			weight: p.weight === null || p.weight === undefined ? null : Number(p.weight),
+			height: p.height === null || p.height === undefined ? null : Number(p.height),
+			behavior: p.behavior || "",
+			currentMedications: p.currentMedications || "",
+			knownAllergies: p.knownAllergies || "",
+			pastInjuriesConditions: p.pastInjuriesConditions || "",
+			vaccinationsUpToDate: p.vaccinationsUpToDate || "",
+			heartwormPreventionCurrent: p.heartwormPreventionCurrent || "",
+		});
+	} catch (err) {
+		console.error("patch pet error", err);
+		res.status(500).json({ error: "failed to update pet profile" });
+	}
+});
+
+
 // returns availability slots for a reasonKey
 router.get("/availability", async (req, res) => {
 	try {

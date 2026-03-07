@@ -35,6 +35,28 @@ function mapProfileRow(r) {
   };
 }
 
+async function selectProfileRow(userID) {
+  const [rows] = await pool.execute(
+    `select
+      userID,
+      email,
+      userBio,
+      legalFirstName,
+      legalLastName,
+      phone,
+      addressLine1,
+      city,
+      state,
+      zipCode,
+      isAdmin
+    from customer
+    where userID = ?`,
+    [userID]
+  );
+
+  return rows;
+}
+
 // GET /api/profile?userID=#
 // returns profile/contact info for the user profile page
 router.get("/", async (req, res) => {
@@ -45,24 +67,7 @@ router.get("/", async (req, res) => {
       return;
     }
 
-    // parameterized query so userID is safely injected into the sql statement
-    const [rows] = await pool.execute(
-      `select
-        userID,
-        email,
-        userBio,
-        legalFirstName,
-        legalLastName,
-        phone,
-        addressLine1,
-        city,
-        state,
-        zipCode,
-        isAdmin
-      from customer
-      where userID = ?`,
-      [userID]
-    );
+    const rows = await selectProfileRow(userID);
 
     if (!rows.length) {
       res.status(404).json({ error: "user not found" });
@@ -76,8 +81,9 @@ router.get("/", async (req, res) => {
   }
 });
 
-// PUT /api/profile?userID=#   body: { userBio }
-// updates customer.userBio for the given user, then returns the updated profile row
+// PUT /api/profile?userID=#
+// updates editable customer profile fields and returns the updated row
+// bio can still be updated through this same route too
 router.put("/", async (req, res) => {
   try {
     const userID = getUserIdFromSessionOrQuery(req);
@@ -86,34 +92,44 @@ router.put("/", async (req, res) => {
       return;
     }
 
-    // accept any value and normalize it into a string
-    // null/undefined becomes empty string so the column is never set to null accidentally
-    const userBioRaw = req?.body?.userBio;
-    const userBio = userBioRaw === null || userBioRaw === undefined ? "" : String(userBioRaw);
+    const body = req.body || {};
+
+    const allowedFields = [
+      "userBio",
+      "legalFirstName",
+      "legalLastName",
+      "phone",
+      "addressLine1",
+      "city",
+      "state",
+      "zipCode",
+    ];
+
+    const setParts = [];
+    const params = [];
+
+    for (const field of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(body, field)) {
+        setParts.push(`${field} = ?`);
+        params.push(body[field] === null || body[field] === undefined ? "" : String(body[field]));
+      }
+    }
+
+    if (!setParts.length) {
+      res.status(400).json({ error: "no editable fields supplied" });
+      return;
+    }
+
+    params.push(userID);
 
     await pool.execute(
-      "update customer set userBio = ? where userID = ?",
-      [userBio, userID]
+      `update customer
+       set ${setParts.join(", ")}
+       where userID = ?`,
+      params
     );
 
-    // reselect and return what is currently stored so frontend stays in sync
-    const [rows] = await pool.execute(
-      `select
-        userID,
-        email,
-        userBio,
-        legalFirstName,
-        legalLastName,
-        phone,
-        addressLine1,
-        city,
-        state,
-        zipCode,
-        isAdmin
-      from customer
-      where userID = ?`,
-      [userID]
-    );
+    const rows = await selectProfileRow(userID);
 
     if (!rows.length) {
       res.status(404).json({ error: "user not found" });

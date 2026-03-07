@@ -10,19 +10,12 @@ import type {
 
 // GET /api/reservations/availability
 // builds a query string and returns available time slots for a given reasonKey
-// required params:
-//  reasonKey: appointment type key used by backend scheduling rules
-//  userID: used to prevent overlaps with the user's existing appointments
-// optional params:
-//  startDate: YYYY-MM-DD (defaults to today on backend if omitted)
-//  days: number of days to scan (backend clamps this)
 export async function getAvailability(params: {
 	reasonKey: ReasonKey;
 	userID: number;
 	startDate?: string;
 	days?: number;
 }) {
-	// URLSearchParams is the standard way to build ?key=value&key=value safely
 	const q = new URLSearchParams();
 	q.set("reasonKey", params.reasonKey);
 	q.set("userID", String(params.userID));
@@ -64,6 +57,17 @@ export async function getPetsForUser(userID: number) {
 		method: "GET",
 	});
 
-	// the api returns { userID, pets }, but the UI only needs the pets array
 	return resp.pets;
+}
+
+// PATCH /api/reservations/pets/:petID?userID=
+// updates one pet profile from the user profile page
+export async function updatePetProfile(userID: number, petID: number, payload: Partial<PetProfile>) {
+	const q = new URLSearchParams();
+	q.set("userID", String(userID));
+
+	return api<PetProfile>(`/reservations/pets/${petID}?${q.toString()}`, {
+		method: "PATCH",
+		body: payload,
+	});
 }

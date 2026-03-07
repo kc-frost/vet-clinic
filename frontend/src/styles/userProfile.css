@@ -33,6 +33,58 @@
   max-width: 260px;
   border-radius: 12px;
   display: block;
+  margin: 0 auto;
+  object-fit: cover;
+}
+
+.profileStaticInfo {
+  margin-bottom: 16px;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.fieldRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldRowWide {
+  grid-column: span 2;
+}
+
+.fieldRow label {
+  font-weight: 700;
+}
+
+.fieldInput {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #9ba8b7;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.fieldTextarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.fieldError {
+  margin: 0;
+  color: #b42318;
+  font-size: 14px;
+}
+
+.sectionActions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .bioInput {
@@ -41,6 +93,7 @@
   border-radius: 10px;
   margin-top: 8px;
   margin-bottom: 10px;
+  box-sizing: border-box;
 }
 
 .primaryBtn {
@@ -147,7 +200,7 @@
 }
 
 .petBox {
-  width: 260px;
+  width: 320px;
   border: 2px solid #ccc;
   border-radius: 12px;
   padding: 16px;
@@ -165,5 +218,13 @@
 
   .reservationsRow {
     grid-template-columns: 1fr;
+  }
+
+  .infoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldRowWide {
+    grid-column: span 1;
   }
 }
