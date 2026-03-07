@@ -34,8 +34,12 @@ type Props = {
   //if parent passes this in, we mirror it into local state
   value?: SlotCalendarValue | null;
 
-  //callback fired when a time button is clicked
+  //callback fired when user clicks a time button
   onSelectSlot: (value: SlotCalendarValue) => void;
+
+  //callback fired when user clicks a date
+  //used by the parent to clear any old time selection if a new date is chosen
+  onBrowseDateChange?: (date: string) => void;
 
   //optional UI states
   isLoading?: boolean;
@@ -65,32 +69,20 @@ function addMonths(d: Date, months: number) {
 //takes a yyyy-mm-dd string and safely turns it into a Date object
 //returns null if the text is not in the expected format
 function parseYYYYMMDD(yyyyMmDd: string): Date | null {
-  //regex here means:
-  //^ start of string
-  //\d{4} exactly 4 digits
-  //- dash
-  //\d{2} exactly 2 digits
-  //$ end of string
   if (!/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd)) return null;
 
-  //slice(start, end) grabs a substring
-  //for example slice(0, 4) on 2026-03-08 gives "2026"
   const year = Number(yyyyMmDd.slice(0, 4));
   const month = Number(yyyyMmDd.slice(5, 7));
   const day = Number(yyyyMmDd.slice(8, 10));
 
-  //extra safety checks
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
   if (month < 1 || month > 12) return null;
   if (day < 1 || day > 31) return null;
 
-  //js Date months are zero based
-  //so january is 0, february is 1, etc
   return new Date(year, month - 1, day);
 }
 
 //turns a Date object back into yyyy-mm-dd text
-//padStart(2, "0") makes sure month/day always stay 2 digits
 function toYYYYMMDD(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -128,12 +120,11 @@ export default function SlotCalendar({
   monthsForward = 2,
   value = null,
   onSelectSlot,
+  onBrowseDateChange,
   isLoading = false,
   errorText = "",
 }: Props) {
   //today with time zeroed out
-  //useMemo here makes sure this value stays stable for the life of the render cycle
-  //instead of recreating a brand new Date every time the component rerenders
   const today = useMemo(() => startOfDay(new Date()), []);
 
   //minimum visible month is the current month
@@ -143,12 +134,7 @@ export default function SlotCalendar({
   const maxMonth = useMemo(() => addMonths(minMonth, monthsForward), [minMonth, monthsForward]);
 
   //group all slots by date
-  //this lets us answer two questions quickly:
-  // does this day have any slots
-  // if this day is selected, which slots belong to it
-  //
-  //Record<string, SlotCalendarSlot[]> means:
-  //an object whose keys are strings and whose values are arrays of SlotCalendarSlot
+  //this makes it easy to get all time buttons for a selected day
   const slotsByDate = useMemo(() => {
     const map: Record<string, SlotCalendarSlot[]> = {};
 
@@ -157,8 +143,6 @@ export default function SlotCalendar({
       map[s.date].push(s);
     }
 
-    //sort times within each date so buttons appear in order
-    //localeCompare works well for strings like 09:00 and 10:00
     for (const date of Object.keys(map)) {
       map[date].sort((a, b) => a.startTime.localeCompare(b.startTime));
     }
@@ -167,7 +151,6 @@ export default function SlotCalendar({
   }, [slots]);
 
   //set of all dates that have at least one slot
-  //Set is useful here because has(...) is fast and clean
   const availableDateSet = useMemo(() => {
     const set = new Set<string>();
     for (const s of slots) set.add(s.date);
@@ -175,16 +158,11 @@ export default function SlotCalendar({
   }, [slots]);
 
   //local UI state
-  //this component still keeps track of what day the user is browsing,
-  //even if the actual selected slot is also being controlled by the parent
+  //this tracks what date is being browsed and which start time is highlighted
   const [internalSelectedDate, setInternalSelectedDate] = useState<string>("");
   const [internalSelectedStart, setInternalSelectedStart] = useState<string>("");
 
-  //if parent passes a selected value, copy it into local state
-  //the ?. syntax is optional chaining
-  //value?.date means:
-  //if value exists, use value.date
-  //if value is null or undefined, just return undefined instead of crashing
+  //if parent already has a selected value, copy it into local state
   useEffect(() => {
     if (value?.date) {
       setInternalSelectedDate(value.date);
@@ -192,21 +170,16 @@ export default function SlotCalendar({
     }
   }, [value?.date, value?.startTime]);
 
-  //currently browsed/selected date
-  //priority is local state first, then parent value, then empty string
+  //currently selected date
   const selectedDate = internalSelectedDate || value?.date || "";
 
-  //only highlight a selected time if it belongs to the currently selected date
-  //the ternary operator here is:
-  //condition ? valueIfTrue : valueIfFalse
+  //keep selected time tied to the currently selected date
   const selectedStartTime =
     selectedDate && value && selectedDate === value.date
       ? value.startTime
       : internalSelectedStart;
 
-  //decide which month the calendar should initially show
-  //if a date is already selected, open the calendar to that month
-  //otherwise default to current month
+  //if a date is already selected, start the calendar on that month
   const initialMonth = useMemo(() => {
     if (selectedDate) {
       const parsed = parseYYYYMMDD(selectedDate);
@@ -215,10 +188,9 @@ export default function SlotCalendar({
     return minMonth;
   }, [minMonth, selectedDate]);
 
-  //which month is currently being displayed in the calendar
   const [visibleMonth, setVisibleMonth] = useState<Date>(initialMonth);
 
-  //makes sure visible month never goes outside our allowed range
+  //keeps the displayed month inside the allowed range
   function clampMonth(next: Date) {
     const a = firstDayOfMonth(next).getTime();
     const min = minMonth.getTime();
@@ -229,55 +201,49 @@ export default function SlotCalendar({
     return firstDayOfMonth(next);
   }
 
-  //move visible calendar one month backward
   function goPrevMonth() {
     const prev = addMonths(visibleMonth, -1);
     setVisibleMonth(clampMonth(prev));
   }
 
-  //move visible calendar one month forward
   function goNextMonth() {
     const next = addMonths(visibleMonth, 1);
     setVisibleMonth(clampMonth(next));
   }
 
-  //jump back to current month
   function goToCurrentMonth() {
     setVisibleMonth(minMonth);
   }
 
-  //used to disable the previous month button
   const canGoPrev = useMemo(() => {
     return firstDayOfMonth(visibleMonth).getTime() > minMonth.getTime();
   }, [visibleMonth, minMonth]);
 
-  //used to disable the next month button
   const canGoNext = useMemo(() => {
     return firstDayOfMonth(visibleMonth).getTime() < maxMonth.getTime();
   }, [visibleMonth, maxMonth]);
 
-  //all slots that belong to the currently selected date
+  //all slot buttons for the selected date
   const selectedSlots = useMemo(() => {
     if (!selectedDate) return [];
     return slotsByDate[selectedDate] ?? [];
   }, [selectedDate, slotsByDate]);
 
-  //react-day-picker gives us the clicked day here
-  //DayClickEventHandler is just the library's function type for day clicks
   const handleDayClick: DayClickEventHandler = (day: Date) => {
     const dateKey = toYYYYMMDD(day);
 
-    //ignore clicks on days that do not have any available slots
+    //ignore clicks on days that do not actually have availability
     if (!availableDateSet.has(dateKey)) return;
 
-    //switching to a new day clears time selection
-    //user must click a specific time button next
+    //switching dates clears the selected time
     setInternalSelectedDate(dateKey);
     setInternalSelectedStart("");
+
+    //tell the parent that the user is browsing a new date
+    //this lets the reservation form clear its old slot selection too
+    onBrowseDateChange?.(dateKey);
   };
 
-  //called when one of the time buttons is clicked
-  //updates local highlight state and also tells the parent what was selected
   function onTimeClick(slot: SlotCalendarSlot) {
     setInternalSelectedDate(slot.date);
     setInternalSelectedStart(slot.startTime);
@@ -289,8 +255,7 @@ export default function SlotCalendar({
     });
   }
 
-  //react-day-picker modifiers work with Date objects
-  //so we convert all available yyyy-mm-dd strings into Date objects here
+  //react-day-picker wants Date objects for modifiers
   const availableDays = useMemo(() => {
     const list: Date[] = [];
 
@@ -302,7 +267,6 @@ export default function SlotCalendar({
     return list;
   }, [availableDateSet]);
 
-  //selected prop for DayPicker also expects a Date object or undefined
   const selectedDayDate = useMemo(() => {
     if (!selectedDate) return undefined;
     const d = parseYYYYMMDD(selectedDate);
@@ -362,15 +326,13 @@ export default function SlotCalendar({
           disabled={(day) => {
             const dateKey = toYYYYMMDD(day);
 
-            //disable past days
+            //disable past days only
             if (startOfDay(day).getTime() < today.getTime()) return true;
 
-            //disable days that do not exist in the available slot set
+            //disable dates that have no available slots returned by the backend
             return !availableDateSet.has(dateKey);
           }}
           modifiers={{
-            //custom modifier name
-            //days in this list get the css class from modifiersClassNames below
             available: availableDays,
           }}
           modifiersClassNames={{
@@ -405,7 +367,6 @@ export default function SlotCalendar({
         ) : (
           <div className="slotCalTimesGrid" role="list">
             {selectedSlots.map((s) => {
-              //button is selected only if both date and startTime match
               const isSelected = selectedDate === s.date && selectedStartTime === s.startTime;
 
               return (

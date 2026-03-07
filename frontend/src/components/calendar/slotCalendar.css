@@ -1,16 +1,30 @@
 .slotCal {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
   display: grid;
-  grid-template-columns: 400px minmax(280px, 420px);
+  grid-template-columns: 420px 620px;
   gap: 18px;
   align-items: start;
+  justify-content: center;
 }
 
 .slotCalLeft,
 .slotCalRight {
+  min-width: 0;
+  overflow: hidden;
   border: 1px solid #333;
   border-radius: 12px;
   padding: 12px;
   background: transparent;
+}
+
+.slotCalLeft {
+  width: 420px;
+}
+
+.slotCalRight {
+  width: 620px;
 }
 
 .slotCalHeader {
@@ -45,10 +59,13 @@
 
 .slotCalDayPicker {
   width: 100%;
+  overflow: hidden;
 }
 
+.slotCalDayPicker .rdp-root,
 .slotCalDayPicker .rdp {
-  --rdp-cell-size: 44px;
+  width: 100%;
+  max-width: 100%;
   margin: 0;
 }
 
@@ -56,13 +73,32 @@
   justify-content: center;
 }
 
-.slotCalDayPicker .rdp-caption {
+.slotCalDayPicker .rdp-caption,
+.slotCalDayPicker .rdp-nav {
   display: none;
 }
 
+.slotCalDayPicker .rdp-month_caption {
+  display: none;
+}
+
+.slotCalDayPicker .rdp-month_grid {
+  width: 100%;
+}
+
+.slotCalDayPicker .rdp-weekdays,
+.slotCalDayPicker .rdp-week {
+  width: 100%;
+}
+
+.slotCalDayPicker .rdp-day {
+  text-align: center;
+}
+
 .slotCalDayPicker .rdp-day_button {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
 }
 
 .slotCalDayAvailable {
@@ -70,14 +106,16 @@
   text-decoration: none;
 }
 
-.slotCalDayPicker .rdp-day.slotCalDayAvailable:not(.rdp-day_disabled) {
+.slotCalDayPicker .rdp-day:not(.rdp-day_disabled).slotCalDayAvailable .rdp-day_button {
   background: rgba(0, 120, 255, 0.15);
-  border-radius: 8px;
 }
 
-.slotCalDayPicker .rdp-day_selected {
-  outline: 2px solid rgba(0, 120, 255, 0.7);
-  border-radius: 8px;
+.slotCalDayPicker .rdp-day_selected .rdp-day_button,
+.slotCalDayPicker .rdp-day_selected:hover .rdp-day_button,
+.slotCalDayPicker .rdp-day_selected:focus-within .rdp-day_button {
+  background: rgba(0, 120, 255, 0.3);
+  border: 2px solid rgba(0, 120, 255, 0.85);
+  color: #0d2b55;
 }
 
 .slotCalDayPicker .rdp-day_disabled {
@@ -126,10 +164,12 @@
   gap: 10px;
   max-height: 560px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
 }
 
 .slotCalTimeBtn {
+  width: 100%;
   border: 1px solid #333;
   border-radius: 10px;
   padding: 10px 10px;
@@ -161,9 +201,16 @@
   opacity: 0.9;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1180px) {
   .slotCal {
+    width: 100%;
     grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .slotCalLeft,
+  .slotCalRight {
+    width: 100%;
   }
 
   .slotCalTimesGrid {

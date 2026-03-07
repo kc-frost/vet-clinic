@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import "../../styles/reservation.css";
 import {
 	INITIAL_RESERVATION_FORM,
@@ -101,6 +101,10 @@ export default function Reservation() {
 	// current section index inside STEPS
 	// changing this changes which section is rendered
 	const [stepIndex, setStepIndex] = useState(0);
+
+	// highest step the user has successfully reached so far
+	// used to decide which future steps can be clicked directly
+	const [furthestReachedStepIndex, setFurthestReachedStepIndex] = useState(0);
 
 	// derived current step object
 	// used for:
@@ -358,6 +362,21 @@ export default function Reservation() {
 		});
 	}
 
+	// if the user clicks a different date after already picking a time,
+	// that old time should no longer count for the new date
+	function onCalendarDateChange(nextDate: string) {
+		setSelectedSlotId("");
+
+		setFormData((prev) => ({
+			...prev,
+			appointmentDate: nextDate,
+			startTime: "",
+		}));
+
+		clearFieldError("appointmentDate");
+		clearFieldError("startTime");
+	}
+
 	// stores slotId for the calendar, but writes slot data into formData
 	// backend submit uses appointmentDate + startTime, not slotId
 	function onSlotSelect(value: { date: string; startTime: string; slotId?: string }) {
@@ -414,6 +433,18 @@ export default function Reservation() {
 		return e;
 	}
 
+	function validateMedical(data: ReservationFormData) {
+		const e: ReservationFormErrors = {};
+
+		if (isBlank(data.pastInjuriesConditions)) e.pastInjuriesConditions = "required";
+		if (isBlank(data.currentMedications)) e.currentMedications = "required";
+		if (isBlank(data.knownAllergies)) e.knownAllergies = "required";
+		if (isBlank(data.vaccinationsUpToDate)) e.vaccinationsUpToDate = "required";
+		if (isBlank(data.heartwormPreventionCurrent)) e.heartwormPreventionCurrent = "required";
+
+		return e;
+	}
+
 	function validateAppointment(data: ReservationFormData) {
 		const e: ReservationFormErrors = {};
 
@@ -424,33 +455,92 @@ export default function Reservation() {
 		return e;
 	}
 
+	function validateInsurance(data: ReservationFormData) {
+		const e: ReservationFormErrors = {};
+
+		if (!isBlank(data.insuranceProvider) && data.insuranceProvider.trim().length > 120) {
+			e.insuranceProvider = "too long";
+		}
+
+		if (!isBlank(data.insuranceMemberId) && data.insuranceMemberId.trim().length > 120) {
+			e.insuranceMemberId = "too long";
+		}
+
+		return e;
+	}
+
 	function validateConsent(data: ReservationFormData) {
 		const e: ReservationFormErrors = {};
 		if (!data.consentToFormInfo) e.consentToFormInfo = "required";
 		return e;
 	}
 
-	// runs validation only for the current section
-	// called by Next and by Submit
-	function validateCurrentStep() {
+	// runs validation for a specific step index
+	// used by Next and also by step jumping when the user clicks the progress boxes
+	function validateStepByIndex(index: number) {
 		let e: ReservationFormErrors = {};
 
-		if (step.id === "owner") e = validateOwner(formData);
-		else if (step.id === "pet") e = validatePet(formData);
-		else if (step.id === "appointment") e = validateAppointment(formData);
-		else if (step.id === "review") e = validateConsent(formData);
+		if (STEPS[index].id === "owner") e = validateOwner(formData);
+		else if (STEPS[index].id === "pet") e = validatePet(formData);
+		else if (STEPS[index].id === "medical") e = validateMedical(formData);
+		else if (STEPS[index].id === "appointment") e = validateAppointment(formData);
+		else if (STEPS[index].id === "insurance") e = validateInsurance(formData);
+		else if (STEPS[index].id === "review") e = validateConsent(formData);
 
 		setErrors(e);
 		return Object.keys(e).length === 0;
 	}
 
+	// runs validation only for the current section
+	// called by Next and by Submit
+	function validateCurrentStep() {
+		return validateStepByIndex(stepIndex);
+	}
+
 	function goNext() {
 		if (!validateCurrentStep()) return;
-		setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
+
+		setStepIndex((i) => {
+			const next = Math.min(i + 1, STEPS.length - 1);
+			setFurthestReachedStepIndex((prev) => Math.max(prev, next));
+			return next;
+		});
 	}
 
 	function goBack() {
 		setStepIndex((i) => Math.max(i - 1, 0));
+	}
+
+	// lets the user click old/current steps freely
+	// and jump forward only if each step in between validates successfully
+	function goToStep(targetIndex: number) {
+		if (isSubmitted) return;
+		if (targetIndex === stepIndex) return;
+
+		// moving backward is always okay
+		if (targetIndex < stepIndex) {
+			setStepIndex(targetIndex);
+			return;
+		}
+
+		// if user is moving forward, validate every step in between
+		for (let i = stepIndex; i < targetIndex; i++) {
+			const valid = validateStepByIndex(i);
+			if (!valid) {
+				setStepIndex(i);
+				return;
+			}
+		}
+
+		setStepIndex(targetIndex);
+		setFurthestReachedStepIndex((prev) => Math.max(prev, targetIndex));
+	}
+
+	function onStepKeyDown(e: KeyboardEvent<HTMLDivElement>, targetIndex: number) {
+		if (e.key === "Enter" || e.key === " ") {
+			e.preventDefault();
+			goToStep(targetIndex);
+		}
 	}
 
 	// sends the final booking request
@@ -496,6 +586,7 @@ export default function Reservation() {
 		setIsSubmitted(false);
 		setSubmitMessage("");
 		setStepIndex(0);
+		setFurthestReachedStepIndex(0);
 		setSelectedPetId(null);
 		setSelectedSlotId("");
 		setAvailableSlots([]);
@@ -552,14 +643,31 @@ export default function Reservation() {
 			<p className="step-progress">{progressText}</p>
 
 			<div className="step-indicator">
-				{STEPS.map((s, idx) => (
-					<div
-						key={s.id}
-						className={`step ${idx === stepIndex ? "active" : ""} ${idx < stepIndex ? "completed" : ""}`}
-					>
-						{s.title}
-					</div>
-				))}
+				{STEPS.map((s, idx) => {
+					const isActive = idx === stepIndex;
+					const isCompleted = idx < stepIndex;
+					const canClick = !isSubmitted && (idx <= furthestReachedStepIndex || idx <= stepIndex + 1 || idx < stepIndex);
+
+					return (
+						<div
+							key={s.id}
+							className={`step ${isActive ? "active" : ""} ${isCompleted ? "completed" : ""} ${canClick ? "step-clickable" : ""}`}
+							onClick={() => {
+								if (canClick) goToStep(idx);
+							}}
+							onKeyDown={(e) => {
+								if (canClick) onStepKeyDown(e, idx);
+							}}
+							role="button"
+							tabIndex={canClick ? 0 : -1}
+							aria-current={isActive ? "step" : undefined}
+							aria-disabled={!canClick}
+							title={canClick ? `Go to ${s.title}` : "Complete previous steps first"}
+						>
+							{s.title}
+						</div>
+					);
+				})}
 			</div>
 
 			<div className="form-container">
@@ -625,6 +733,7 @@ export default function Reservation() {
 											: null
 									}
 									onSelectSlot={onSlotSelect}
+									onBrowseDateChange={onCalendarDateChange}
 									isLoading={slotsLoading}
 									errorText={slotsError}
 								/>
