@@ -27,7 +27,7 @@ type Props = {
   slots: SlotCalendarSlot[];
 
   //how many months ahead the user is allowed to browse
-  //defaults to 3 if not passed in
+  //defaults to 2 if not passed in
   monthsForward?: number;
 
   //optional controlled value from the parent
@@ -101,6 +101,26 @@ function toYYYYMMDD(d: Date) {
 //returns a readable title like "March 2026"
 function monthTitle(d: Date) {
   return d.toLocaleString(undefined, { month: "long", year: "numeric" });
+}
+
+//turns 24 hour time like 13:30 into 1:30 PM for the ui
+function formatTime12Hour(hhmm: string) {
+  const parts = hhmm.split(":");
+  if (parts.length < 2) return hhmm;
+
+  const hours = Number(parts[0]);
+  const minutes = Number(parts[1]);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return hhmm;
+
+  const temp = new Date();
+  temp.setHours(hours, minutes, 0, 0);
+
+  return temp.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 export default function SlotCalendar({
@@ -395,7 +415,7 @@ export default function SlotCalendar({
                   className={`slotCalTimeBtn ${isSelected ? "slotCalTimeBtnSelected" : ""}`}
                   onClick={() => onTimeClick(s)}
                 >
-                  {s.startTime} – {s.endTime}
+                  {formatTime12Hour(s.startTime)} – {formatTime12Hour(s.endTime)}
                 </button>
               );
             })}
@@ -404,7 +424,7 @@ export default function SlotCalendar({
 
         {selectedDate && selectedStartTime ? (
           <div className="slotCalSelectedSummary">
-            Selected: <b>{selectedDate}</b> at <b>{selectedStartTime}</b>
+            Selected: <b>{selectedDate}</b> at <b>{formatTime12Hour(selectedStartTime)}</b>
           </div>
         ) : null}
       </div>

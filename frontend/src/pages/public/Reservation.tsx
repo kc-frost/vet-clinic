@@ -243,7 +243,7 @@ export default function Reservation() {
 				const resp = await getAvailability({
 					reasonKey: formData.reasonKey as ReasonKey,
 					userID: currentUser.userID,
-					days: 30,
+					days: 90,
 				});
 				if (!alive) return;
 				setAvailableSlots(resp.slots || []);
@@ -646,7 +646,7 @@ export default function Reservation() {
 						</div>
 					</div>
 				) : null}
-                
+
 				{step.id === "insurance" ? (
 					<InsuranceStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
 				) : null}

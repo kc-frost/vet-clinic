@@ -1,7 +1,7 @@
 .slotCal {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 16px;
+  grid-template-columns: 400px minmax(280px, 420px);
+  gap: 18px;
   align-items: start;
 }
 
@@ -10,6 +10,7 @@
   border: 1px solid #333;
   border-radius: 12px;
   padding: 12px;
+  background: transparent;
 }
 
 .slotCalHeader {
@@ -46,26 +47,39 @@
   width: 100%;
 }
 
-/* react-day-picker day styles */
-/* "available" days are clickable and visually distinct */
+.slotCalDayPicker .rdp {
+  --rdp-cell-size: 44px;
+  margin: 0;
+}
+
+.slotCalDayPicker .rdp-months {
+  justify-content: center;
+}
+
+.slotCalDayPicker .rdp-caption {
+  display: none;
+}
+
+.slotCalDayPicker .rdp-day_button {
+  width: 40px;
+  height: 40px;
+}
+
 .slotCalDayAvailable {
   font-weight: 700;
   text-decoration: none;
 }
 
-/* make available days look highlighted */
 .slotCalDayPicker .rdp-day.slotCalDayAvailable:not(.rdp-day_disabled) {
   background: rgba(0, 120, 255, 0.15);
   border-radius: 8px;
 }
 
-/* selected day gets a stronger outline */
 .slotCalDayPicker .rdp-day_selected {
   outline: 2px solid rgba(0, 120, 255, 0.7);
   border-radius: 8px;
 }
 
-/* disabled day appearance */
 .slotCalDayPicker .rdp-day_disabled {
   opacity: 0.35;
 }
@@ -108,8 +122,11 @@
 
 .slotCalTimesGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .slotCalTimeBtn {
@@ -119,6 +136,7 @@
   background: transparent;
   cursor: pointer;
   text-align: center;
+  white-space: nowrap;
 }
 
 .slotCalTimeBtn:hover {
@@ -141,4 +159,14 @@
 .slotCalSelectedSummary {
   margin-top: 12px;
   opacity: 0.9;
+}
+
+@media (max-width: 980px) {
+  .slotCal {
+    grid-template-columns: 1fr;
+  }
+
+  .slotCalTimesGrid {
+    max-height: 320px;
+  }
 }
