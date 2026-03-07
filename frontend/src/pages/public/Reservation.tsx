@@ -15,6 +15,9 @@ import PetInformationStep from "../../components/reservation/PetInformationStep"
 import MedicalHistoryStep from "../../components/reservation/MedicalHistoryStep";
 import InsuranceStep from "../../components/reservation/InsuranceStep";
 import ReviewConfirmStep from "../../components/reservation/ReviewConfirmStep";
+
+import SlotCalendar from "../../components/calendar/SlotCalendar";
+
 import { getCurrentUser } from "../../api/auth";
 import { createReservation, getAvailability, getPetsForUser, getReservationProfile } from "../../api/reservations";
 
@@ -109,11 +112,11 @@ export default function Reservation() {
 	// loaded from GET /api/reservations/availability?reasonKey=...&userID=...&days=...
 	const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
 
-	// while true, the slots dropdown shows "Loading slots..." and is disabled
+	// while true, the slot calendar shows a loading state
 	const [slotsLoading, setSlotsLoading] = useState(false);
 
 	// error message for slot fetch
-	// shown under the slot dropdown
+	// shown inside the slot calendar area
 	const [slotsError, setSlotsError] = useState<string>("");
 
 	// UI-only identifier of the selected slot
@@ -355,21 +358,15 @@ export default function Reservation() {
 		});
 	}
 
-	// stores slotId for the dropdown, but writes slot data into formData
+	// stores slotId for the calendar, but writes slot data into formData
 	// backend submit uses appointmentDate + startTime, not slotId
-	function onSlotChange(slotId: string) {
-		setSelectedSlotId(slotId);
-
-		const slot = availableSlots.find((s) => s.slotId === slotId);
-		if (!slot) {
-			setFormData((prev) => ({ ...prev, appointmentDate: "", startTime: "" }));
-			return;
-		}
+	function onSlotSelect(value: { date: string; startTime: string; slotId?: string }) {
+		setSelectedSlotId(value.slotId || "");
 
 		setFormData((prev) => ({
 			...prev,
-			appointmentDate: slot.date,
-			startTime: slot.startTime,
+			appointmentDate: value.date,
+			startTime: value.startTime,
 		}));
 
 		clearFieldError("appointmentDate");
@@ -588,7 +585,7 @@ export default function Reservation() {
 				{step.id === "appointment" ? (
 					<div>
 						<h2>Appointment Details</h2>
-						<p>Select a reason and an available time slot.</p>
+						<p>Select a reason, then pick a highlighted date and time.</p>
 
 						<div className="form-row">
 							<label>Reason for visit</label>
@@ -608,38 +605,48 @@ export default function Reservation() {
 						</div>
 
 						<div className="form-row">
-							<label>Available slots</label>
-							<select
-								value={selectedSlotId}
-								onChange={(e) => onSlotChange(e.target.value)}
-								disabled={!formData.reasonKey || slotsLoading}
-							>
-								<option value="">
-									{slotsLoading
-										? "Loading slots..."
-										: !formData.reasonKey
-											? "Select a reason first"
-											: availableSlots.length
-												? "Select a slot"
-												: "No slots available"}
-								</option>
-								{availableSlots.map((s) => (
-									<option key={s.slotId} value={s.slotId}>
-										{s.date} {s.startTime} - {s.endTime}
-									</option>
-								))}
-							</select>
-							{slotsError ? <p className="field-error">{slotsError}</p> : null}
-							{errors.startTime || errors.appointmentDate ? <p className="field-error">select a time slot</p> : null}
+							<label>Available dates and times</label>
+
+							{!formData.reasonKey ? (
+								<div className="availability-placeholder">
+									Select a reason first to load available dates and times.
+								</div>
+							) : (
+								<SlotCalendar
+									key={formData.reasonKey}
+									slots={availableSlots}
+									value={
+										formData.appointmentDate && formData.startTime
+											? {
+													date: formData.appointmentDate,
+													startTime: formData.startTime,
+													slotId: selectedSlotId || undefined,
+											  }
+											: null
+									}
+									onSelectSlot={onSlotSelect}
+									isLoading={slotsLoading}
+									errorText={slotsError}
+								/>
+							)}
+
+							{errors.startTime || errors.appointmentDate ? (
+								<p className="field-error">select a time slot</p>
+							) : null}
 						</div>
 
 						<div className="form-row">
 							<label>Notes (optional)</label>
-							<textarea name="reasonDetails" value={formData.reasonDetails} onChange={onInputChange} rows={4} />
+							<textarea
+								name="reasonDetails"
+								value={formData.reasonDetails}
+								onChange={onInputChange}
+								rows={4}
+							/>
 						</div>
 					</div>
 				) : null}
-
+                
 				{step.id === "insurance" ? (
 					<InsuranceStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
 				) : null}

@@ -1,0 +1,144 @@
+.slotCal {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.slotCalLeft,
+.slotCalRight {
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.slotCalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.slotCalHeaderTitle {
+  font-weight: 700;
+}
+
+.slotCalHeaderButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.slotCalBtn {
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.slotCalBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.slotCalDayPicker {
+  width: 100%;
+}
+
+/* react-day-picker day styles */
+/* "available" days are clickable and visually distinct */
+.slotCalDayAvailable {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* make available days look highlighted */
+.slotCalDayPicker .rdp-day.slotCalDayAvailable:not(.rdp-day_disabled) {
+  background: rgba(0, 120, 255, 0.15);
+  border-radius: 8px;
+}
+
+/* selected day gets a stronger outline */
+.slotCalDayPicker .rdp-day_selected {
+  outline: 2px solid rgba(0, 120, 255, 0.7);
+  border-radius: 8px;
+}
+
+/* disabled day appearance */
+.slotCalDayPicker .rdp-day_disabled {
+  opacity: 0.35;
+}
+
+.slotCalLegend {
+  margin-top: 10px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  opacity: 0.9;
+}
+
+.slotCalLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.slotCalLegendSwatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid #333;
+  display: inline-block;
+}
+
+.slotCalLegendSwatchAvailable {
+  background: rgba(0, 120, 255, 0.25);
+}
+
+.slotCalLegendSwatchDisabled {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.slotCalTimesTitle {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.slotCalTimesGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.slotCalTimeBtn {
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 10px 10px;
+  background: transparent;
+  cursor: pointer;
+  text-align: center;
+}
+
+.slotCalTimeBtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.slotCalTimeBtnSelected {
+  background: rgba(0, 120, 255, 0.2);
+  border-color: rgba(0, 120, 255, 0.8);
+}
+
+.slotCalHint {
+  opacity: 0.8;
+}
+
+.slotCalError {
+  color: #ffb3b3;
+}
+
+.slotCalSelectedSummary {
+  margin-top: 12px;
+  opacity: 0.9;
+}
