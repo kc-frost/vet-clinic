@@ -1,4 +1,4 @@
-drop database veterinarianDB;
+drop database if exists veterinarianDB;
 create database veterinarianDB;
 use veterinarianDB;
 
@@ -11,7 +11,7 @@ create table veterinary(
 create table medicine(
 	ndc int primary key,
 	medicineName varchar(255),
-	medicineType varchar(255), -- examples, anesthetic, painkiller, antibiotic
+	medicineType varchar(255), -- examples: anesthetic, painkiller, antibiotic
 	manufactorTime timestamp,
 	expirationDate timestamp
 );
@@ -23,7 +23,7 @@ create table customer(
 	password varchar(255),
 
 	-- profile/contact fields for the user
-    -- auto populated by first appointment form or filled out by user in user profile
+	-- auto populated by first appointment form or filled out by user in user profile
 	legalFirstName varchar(255),
 	legalLastName varchar(255),
 	phone varchar(20),
@@ -33,12 +33,14 @@ create table customer(
 	zipCode varchar(10),
 
 	address varchar(255),
-    -- text so that user can type paragraph into user biography
+	-- text so that user can type paragraph into user biography
 	userBio text,
 
-    -- isAdmin bool used denote user admin permissions for website traversal
-	isAdmin boolean not null default false, 
-    -- createdAt is for storing date of user account registration in days
+	-- website account identity type, not staff capability role
+	-- expected values: CUSTOMER, STAFF, ADMIN
+	userType varchar(20) not null default 'CUSTOMER',
+
+	-- createdAt is for storing date of user account registration
 	createdAt datetime not null default current_timestamp
 );
 
@@ -60,7 +62,7 @@ create table pet(
 	height int, -- in inches
 	behavior varchar(255), -- stores behavior notes for pet
 
-	-- medical history fields (this is what isFilled/autofills step 4 and shows in mini pet profile)
+	-- medical history fields (this is what autofills step 4 and shows in mini pet profile)
 	currentMedications text,
 	knownAllergies text,
 	pastInjuriesConditions text,
@@ -70,35 +72,50 @@ create table pet(
 	foreign key (userID) references customer(userID)
 );
 
--- role is what backend uses for appointment constraint logic (VET 2, PET_GROOMER 1)
--- position is basically display text / job title version of the role.
+-- staff is the clinic employee extension of a normal website account.
+-- user profile/contact info should come from customer, not be duplicated here.
 create table staff(
 	staffID int auto_increment primary key,
-	name varchar(255),
-	StaffNumber varchar(12), -- includes dashes
-	email varchar(255),
-	position varchar(255),
-	role varchar(50)
+	userID int not null unique,
+	staffNumber varchar(12) unique, -- includes dashes
+	positionTitle varchar(255), -- human readable job title for display
+	foreign key (userID) references customer(userID)
+);
+
+-- stores what staff scheduling capabilities a staff member possesses.
+-- examples: GENERAL, SURGEON, DENTIST, GROOMER, XRAY_TECH, ULTRASOUND_TECH
+create table staff_role(
+	staffID int not null,
+	roleKey varchar(50) not null,
+	primary key (staffID, roleKey),
+	foreign key (staffID) references staff(staffID)
+);
+
+-- recurring weekly availability.
+-- one continuous block per day per staff member.
+-- if a day has no row for the staff member, they are unavailable that day.
+create table staff_availability(
+	availabilityID int auto_increment primary key,
+	staffID int not null,
+	dayOfWeek tinyint not null, -- 1=Monday ... 7=Sunday
+	startTime time not null,
+	endTime time not null,
+	unique (staffID, dayOfWeek),
+	foreign key (staffID) references staff(staffID)
 );
 
 create table contactinfo(
-	address varchar(255) references veterinary(address),
+	address varchar(255),
 	generalPhoneNumber varchar(12), -- includes dashes
 	branchNumber varchar(12), -- includes dashes
-	email varchar(255)
+	email varchar(255),
+	foreign key (address) references veterinary(address)
 );
-
 
 -- this table represents both consumables and non-consumables, Xray or bandages for example.
 -- itemKey is the internal key used in backend logic (VACCINE_DOSE, XRAY_MACHINE, SHAMPOO_DOSE, etc)
 -- isConsumable tells backend if quantity means "stock" vs "capacity" based.
 -- since xrays can't be "consumed" but bandages do and have to get "restocked"
-
--- seeded non-consumable equipment should be: 
--- XRAY_MACHINE 1, ULTRASOUND_MACHINE 1, ANESTHESIA_MACHINE 1, DENTAL_UNIT 1
--- seeded consumables are:
--- EXAM_SUPPLY_KIT, VACCINE_DOSE, BANDAGE_PACK, ANTIBIOTIC_DOSE, 
--- DENTAL_CLEANING_KIT, PAIN_MED_DOSE, SUTURE_KIT, SHAMPOO_DOSE
 create table inventory(
 	itemID int auto_increment primary key,
 	itemType varchar(50),
@@ -113,36 +130,48 @@ create table leasings(
 	leasingID int auto_increment primary key,
 	leasestartdate timestamp,
 	leaseenddate timestamp,
-	itemID int references inventory(itemID)
+	itemID int,
+	foreign key (itemID) references inventory(itemID)
 );
 
 -- roomType should be EXAM, IMAGING, SURGERY, GROOMING
--- seeded quantities are 3, 1, 1, 1 respectively.
 create table rooms(
 	roomNumber int primary key,
 	roomType varchar(255),
 	capacity int
 );
 
--- appointment rows provide scheduling date info and linking to staff and room assignments
--- consumables are linked to appointment via appointment_consumable table to help handle 
--- appointment deletions, like returning consumable items
--- petID is nullable temporarily as it may be used to integrate mini-pet-profiles under users
+-- appointment rows provide scheduling date info and linking to room assignments.
+-- staffID is kept temporarily during sprint 4 transition so old code does not break immediately.
+-- long term, appointment_staff should become the true source of staff assignment.
 create table appointment(
 	appointmentID int auto_increment primary key,
 
 	userID int not null,
 	petID int null,
 
-	staffID int references staff(staffID),
-	roomNumber int references rooms(roomNumber),
+	staffID int null,
+	roomNumber int,
 
 	reasonKey varchar(100) not null,
 	date datetime not null,
 	durationMinutes int not null,
 
 	foreign key (userID) references customer(userID),
-	foreign key (petID) references pet(petID)
+	foreign key (petID) references pet(petID),
+	foreign key (staffID) references staff(staffID),
+	foreign key (roomNumber) references rooms(roomNumber)
+);
+
+-- actual many-to-many staff assignments for appointments.
+-- assignedRoleKey records which role the staff member is fulfilling on that appointment.
+create table appointment_staff(
+	appointmentID int not null,
+	staffID int not null,
+	assignedRoleKey varchar(50) not null,
+	primary key (appointmentID, staffID),
+	foreign key (appointmentID) references appointment(appointmentID),
+	foreign key (staffID) references staff(staffID)
 );
 
 -- essentially stores the full reservation fields as a snapshot
@@ -198,6 +227,21 @@ create table appointment_consumable(
 	foreign key (itemID) references inventory(itemID)
 );
 
+-- persistent notifications tied to user accounts.
+-- supports both customer reminders and staff in-app notifications.
+create table notification(
+	notificationID int auto_increment primary key,
+	userID int not null,
+	appointmentID int not null,
+	notificationType varchar(50) not null,
+	message text not null,
+	createdAt datetime not null default current_timestamp,
+	scheduledFor datetime not null,
+	isDismissed boolean not null default false,
+	foreign key (userID) references customer(userID),
+	foreign key (appointmentID) references appointment(appointmentID)
+);
+
 -- service catalog (what services exist in general)
 create table service(
 	serviceID int auto_increment primary key,
@@ -210,21 +254,24 @@ create table service(
 );
 
 create table veterinaryservice(
-	branch int references veterinary(branch),
-	serviceID int references service(serviceID),
+	branch int,
+	serviceID int,
 	isOffered boolean,
-	primary key (branch, serviceID)
+	primary key (branch, serviceID),
+	foreign key (branch) references veterinary(branch),
+	foreign key (serviceID) references service(serviceID)
 );
 
 create table insurance(
 	insuranceID int auto_increment primary key,
-	customerID int references customer(userID),
+	customerID int,
 	providerName varchar(255),
 	policyNumber varchar(255),
-	phoneNumber varchar(12),
+	phoneNumber varchar(12),	
 	planName varchar(255),
 	coveragePercent decimal(5,2),
-	isActive boolean
+	isActive boolean,
+	foreign key (customerID) references customer(userID)
 );
 
 create table payment(
@@ -233,7 +280,10 @@ create table payment(
 	paymentMethod varchar(255),
 	paymentStatus varchar(255),
 	TimeOfPayment datetime,
-	insuranceID int references insurance(insuranceID),
-	appointmentID int references appointment(appointmentID),
-	userID int references customer(userID)
+	insuranceID int,
+	appointmentID int,
+	userID int,
+	foreign key (insuranceID) references insurance(insuranceID),
+	foreign key (appointmentID) references appointment(appointmentID),
+	foreign key (userID) references customer(userID)
 );
