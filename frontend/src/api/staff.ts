@@ -1,26 +1,44 @@
-import type { Staff, StaffCreate } from "../types/staff";
+import { api } from "./client";
+import type { Staff, StaffCreate, StaffUserCandidate } from "../types/staff";
 
-const BASE_URL = "/api/staff";
+/*
+	Gets the full staff list.
 
-// GET /api/staff
-// returns staff rows as Staff[]
+	The backend already joins and shapes the data,
+	so by the time it gets here each item already has:
+	- staff info
+	- linked customer/general user info
+	- roleKeys
+*/
 export async function getStaff(): Promise<Staff[]> {
-	const res = await fetch(BASE_URL);
-	if (!res.ok) throw new Error(`Failed to fetch staff (${res.status})`);
-	return res.json();
+	return api<Staff[]>("/staff");
 }
 
-// POST /api/staff
-// creates a new staff row using the provided payload
-export async function createStaff(payload: StaffCreate): Promise<void> {
-	const res = await fetch(BASE_URL, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(payload),
-	});
+/*
+	Creates a new staff profile by linking an existing user account.
 
-	if (!res.ok) {
-		const txt = await res.text().catch(() => "");
-		throw new Error(`Failed to create staff (${res.status}) ${txt}`);
-	}
+	Payload shape:
+	- userID
+	- staffNumber
+	- positionTitle
+	- roleKeys
+*/
+export async function createStaff(payload: StaffCreate): Promise<{ staffID: number; message: string }> {
+	return api<{ staffID: number; message: string }>("/staff", {
+		method: "POST",
+		body: payload,
+	});
+}
+
+/*
+	Gets the user accounts admin can look through before linking one
+	to a staff profile.
+
+	This helps the UI know:
+	- which userID to use
+	- whether that account is already linked
+	- some quick account info for display
+*/
+export async function getStaffUsers(): Promise<StaffUserCandidate[]> {
+	return api<StaffUserCandidate[]>("/staff/users");
 }
