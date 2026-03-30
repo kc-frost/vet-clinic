@@ -13,12 +13,14 @@ import type {
 export async function getAvailability(params: {
 	reasonKey: ReasonKey;
 	userID: number;
+	petID?: number | null;
 	startDate?: string;
 	days?: number;
 }) {
 	const q = new URLSearchParams();
 	q.set("reasonKey", params.reasonKey);
 	q.set("userID", String(params.userID));
+	if (params.petID) q.set("petID", String(params.petID));
 	if (params.startDate) q.set("startDate", params.startDate);
 	if (params.days) q.set("days", String(params.days));
 

@@ -126,8 +126,12 @@
         reasonKey: ReasonKey;
         date: string;
         durationMinutes: number;
-        staffID: number;
+        assignedStaff: {
+            staffID: number;
+            assignedRoleKey: string;
+        }[];
         roomNumber: number;
+        petID?: number | null;
     };
 
     export type ReservationFormData = {

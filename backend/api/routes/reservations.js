@@ -16,11 +16,12 @@ const SLOT_STEP_MINUTES = 15;
 // roomType is used to pick rooms
 // nonConsumables are capacity-based (no stock decrement, just need capacity available)
 // consumables are stock-based (inventory.quantity is decremented on booking)
+
 const REASON_RULES = {
 	WELLNESS_EXAM: {
 		reasonKey: "WELLNESS_EXAM",
 		durationMinutes: 45,
-		staffRole: "VET",
+		requiredStaff: [{ roleKey: "GENERAL", qty: 1 }],
 		roomType: "EXAM",
 		nonConsumables: [],
 		consumables: [{ itemKey: "EXAM_SUPPLY_KIT", qty: 1 }],
@@ -28,7 +29,7 @@ const REASON_RULES = {
 	VACCINATION: {
 		reasonKey: "VACCINATION",
 		durationMinutes: 15,
-		staffRole: "VET",
+		requiredStaff: [{ roleKey: "GENERAL", qty: 1 }],
 		roomType: "EXAM",
 		nonConsumables: [],
 		consumables: [{ itemKey: "VACCINE_DOSE", qty: 1 }],
@@ -36,7 +37,10 @@ const REASON_RULES = {
 	DENTAL_CLEANING: {
 		reasonKey: "DENTAL_CLEANING",
 		durationMinutes: 75,
-		staffRole: "VET",
+		requiredStaff: [
+			{ roleKey: "DENTIST", qty: 1 },
+			{ roleKey: "TECHNICIAN", qty: 1 },
+		],
 		roomType: "SURGERY",
 		nonConsumables: ["ANESTHESIA_MACHINE", "DENTAL_UNIT"],
 		consumables: [
@@ -47,7 +51,10 @@ const REASON_RULES = {
 	FRACTURE: {
 		reasonKey: "FRACTURE",
 		durationMinutes: 60,
-		staffRole: "VET",
+		requiredStaff: [
+			{ roleKey: "GENERAL", qty: 1 },
+			{ roleKey: "XRAY_TECH", qty: 1 },
+		],
 		roomType: "IMAGING",
 		nonConsumables: ["XRAY_MACHINE"],
 		consumables: [
@@ -58,7 +65,7 @@ const REASON_RULES = {
 	GROOMING: {
 		reasonKey: "GROOMING",
 		durationMinutes: 60,
-		staffRole: "PET_GROOMER",
+		requiredStaff: [{ roleKey: "GROOMER", qty: 1 }],
 		roomType: "GROOMING",
 		nonConsumables: [],
 		consumables: [{ itemKey: "SHAMPOO_DOSE", qty: 1 }],
@@ -66,7 +73,11 @@ const REASON_RULES = {
 	EMERGENCY_TRAUMA: {
 		reasonKey: "EMERGENCY_TRAUMA",
 		durationMinutes: 120,
-		staffRole: "VET",
+		requiredStaff: [
+			{ roleKey: "SURGEON", qty: 1 },
+			{ roleKey: "SURGEON_ASSISTANT", qty: 1 },
+			{ roleKey: "TECHNICIAN", qty: 1 },
+		],
 		roomType: "SURGERY",
 		nonConsumables: ["ANESTHESIA_MACHINE"],
 		consumables: [
@@ -79,7 +90,10 @@ const REASON_RULES = {
 	ULTRASOUND: {
 		reasonKey: "ULTRASOUND",
 		durationMinutes: 45,
-		staffRole: "VET",
+		requiredStaff: [
+			{ roleKey: "GENERAL", qty: 1 },
+			{ roleKey: "ULTRASOUND_TECH", qty: 1 },
+		],
 		roomType: "IMAGING",
 		nonConsumables: ["ULTRASOUND_MACHINE"],
 		consumables: [],
@@ -315,6 +329,160 @@ function validateRequiredInventory(rule, consumableRows, nonConsumableRows) {
 	}
 
 	return { ok: true, error: "" };
+}
+
+
+function parseTimeValueToMinutes(value) {
+	// mysql TIME may come back as HH:MM:SS or HH:MM
+	const raw = String(value || "").trim();
+	const match = raw.match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+	if (!match) return NaN;
+	return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function getDayOfWeekFromDateStr(dateStr) {
+	// js getDay is 0=Sunday ... 6=Saturday
+	// backend availability uses 1=Monday ... 7=Sunday
+	const [y, m, d] = String(dateStr).split("-").map((v) => Number(v));
+	const dt = new Date(y, m - 1, d);
+	const jsDay = dt.getDay();
+	return jsDay === 0 ? 7 : jsDay;
+}
+
+function expandRequiredStaffSlots(rule) {
+	// one staff member can only fill one required slot on one appointment
+	const slots = [];
+	for (const need of rule.requiredStaff || []) {
+		const qty = Number(need.qty || 0);
+		for (let i = 0; i < qty; i++) {
+			slots.push({ roleKey: need.roleKey, slotIndex: i });
+		}
+	}
+	return slots;
+}
+
+function shuffleArray(values) {
+	// this is for random-enough distribution without building every full combination
+	const copy = [...values];
+	for (let i = copy.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[copy[i], copy[j]] = [copy[j], copy[i]];
+	}
+	return copy;
+}
+
+function buildStaffRoleMap(roleRows) {
+	// map roleKey -> [staffID]
+	const map = new Map();
+	for (const row of roleRows) {
+		const roleKey = String(row.roleKey || "");
+		const staffID = Number(row.staffID);
+		if (!roleKey || !Number.isFinite(staffID)) continue;
+		if (!map.has(roleKey)) map.set(roleKey, []);
+		map.get(roleKey).push(staffID);
+	}
+	return map;
+}
+
+function buildStaffAvailabilityMap(rows) {
+	// map staffID -> map(dayOfWeek -> { startMin, endMin })
+	const map = new Map();
+	for (const row of rows) {
+		const staffID = Number(row.staffID);
+		const dayOfWeek = Number(row.dayOfWeek);
+		const startMin = parseTimeValueToMinutes(row.startTime);
+		const endMin = parseTimeValueToMinutes(row.endTime);
+		if (!Number.isFinite(staffID) || !Number.isFinite(dayOfWeek)) continue;
+		if (!Number.isFinite(startMin) || !Number.isFinite(endMin)) continue;
+		if (!map.has(staffID)) map.set(staffID, new Map());
+		map.get(staffID).set(dayOfWeek, { startMin, endMin });
+	}
+	return map;
+}
+
+function buildAppointmentStaffMap(rows) {
+	// map appointmentID -> [staffID]
+	const map = new Map();
+	for (const row of rows) {
+		const appointmentID = Number(row.appointmentID);
+		const staffID = Number(row.staffID);
+		if (!Number.isFinite(appointmentID) || !Number.isFinite(staffID)) continue;
+		if (!map.has(appointmentID)) map.set(appointmentID, []);
+		map.get(appointmentID).push(staffID);
+	}
+	return map;
+}
+
+function staffHasWeeklyAvailability(staffAvailabilityById, staffID, dayOfWeek, startMin, endMin) {
+	// staff must cover the full appointment window
+	const byDay = staffAvailabilityById.get(staffID);
+	if (!byDay) return false;
+	const block = byDay.get(dayOfWeek);
+	if (!block) return false;
+	return block.startMin <= startMin && block.endMin >= endMin;
+}
+
+function appointmentHasStaffOverlap(appt, assignedStaffIds, staffID, startMin, endMin) {
+	// assignedStaffIds comes from appointment_staff rows for that appointment
+	if (!assignedStaffIds.includes(staffID)) return false;
+	const apptStartMin = parseSqlDateTimeToMinutes(appt.date);
+	const apptEndMin = apptStartMin + Number(appt.durationMinutes || 0);
+	return minutesOverlap(apptStartMin, apptEndMin, startMin, endMin);
+}
+
+function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, dayOfWeek, dayAppts, appointmentStaffByAppt, startMin, endMin) {
+	// this returns one valid assignment set or null
+	// shuffle first, then backtrack into the first valid full set
+	const requiredSlots = expandRequiredStaffSlots(rule);
+	if (!requiredSlots.length) return null;
+
+	const preparedSlots = requiredSlots.map((slot, index) => {
+		const rawCandidates = roleToStaffIds.get(slot.roleKey) || [];
+		const filteredCandidates = rawCandidates.filter((staffID) => {
+			if (!staffHasWeeklyAvailability(staffAvailabilityById, staffID, dayOfWeek, startMin, endMin)) return false;
+
+			for (const appt of dayAppts) {
+				const assignedStaffIds = appointmentStaffByAppt.get(Number(appt.appointmentID)) || [];
+				if (appointmentHasStaffOverlap(appt, assignedStaffIds, staffID, startMin, endMin)) return false;
+			}
+
+			return true;
+		});
+
+		return {
+			roleKey: slot.roleKey,
+			index,
+			candidates: shuffleArray(filteredCandidates),
+			randomTie: Math.random(),
+		};
+	});
+
+	preparedSlots.sort((a, b) => {
+		if (a.candidates.length !== b.candidates.length) return a.candidates.length - b.candidates.length;
+		return a.randomTie - b.randomTie;
+	});
+
+	if (preparedSlots.some((slot) => slot.candidates.length === 0)) return null;
+
+	const usedStaffIds = new Set();
+
+	function assign(slotIndex) {
+		if (slotIndex >= preparedSlots.length) return [];
+
+		const slot = preparedSlots[slotIndex];
+		for (const staffID of slot.candidates) {
+			if (usedStaffIds.has(staffID)) continue;
+
+			usedStaffIds.add(staffID);
+			const rest = assign(slotIndex + 1);
+			if (rest) return [{ staffID, assignedRoleKey: slot.roleKey }, ...rest];
+			usedStaffIds.delete(staffID);
+		}
+
+		return null;
+	}
+
+	return assign(0);
 }
 
 function findFreeResourceId(resourceIds, busyById, startBucket, bucketCount) {
@@ -589,6 +757,7 @@ router.patch("/pets/:petID", async (req, res) => {
 });
 
 
+
 // returns availability slots for a reasonKey
 router.get("/availability", async (req, res) => {
 	try {
@@ -600,8 +769,12 @@ router.get("/availability", async (req, res) => {
 			return;
 		}
 
-		// bookingUserID is optional, but if present it blocks user-overlapping slots
-		const bookingUserID = resolveUserIdFromRequest(req, req.query.userID);
+		const bookingPetIDRaw = req.query.petID;
+		const bookingPetID = bookingPetIDRaw === null || bookingPetIDRaw === undefined || bookingPetIDRaw === "" ? null : Number(bookingPetIDRaw);
+		if (bookingPetIDRaw !== null && bookingPetIDRaw !== undefined && bookingPetIDRaw !== "" && (!Number.isFinite(bookingPetID) || bookingPetID <= 0)) {
+			res.status(400).json({ error: "invalid petID" });
+			return;
+		}
 
 		const days = clampInt(req.query.days, 1, 120, 30);
 		let startDate = String(req.query.startDate || "");
@@ -617,61 +790,78 @@ router.get("/availability", async (req, res) => {
 			return;
 		}
 
-		// pull resource lists once so availability checks can be fast
 		const conn = await pool.getConnection();
 		try {
 			const requiredConsumableKeys = rule.consumables.map((c) => c.itemKey);
 			const requiredNonConsumableKeys = rule.nonConsumables;
 
-			const [staffRows] = await conn.execute(
-				"select staffID from staff where role = ? order by staffID asc",
-				[rule.staffRole]
+			const [staffRoleRows] = await conn.execute(
+				`select staffID, roleKey
+				 from staff_role
+				 order by staffID asc, roleKey asc`
 			);
-			const staffIds = staffRows.map((r) => r.staffID);
+			const roleToStaffIds = buildStaffRoleMap(staffRoleRows);
+
+			const [staffAvailabilityRows] = await conn.execute(
+				`select staffID, dayOfWeek, startTime, endTime
+				 from staff_availability`
+			);
+			const staffAvailabilityById = buildStaffAvailabilityMap(staffAvailabilityRows);
+
+			const requiredRoleKeys = [...new Set((rule.requiredStaff || []).map((need) => need.roleKey))];
+			if (requiredRoleKeys.some((roleKey) => !(roleToStaffIds.get(roleKey) || []).length)) {
+				res.json({ ok: true, reasonKey: rule.reasonKey, durationMinutes: rule.durationMinutes, timezone: "local", range: { startDate, days }, slots: [] });
+				return;
+			}
 
 			const [roomRows] = await conn.execute(
 				"select roomNumber from rooms where roomType = ? order by roomNumber asc",
 				[rule.roomType]
 			);
-			const roomNumbers = roomRows.map((r) => r.roomNumber);
-
-			// if no staff or no rooms exist, nothing can be booked
-			if (!staffIds.length) {
-				res.json({ reasonKey: rule.reasonKey, slots: [] });
-				return;
-			}
-
+			const roomNumbers = roomRows.map((r) => Number(r.roomNumber));
 			if (!roomNumbers.length) {
-				res.json({ reasonKey: rule.reasonKey, slots: [] });
+				res.json({ ok: true, reasonKey: rule.reasonKey, durationMinutes: rule.durationMinutes, timezone: "local", range: { startDate, days }, slots: [] });
 				return;
 			}
 
 			const consumableRows = buildItemKeyToRowMap(await fetchInventoryByKeys(conn, requiredConsumableKeys, true));
 			const nonConsumableRows = buildItemKeyToRowMap(await fetchInventoryByKeys(conn, requiredNonConsumableKeys, false));
-
 			const invCheck = validateRequiredInventory(rule, consumableRows, nonConsumableRows);
 			if (!invCheck.ok) {
-				// if required inventory is missing or empty, no slots are bookable
-				res.json({ reasonKey: rule.reasonKey, slots: [] });
+				res.json({ ok: true, reasonKey: rule.reasonKey, durationMinutes: rule.durationMinutes, timezone: "local", range: { startDate, days }, slots: [] });
 				return;
 			}
 
-			// load appointments across the range so resources can be marked busy
 			const rangeStart = `${startDate} 00:00:00`;
 			const endExclusive = addDays(endDate, 1);
 			const rangeEndExclusive = `${endExclusive} 00:00:00`;
 
 			const [apptRows] = await conn.execute(
-				"select appointmentID, userID, staffID, roomNumber, reasonKey, date, durationMinutes from appointment where date >= ? and date < ?",
+				`select appointmentID, userID, petID, roomNumber, reasonKey, date, durationMinutes
+				 from appointment
+				 where date >= ? and date < ?`,
 				[rangeStart, rangeEndExclusive]
 			);
 
-			// group appointments by date (YYYY-MM-DD)
+			const appointmentIds = apptRows.map((row) => Number(row.appointmentID)).filter((id) => Number.isFinite(id));
+			let appointmentStaffRows = [];
+			if (appointmentIds.length) {
+				const placeholders = appointmentIds.map(() => "?").join(",");
+				const [rows] = await conn.execute(
+					`select appointmentID, staffID, assignedRoleKey
+					 from appointment_staff
+					 where appointmentID in (${placeholders})`,
+					appointmentIds
+				);
+				appointmentStaffRows = rows;
+			}
+			const appointmentStaffByAppt = buildAppointmentStaffMap(appointmentStaffRows);
+
 			const apptsByDate = new Map();
 			for (const row of apptRows) {
-				const d = getDateOnly(row.date);
-				if (!apptsByDate.has(d)) apptsByDate.set(d, []);
-				apptsByDate.get(d).push(row);
+				const dateOnly = getDateOnly(row.date);
+				if (!apptsByDate.has(dateOnly)) apptsByDate.set(dateOnly, []);
+				apptsByDate.get(dateOnly).push(row);
 			}
 
 			const slots = [];
@@ -679,31 +869,22 @@ router.get("/availability", async (req, res) => {
 			const today = getTodayDateStr();
 			const nowMinutes = getNowMinutesOfDay();
 
-			// iterate each day in the range and generate candidate slots
 			let curDate = startDate;
 			while (curDate <= endDate) {
 				const dayAppts = apptsByDate.get(curDate) || [];
-
-				// busy maps for staff and rooms (bucketed by 15 minutes)
-				const staffBusy = new Map();
-				for (const id of staffIds) staffBusy.set(id, Array(64).fill(false));
+				const dayOfWeek = getDayOfWeekFromDateStr(curDate);
 
 				const roomBusy = new Map();
 				for (const rn of roomNumbers) roomBusy.set(rn, Array(64).fill(false));
 
-				// a user can't book two overlapping appointments
-				const userBusy = bookingUserID ? Array(64).fill(false) : null;
+				const petBusy = bookingPetID ? Array(64).fill(false) : null;
 
-				// usage counts for non-consumable equipment (capacity-based)
 				const equipBusyCount = new Map();
 				for (const key of requiredNonConsumableKeys) equipBusyCount.set(key, Array(64).fill(0));
 
-				// mark busy buckets from existing appointments
 				for (const appt of dayAppts) {
 					const apptStartMin = parseSqlDateTimeToMinutes(appt.date);
 					const apptEndMin = apptStartMin + Number(appt.durationMinutes || 0);
-
-					// clamp to clinic hours so bad data doesnt break availability
 					const startClamped = Math.max(apptStartMin, OPEN_MINUTES);
 					const endClamped = Math.min(apptEndMin, CLOSE_MINUTES);
 					if (endClamped <= startClamped) continue;
@@ -711,24 +892,17 @@ router.get("/availability", async (req, res) => {
 					const startBucket = bucketIndexFromMinutes(startClamped);
 					const endBucketExclusive = Math.ceil((endClamped - OPEN_MINUTES) / SLOT_STEP_MINUTES);
 
-					const staffArr = staffBusy.get(appt.staffID);
-					if (staffArr) {
-						for (let b = startBucket; b < endBucketExclusive; b++) staffArr[b] = true;
-					}
-
-					const roomArr = roomBusy.get(appt.roomNumber);
+					const roomArr = roomBusy.get(Number(appt.roomNumber));
 					if (roomArr) {
 						for (let b = startBucket; b < endBucketExclusive; b++) roomArr[b] = true;
 					}
 
-					if (userBusy && Number(appt.userID) === bookingUserID) {
-						for (let b = startBucket; b < endBucketExclusive; b++) userBusy[b] = true;
+					if (petBusy && Number(appt.petID) === bookingPetID) {
+						for (let b = startBucket; b < endBucketExclusive; b++) petBusy[b] = true;
 					}
 
-					// non-consumables are implied by the appointment reasonKey
 					const apptRule = getRule(appt.reasonKey);
 					if (!apptRule) continue;
-
 					for (const equipKey of apptRule.nonConsumables || []) {
 						const arr = equipBusyCount.get(equipKey);
 						if (!arr) continue;
@@ -736,37 +910,27 @@ router.get("/availability", async (req, res) => {
 					}
 				}
 
-				// build all candidate starts for this day
 				const dayCandidates = buildSlotsForDay(curDate, rule.durationMinutes);
-
 				for (const c of dayCandidates) {
 					const startMin = c.startMin;
 					const startBucket = bucketIndexFromMinutes(startMin);
 
-					// hide past times for today
 					if (curDate === today && startMin < nowMinutes) continue;
 
-					// user overlap check
-					if (userBusy) {
-						let ok = true;
+					if (petBusy) {
+						let petOk = true;
 						for (let i = 0; i < bucketCount; i++) {
-							if (userBusy[startBucket + i]) {
-								ok = false;
+							if (petBusy[startBucket + i]) {
+								petOk = false;
 								break;
 							}
 						}
-						if (!ok) continue;
+						if (!petOk) continue;
 					}
 
-					// staff availability check
-					const freeStaffId = findFreeResourceId(staffIds, staffBusy, startBucket, bucketCount);
-					if (!freeStaffId) continue;
-
-					// room availability check
 					const freeRoomNumber = findFreeResourceId(roomNumbers, roomBusy, startBucket, bucketCount);
 					if (!freeRoomNumber) continue;
 
-					// non-consumable capacity checks across the entire appointment window
 					let equipOk = true;
 					for (const equipKey of requiredNonConsumableKeys) {
 						const capRow = nonConsumableRows.get(equipKey);
@@ -782,6 +946,9 @@ router.get("/availability", async (req, res) => {
 					}
 					if (!equipOk) continue;
 
+					const staffAssignment = findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, dayOfWeek, dayAppts, appointmentStaffByAppt, startMin, startMin + rule.durationMinutes);
+					if (!staffAssignment) continue;
+
 					const startTime = minutesToTimeStr(startMin);
 					const endTime = minutesToTimeStr(startMin + rule.durationMinutes);
 					const slotId = `slot_${curDate}_${startTime.replace(":", "")}_${endTime.replace(":", "")}`;
@@ -791,14 +958,17 @@ router.get("/availability", async (req, res) => {
 						date: curDate,
 						startTime,
 						endTime,
-						displayLabel: `${startTime} - ${endTime}`,
+						startDateTime: formatSqlDateTime(curDate, startTime),
+						endDateTime: formatSqlDateTime(curDate, endTime),
+						staffID: Number(staffAssignment[0]?.staffID || 0),
+						roomNumber: freeRoomNumber,
 					});
 				}
 
 				curDate = addDays(curDate, 1);
 			}
 
-			res.json({ reasonKey: rule.reasonKey, slots });
+			res.json({ ok: true, reasonKey: rule.reasonKey, durationMinutes: rule.durationMinutes, timezone: "local", range: { startDate, days }, slots });
 		} finally {
 			conn.release();
 		}
@@ -807,6 +977,7 @@ router.get("/availability", async (req, res) => {
 		res.status(500).json({ error: "failed to fetch availability" });
 	}
 });
+
 
 function pickFormData(body) {
 	// support either { formData: {...} } or a flattened payload
@@ -864,28 +1035,64 @@ async function resolveUserId(conn, body) {
 	return userID;
 }
 
-async function selectAvailableStaff(conn, role, startSql, endSql) {
-	// select one staff member with no overlapping appointment
-	// overlap check: existing.start < new.end AND existing.end > new.start
-	// for update locks the selected staff row to reduce race conditions
-	const [rows] = await conn.execute(
-		`select s.staffID
-		 from staff s
-		 where s.role = ?
-		 and not exists (
-			select 1 from appointment a
-			where a.staffID = s.staffID
-			and a.date < ?
-			and date_add(a.date, interval a.durationMinutes minute) > ?
-		 )
-		 order by s.staffID asc
-		 limit 1
+
+async function selectAvailableStaffAssignment(conn, rule, appointmentDate, startSql, endSql) {
+	// this picks one full valid assignment set inside the transaction
+	const dayOfWeek = getDayOfWeekFromDateStr(appointmentDate);
+	const startMin = parseSqlDateTimeToMinutes(startSql);
+	const endMin = parseSqlDateTimeToMinutes(endSql);
+
+	const [staffRoleRows] = await conn.execute(
+		`select staffID, roleKey
+		 from staff_role
+		 order by staffID asc, roleKey asc`
+	);
+	const roleToStaffIds = buildStaffRoleMap(staffRoleRows);
+
+	const [staffAvailabilityRows] = await conn.execute(
+		`select staffID, dayOfWeek, startTime, endTime
+		 from staff_availability
+		 where dayOfWeek = ?`,
+		[dayOfWeek]
+	);
+	const staffAvailabilityById = buildStaffAvailabilityMap(staffAvailabilityRows);
+
+	const [apptRows] = await conn.execute(
+		`select appointmentID, date, durationMinutes
+		 from appointment
+		 where date < ?
+		 and date_add(date, interval durationMinutes minute) > ?
 		 for update`,
-		[role, endSql, startSql]
+		[endSql, startSql]
 	);
 
-	if (!rows.length) return null;
-	return Number(rows[0].staffID);
+	const appointmentIds = apptRows.map((row) => Number(row.appointmentID)).filter((id) => Number.isFinite(id));
+	let appointmentStaffRows = [];
+	if (appointmentIds.length) {
+		const placeholders = appointmentIds.map(() => "?").join(",");
+		const [rows] = await conn.execute(
+			`select appointmentID, staffID, assignedRoleKey
+			 from appointment_staff
+			 where appointmentID in (${placeholders})
+			 for update`,
+			appointmentIds
+		);
+		appointmentStaffRows = rows;
+	}
+	const appointmentStaffByAppt = buildAppointmentStaffMap(appointmentStaffRows);
+
+	return findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, dayOfWeek, apptRows, appointmentStaffByAppt, startMin, endMin);
+}
+
+async function insertAppointmentStaffRows(conn, appointmentID, assignments) {
+	// one row per staff assignment on the appointment
+	for (const assignment of assignments) {
+		await conn.execute(
+			`insert into appointment_staff (appointmentID, staffID, assignedRoleKey)
+			 values (?,?,?)`,
+			[appointmentID, assignment.staffID, assignment.assignedRoleKey]
+		);
+	}
 }
 
 async function selectAvailableRoom(conn, roomType, startSql, endSql) {
@@ -1348,24 +1555,30 @@ router.post("/", async (req, res) => {
 				return { ok: false, status: 400, error: "missing or invalid userID" };
 			}
 
-			// block user overlap (user cannot book overlapping appointments)
-			const [userOverlapRows] = await conn.execute(
-				`select appointmentID
-				 from appointment
-				 where userID = ?
-				 and date < ?
-				 and date_add(date, interval durationMinutes minute) > ?
-				 for update`,
-				[userID, endSql, startSql]
-			);
+			// optional pet profiles
+			const petResult = await maybeCreateOrUpdatePetProfile(conn, userID, body, form);
+			const petID = petResult.petID;
 
-			if (userOverlapRows.length) {
-				return { ok: false, status: 409, error: "you already have an overlapping appointment" };
+			// same pet cannot be double-booked on overlapping appointments
+			if (petID) {
+				const [petOverlapRows] = await conn.execute(
+					`select appointmentID
+					 from appointment
+					 where petID = ?
+					 and date < ?
+					 and date_add(date, interval durationMinutes minute) > ?
+					 for update`,
+					[petID, endSql, startSql]
+				);
+
+				if (petOverlapRows.length) {
+					return { ok: false, status: 409, error: "that pet already has an overlapping appointment" };
+				}
 			}
 
 			// staff and room are assigned automatically based on availability
-			const staffID = await selectAvailableStaff(conn, rule.staffRole, startSql, endSql);
-			if (!staffID) {
+			const staffAssignments = await selectAvailableStaffAssignment(conn, rule, appointmentDate, startSql, endSql);
+			if (!staffAssignments) {
 				return { ok: false, status: 409, error: "no staff available for that time" };
 			}
 
@@ -1389,28 +1602,26 @@ router.post("/", async (req, res) => {
 			// fill customer profile only if empty (does not overwrite existing values)
 			await maybeFillCustomerProfileIfEmpty(conn, userID, form);
 
-			// optional pet profiles
-			const petResult = await maybeCreateOrUpdatePetProfile(conn, userID, body, form);
-			const petID = petResult.petID;
-
 			// create appointment row (scheduling record)
 			const [apptInsert] = await conn.execute(
 				`insert into appointment (
 					userID,
 					petID,
-					staffID,
 					roomNumber,
 					reasonKey,
 					date,
 					durationMinutes
-				) values (?,?,?,?,?,?,?)`,
-				[userID, petID, staffID, roomNumber, rule.reasonKey, startSql, rule.durationMinutes]
+				) values (?,?,?,?,?,?)`,
+				[userID, petID, roomNumber, rule.reasonKey, startSql, rule.durationMinutes]
 			);
 
 			const appointmentID = Number(apptInsert.insertId);
 
 			// snapshot the submitted form fields
 			await insertAppointmentForm(conn, appointmentID, form);
+
+			// store the actual staff assignments for this appointment
+			await insertAppointmentStaffRows(conn, appointmentID, staffAssignments);
 
 			// store reserved consumables so cancel can refund stock correctly
 			for (const r of consumableReserve.reserved || []) {
@@ -1426,7 +1637,7 @@ router.post("/", async (req, res) => {
 				reasonKey: rule.reasonKey,
 				date: body.appointmentDate,
 				durationMinutes: rule.durationMinutes,
-				staffID,
+				assignedStaff: staffAssignments,
 				roomNumber,
 				petID,
 			};
@@ -1443,7 +1654,7 @@ router.post("/", async (req, res) => {
 			reasonKey: result.reasonKey,
 			date: result.date,
 			durationMinutes: result.durationMinutes,
-			staffID: result.staffID,
+			assignedStaff: result.assignedStaff,
 			roomNumber: result.roomNumber,
 			petID: result.petID,
 			message: "appointment created",
@@ -1494,6 +1705,7 @@ router.delete("/:appointmentID", async (req, res) => {
 
 			// delete children first, then delete the appointment row
 			await conn.execute("delete from appointment_consumable where appointmentID = ?", [appointmentID]);
+			await conn.execute("delete from appointment_staff where appointmentID = ?", [appointmentID]);
 			await conn.execute("delete from appointment_form where appointmentID = ?", [appointmentID]);
 			await conn.execute("delete from appointment where appointmentID = ?", [appointmentID]);
 

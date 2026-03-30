@@ -113,7 +113,7 @@ export default function Reservation() {
 	const step = STEPS[stepIndex];
 
 	// available time slots returned by the backend
-	// loaded from GET /api/reservations/availability?reasonKey=...&userID=...&days=...
+	// loaded from GET /api/reservations/availability?reasonKey=...&userID=...&petID=...&days=...
 	const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([]);
 
 	// while true, the slot calendar shows a loading state
@@ -247,6 +247,7 @@ export default function Reservation() {
 				const resp = await getAvailability({
 					reasonKey: formData.reasonKey as ReasonKey,
 					userID: currentUser.userID,
+					petID: selectedPetId,
 					days: 90,
 				});
 				if (!alive) return;
@@ -264,7 +265,7 @@ export default function Reservation() {
 		return () => {
 			alive = false;
 		};
-	}, [currentUser?.userID, formData.reasonKey]);
+	}, [currentUser?.userID, formData.reasonKey, selectedPetId]);
 
 	// clears errors[field] when the user edits that field again
 	function clearFieldError<K extends keyof ReservationFormData>(field: K) {
@@ -300,6 +301,17 @@ export default function Reservation() {
 	// saved pet selection fills both pet fields and medical history fields
 	function onSelectPet(petID: number | null) {
 		setSelectedPetId(petID);
+
+		// pet choice changes which slots are valid for saved pets
+		// this clears the old slot so a stale overlap does not stay selected
+		setSelectedSlotId("");
+		setFormData((prev) => ({
+			...prev,
+			appointmentDate: "",
+			startTime: "",
+		}));
+		clearFieldError("appointmentDate");
+		clearFieldError("startTime");
 
 		if (petID === null) {
 			// reset pet-related fields to blank for a new pet entry
