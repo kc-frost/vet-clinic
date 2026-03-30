@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import session from "express-session";
 import { pool } from "./db.js";
 
+
 import inventoryRoutes from "./routes/inventory.js";
 import roomsRoutes from "./routes/rooms.js";
 import staffRoutes from "./routes/staff.js";
@@ -15,6 +16,9 @@ import equipmentRoutes from "./routes/equipment.js";
 import appointmentsRoutes from "./routes/appointments.js";
 import reservationsRoutes from "./routes/reservations.js";
 import profileRoutes from "./routes/profile.js";
+
+import notificationsRoutes from "./routes/notifications.js";
+import { startNotificationScheduler } from "./lib/notifications.js";
 
 dotenv.config();
 
@@ -64,6 +68,9 @@ app.use("/api/equipment", equipmentRoutes);
 app.use("/api/appointments", appointmentsRoutes);
 app.use("/api/reservations", reservationsRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/notifications", notificationsRoutes);
+
+startNotificationScheduler();
 
 const port = process.env.PORT || 3001;
 app.listen(port, "127.0.0.1", () => {

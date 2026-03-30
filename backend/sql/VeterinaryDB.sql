@@ -227,20 +227,7 @@ create table appointment_consumable(
 	foreign key (itemID) references inventory(itemID)
 );
 
--- persistent notifications tied to user accounts.
--- supports both customer reminders and staff in-app notifications.
-create table notification(
-	notificationID int auto_increment primary key,
-	userID int not null,
-	appointmentID int not null,
-	notificationType varchar(50) not null,
-	message text not null,
-	createdAt datetime not null default current_timestamp,
-	scheduledFor datetime not null,
-	isDismissed boolean not null default false,
-	foreign key (userID) references customer(userID),
-	foreign key (appointmentID) references appointment(appointmentID)
-);
+
 
 -- service catalog (what services exist in general)
 create table service(
@@ -286,4 +273,33 @@ create table payment(
 	foreign key (insuranceID) references insurance(insuranceID),
 	foreign key (appointmentID) references appointment(appointmentID),
 	foreign key (userID) references customer(userID)
+);
+
+-- persistent notifications tied to user accounts.
+-- supports both customer reminders and staff in-app notifications.
+
+CREATE TABLE notification (
+  notificationID INT NOT NULL AUTO_INCREMENT,
+  userID INT NOT NULL,
+  appointmentID INT NULL,
+  type VARCHAR(60) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  channel VARCHAR(20) NOT NULL DEFAULT 'IN_APP',
+  isRead TINYINT(1) NOT NULL DEFAULT 0,
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (notificationID),
+  KEY idx_notification_user_created (userID, createdAt),
+  KEY idx_notification_appointment_type_channel (appointmentID, type, channel)
+);
+
+CREATE TABLE email_log (
+  emailLogID INT NOT NULL AUTO_INCREMENT,
+  userID INT NULL,
+  appointmentID INT NULL,
+  type VARCHAR(60) NOT NULL,
+  recipientEmail VARCHAR(255) NOT NULL,
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (emailLogID),
+  KEY idx_email_log_appointment_type (appointmentID, type)
 );

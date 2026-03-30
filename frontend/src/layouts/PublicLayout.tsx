@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import "../styles/publicLayout.css";
 import NavButton from "../components/NavButton";
 import { getCurrentUser, type AuthUser } from "../api/auth";
+import NotificationBell from "../components/NotificationBell";
 
 // public layout used for the main site header and outlet pages
 // admin-only nav buttons are rendered only when the logged in user has admin access
@@ -56,6 +57,7 @@ export default function PublicLayout() {
             <NavButton to="/login" className="nav-btn">Login</NavButton>
             <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
             <NavButton to="/userprofile" className="nav-btn">My Profile</NavButton>
+            {currentUser ? <NotificationBell /> : null}
           </div>
         </nav>
       </header>

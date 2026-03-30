@@ -1,6 +1,6 @@
 import express from "express";
 import { pool } from "../db.js";
-
+import { notifyStaffReservationCreated } from "../lib/notifications.js";
 const router = express.Router();
 
 // clinic hours expressed in minutes so time math stays consistent
@@ -1409,6 +1409,26 @@ router.post("/", async (req, res) => {
 
 			const appointmentID = Number(apptInsert.insertId);
 
+			const [staffRows] = await conn.execute(
+				`SELECT s.staffID, s.userID, c.email
+				 FROM staff s
+				 LEFT JOIN customer c ON c.userID = s.userID
+				 WHERE s.staffID = ?
+				 LIMIT 1`,
+				[staffID]
+			  );
+			  
+			  const assignedStaff = staffRows[0] || null;
+			  
+			  if (assignedStaff) {
+				await notifyStaffReservationCreated({
+				  staffUserID: assignedStaff.userID ? Number(assignedStaff.userID) : null,
+				  staffEmail: assignedStaff.email ? String(assignedStaff.email) : null,
+				  appointmentID,
+				  reasonKey: rule.reasonKey,
+				  startSql,
+				});
+			  }
 			// snapshot the submitted form fields
 			await insertAppointmentForm(conn, appointmentID, form);
 
