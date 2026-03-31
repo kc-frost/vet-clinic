@@ -13,6 +13,7 @@ import Login from "../pages/public/Login";
 import Register from "../pages/public/Register";
 
 import Inventory from "../pages/staff/Inventory";
+import StaffDashboard from "../pages/staff/StaffDashboard";
 import Reservation from "../pages/public/Reservation";
 import ViewAppointments from "../pages/public/ViewAppointments";
 import UserProfile from "../pages/public/UserProfile";
@@ -24,7 +25,6 @@ export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-
         {/* public routes */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Home />} />
@@ -35,6 +35,7 @@ export default function AppRouter() {
           <Route element={<RequireAuth />}>
             <Route path="/reservation" element={<Reservation />} />
             <Route path="/userprofile" element={<UserProfile />} />
+            <Route path="/staff/dashboard" element={<StaffDashboard />} />
           </Route>
         </Route>
 

@@ -1,12 +1,12 @@
 import express from "express";
 import { pool } from "../db.js";
-import { requireAdmin } from "../lib/authMiddleware.js";
+import { requireAdmin, requireAuth } from "../lib/authMiddleware.js";
 
 const router = express.Router();
 
 /*
-	These are the valid scheduling role keys a staff member can have.
-	These are what later reservation logic will check against.
+	These are the valid scheduling role keys a staff member can have
+	These are what later reservation logic will check against
 */
 const VALID_ROLE_KEYS = new Set([
 	"GENERAL",
@@ -25,13 +25,13 @@ function cleanText(value) {
 
 function uniqueRoleKeys(rawRoleKeys) {
 	/*
-		The incoming role array can be messy.
-		It might have duplicates, spaces, lowercase text, or non strings.
+		The incoming role array can be messy
+		It might have duplicates spaces lowercase text or non strings
 
-		So first clean every value,
-		then turn them all into uppercase,
-		then remove duplicates,
-		then return the final clean array.
+		So first clean every value
+		Then turn them all into uppercase
+		Then remove duplicates
+		Then return the final clean array
 	*/
 	if (!Array.isArray(rawRoleKeys)) return [];
 
@@ -43,10 +43,155 @@ function uniqueRoleKeys(rawRoleKeys) {
 	return [...new Set(normalized)];
 }
 
+function buildStaffProfileFromRows(rows) {
+	const first = rows[0];
+
+	return {
+		staffID: first.staffID,
+		userID: first.userID,
+		staffNumber: first.staffNumber,
+		positionTitle: first.positionTitle,
+		legalFirstName: first.legalFirstName,
+		legalLastName: first.legalLastName,
+		email: first.email,
+		phone: first.phone,
+		roleKeys: [...new Set(rows.map((row) => row.roleKey).filter(Boolean))],
+	};
+}
+
+router.get("/me", requireAuth, async (req, res) => {
+	try {
+		const userID = Number(req.session.userID);
+
+		const [rows] = await pool.query(
+			`SELECT
+				s.staffID,
+				s.userID,
+				s.staffNumber,
+				s.positionTitle,
+				c.legalFirstName,
+				c.legalLastName,
+				c.email,
+				c.phone,
+				sr.roleKey
+			 FROM staff s
+			 INNER JOIN customer c
+				ON c.userID = s.userID
+			 LEFT JOIN staff_role sr
+				ON sr.staffID = s.staffID
+			 WHERE s.userID = ?
+			 ORDER BY sr.roleKey`,
+			[userID]
+		);
+
+		if (rows.length === 0) {
+			return res.status(404).json({ message: "No staff profile found for this user" });
+		}
+
+		res.json(buildStaffProfileFromRows(rows));
+	} catch (err) {
+		console.error("GET /api/staff/me error:", err);
+		res.status(500).json({ message: "Failed to fetch logged in staff profile" });
+	}
+});
+
+router.get("/me/appointments", requireAuth, async (req, res) => {
+	try {
+		const userID = Number(req.session.userID);
+
+		const [staffRows] = await pool.query(`SELECT staffID FROM staff WHERE userID = ? LIMIT 1`, [userID]);
+		if (staffRows.length === 0) {
+			return res.status(404).json({ message: "Staff not found" });
+		}
+
+		const staffID = Number(staffRows[0].staffID);
+
+		const [rows] = await pool.query(
+			`SELECT
+				a.appointmentID,
+				COALESCE(p.petName, af.petName, 'Unknown Pet') AS petName,
+				a.reasonKey AS service,
+				DATE_FORMAT(a.date, '%Y-%m-%d') AS appointmentDate,
+				TIME_FORMAT(a.date, '%h:%i %p') AS appointmentTime,
+				DATE_FORMAT(a.date, '%Y-%m-%d %H:%i:%s') AS appointmentDateTime,
+				aps.assignedRoleKey
+			 FROM appointment_staff aps
+			 INNER JOIN appointment a
+				ON a.appointmentID = aps.appointmentID
+			 LEFT JOIN pet p
+				ON p.petID = a.petID
+			 LEFT JOIN appointment_form af
+				ON af.appointmentID = a.appointmentID
+			 WHERE aps.staffID = ?
+				AND a.date >= CURDATE()
+			 ORDER BY a.date ASC`,
+			[staffID]
+		);
+
+		res.json(rows);
+	} catch (err) {
+		console.error("GET /api/staff/me/appointments error:", err);
+		res.status(500).json({ message: "Failed to fetch appointments" });
+	}
+});
+
+router.get("/me/notifications", requireAuth, async (req, res) => {
+	try {
+		const userID = Number(req.session.userID);
+
+		const [rows] = await pool.query(
+			`SELECT
+				notificationID,
+				type,
+				title,
+				message,
+				channel,
+				isRead,
+				createdAt
+			 FROM notification
+			 WHERE userID = ?
+				AND channel = 'IN_APP'
+				AND isRead = 0
+			 ORDER BY createdAt DESC`,
+			[userID]
+		);
+
+		res.json(rows);
+	} catch (err) {
+		console.error("GET /api/staff/me/notifications error:", err);
+		res.status(500).json({ message: "Failed to fetch notifications" });
+	}
+});
+
+router.patch("/me/notifications/:notificationID/read", requireAuth, async (req, res) => {
+	try {
+		const userID = Number(req.session.userID);
+		const notificationID = Number(req.params.notificationID);
+
+		if (!Number.isInteger(notificationID) || notificationID < 1) {
+			return res.status(400).json({ message: "Invalid notification id" });
+		}
+
+		await pool.query(
+			`UPDATE notification
+			 SET isRead = 1
+			 WHERE notificationID = ?
+				AND userID = ?
+				AND channel = 'IN_APP'`,
+			[notificationID, userID]
+		);
+
+		res.json({ ok: true, message: "Notification marked as read" });
+	} catch (err) {
+		console.error("PATCH /api/staff/me/notifications/:notificationID/read error:", err);
+		res.status(500).json({ message: "Failed to mark notification as read" });
+	}
+});
+
 /*
 	GET /api/staff
 
-	Returns the full staff list using the new schema shape.
+	Returns the full staff list using the new schema shape
 
 	The data is built from:
 	- staff for employee-specific data
@@ -56,13 +201,11 @@ function uniqueRoleKeys(rawRoleKeys) {
 router.get("/", requireAdmin, async (req, res) => {
 	try {
 		const [rows] = await pool.query(
-			`
-			SELECT
+			`SELECT
 				s.staffID,
 				s.userID,
 				s.staffNumber,
 				s.positionTitle,
-
 				c.legalFirstName,
 				c.legalLastName,
 				c.email,
@@ -72,30 +215,15 @@ router.get("/", requireAdmin, async (req, res) => {
 				c.state,
 				c.zipCode,
 				c.userType,
-
 				sr.roleKey
-			FROM staff s
-			INNER JOIN customer c
+			 FROM staff s
+			 INNER JOIN customer c
 				ON c.userID = s.userID
-			LEFT JOIN staff_role sr
+			 LEFT JOIN staff_role sr
 				ON sr.staffID = s.staffID
-			ORDER BY
-				COALESCE(c.legalLastName, ''),
-				COALESCE(c.legalFirstName, ''),
-				s.staffID,
-				sr.roleKey
-			`
+			 ORDER BY COALESCE(c.legalLastName, ''), COALESCE(c.legalFirstName, ''), s.staffID, sr.roleKey`
 		);
 
-		/*
-			The LEFT JOIN gives one row per role.
-			So if one staff member has 3 roles, that same staff shows up 3 times.
-
-			This loop fixes that by grouping rows by staffID
-			and pushing each roleKey into roleKeys[] for that one staff object.
-
-			So the final response becomes one object per staff member.
-		*/
 		const byStaffID = new Map();
 
 		for (const row of rows) {
@@ -123,56 +251,36 @@ router.get("/", requireAdmin, async (req, res) => {
 			}
 		}
 
-		res.json([...byStaffID.values()]);
+		const staffList = [...byStaffID.values()];
+		res.json(staffList);
 	} catch (err) {
 		console.error("GET /api/staff error:", err);
-		res.status(500).send("Server error fetching staff.");
+		res.status(500).send("Server error fetching staff list.");
 	}
 });
 
 /*
 	POST /api/staff
 
-	Creates a staff profile linked to an already existing customer account.
+	Creates one new staff profile by linking an existing customer account
 
-	Expected body:
-	{
-		userID: number,
-		staffNumber: string,
-		positionTitle: string,
-		roleKeys: string[]
-	}
-
-	logic flow:
-	 validate body
-	 make sure target user exists
-	 block admin accounts
-	 make sure user is not already linked
-	 insert into staff
-	 insert role rows into staff_role
-	 update customer.userType to STAFF
-
-	This uses a transaction since all of this is really one operation.
-	If something fails halfway, rollback keeps it from ending in a half-done state.
+	Expected request body:
+	- userID
+	- staffNumber
+	- positionTitle
+	- roleKeys
 */
 router.post("/", requireAdmin, async (req, res) => {
 	let conn;
 
 	try {
-		const {
-			userID,
-			staffNumber,
-			positionTitle,
-			roleKeys: rawRoleKeys,
-		} = req.body ?? {};
-
-		const parsedUserID = Number(userID);
-		const cleanStaffNumber = cleanText(staffNumber);
-		const cleanPositionTitle = cleanText(positionTitle);
-		const roleKeys = uniqueRoleKeys(rawRoleKeys);
+		const parsedUserID = Number(req.body?.userID);
+		const cleanStaffNumber = cleanText(req.body?.staffNumber);
+		const cleanPositionTitle = cleanText(req.body?.positionTitle);
+		const roleKeys = uniqueRoleKeys(req.body?.roleKeys);
 
 		if (!Number.isInteger(parsedUserID) || parsedUserID < 1) {
-			return res.status(400).send("userID must be a positive integer.");
+			return res.status(400).send("A valid userID is required.");
 		}
 
 		if (!cleanStaffNumber) {
@@ -187,69 +295,57 @@ router.post("/", requireAdmin, async (req, res) => {
 			return res.status(400).send("At least one roleKey is required.");
 		}
 
-		const invalidRole = roleKeys.find((roleKey) => !VALID_ROLE_KEYS.has(roleKey));
-		if (invalidRole) {
-			return res.status(400).send(`Invalid roleKey: ${invalidRole}`);
+		for (const roleKey of roleKeys) {
+			if (!VALID_ROLE_KEYS.has(roleKey)) {
+				return res.status(400).send(`Invalid roleKey: ${roleKey}`);
+			}
 		}
 
 		conn = await pool.getConnection();
 		await conn.beginTransaction();
 
-		/*
-			Check that the target user exists first.
-
-			Admin is blocked here.
-			Staff profiles should only be linked to normal user accounts, not admin accounts.
-
-			FOR UPDATE is used so this row is locked while this transaction is running.
-			That helps avoid weird race condition cases if two requests try to do this at once.
-		*/
 		const [userRows] = await conn.query(
-			`
-			SELECT userID, userType
-			FROM customer
-			WHERE userID = ?
-			FOR UPDATE
-			`,
+			`SELECT userID, userType
+			 FROM customer
+			 WHERE userID = ?
+			 LIMIT 1`,
 			[parsedUserID]
 		);
 
 		if (userRows.length === 0) {
 			await conn.rollback();
-			return res.status(404).send("Target user does not exist.");
+			return res.status(404).send("The selected user account does not exist.");
 		}
 
-		const targetUser = userRows[0];
-		if (targetUser.userType === "ADMIN") {
-			await conn.rollback();
-			return res.status(400).send("Admin accounts cannot be linked as staff.");
-		}
-
-		/*
-			Check if this user was already linked to a staff profile.
-
-            userID in staff table is unique. We do the check here to produce a better duplicate
-            key error message rather than just using SQL's dupe key error msg
-		*/
 		const [existingStaffRows] = await conn.query(
-			`
-			SELECT staffID
-			FROM staff
-			WHERE userID = ?
-			FOR UPDATE
-			`,
+			`SELECT staffID
+			 FROM staff
+			 WHERE userID = ?
+			 LIMIT 1`,
 			[parsedUserID]
 		);
 
 		if (existingStaffRows.length > 0) {
 			await conn.rollback();
-			return res.status(400).send("This user is already linked to a staff profile.");
+			return res.status(409).send("This user account is already linked to a staff profile.");
+		}
+
+		const [numberRows] = await conn.query(
+			`SELECT staffID
+			 FROM staff
+			 WHERE staffNumber = ?
+			 LIMIT 1`,
+			[cleanStaffNumber]
+		);
+
+		if (numberRows.length > 0) {
+			await conn.rollback();
+			return res.status(409).send("That staffNumber is already in use.");
 		}
 
 		/*
-			Insert the main staff row first.
-			We need the new staffID from this insert so the role rows can point to the 
-            right staff member.
+			Insert the main staff row first
+			This is for getting the new staffID before role rows get inserted
 		*/
 		const [staffInsert] = await conn.query(
 			`
@@ -262,8 +358,8 @@ router.post("/", requireAdmin, async (req, res) => {
 		const newStaffID = staffInsert.insertId;
 
 		/*
-			Insert one row per role key.
-			This allows one staff member to have multiple roles. Each role is its own row in staff_role.
+			Insert one row per selected roleKey
+			This is what makes staff capabilities many-to-many now
 		*/
 		for (const roleKey of roleKeys) {
 			await conn.query(
@@ -275,8 +371,10 @@ router.post("/", requireAdmin, async (req, res) => {
 			);
 		}
 
-		
-        //Once the staff row and role rows are done, update the linked customer account to STAFF.
+		/*
+			Update the linked user account type
+			This marks the account as STAFF in the website identity sense
+		*/
 		await conn.query(
 			`
 			UPDATE customer
@@ -289,57 +387,32 @@ router.post("/", requireAdmin, async (req, res) => {
 		await conn.commit();
 
 		res.status(201).json({
+			message: "Staff profile created successfully.",
 			staffID: newStaffID,
-			message: "Created.",
 		});
 	} catch (err) {
-		if (conn) {
-			try {
-				await conn.rollback();
-			} catch (rollbackErr) {
-				console.error("POST /api/staff rollback error:", rollbackErr);
-			}
-		}
-
-		/*
-			Catch duplicate key cases separately so the error is cleaner.
-			Can happen if staffNumber already exists, userID was already linked, some other unique 
-            field hits a duplicate
-		*/
-		if (err?.code === "ER_DUP_ENTRY") {
-			console.error("POST /api/staff duplicate entry:", err);
-			return res.status(409).send("Staff profile could not be created because a unique value already exists.");
-		}
-
+		if (conn) await conn.rollback();
 		console.error("POST /api/staff error:", err);
-		res.status(500).send("Server error creating staff.");
+		res.status(500).send("Server error creating staff profile.");
+	} finally {
+		if (conn) conn.release();
 	}
-});
-
-/*
-	DELETE /api/staff/:id
-
-	Disabled for now.
-	Deleting staff right now could mess with old or future appointments.
-*/
-router.delete("/:id", requireAdmin, (req, res) => {
-	res.status(405).send("Delete is disabled.");
 });
 
 /*
 	GET /api/staff/users
 
-	Returns existing user accounts the admin can look through
-	before linking one to a staff profile.
+	Returns user accounts for the admin linking step
 
-	This helps the admin side know which userID to use, whether that user is already linked, and some 
-    info about that account
+	This helps the frontend show:
+	- who exists
+	- who is already linked
+	- some profile basics for selecting the right account
 */
 router.get("/users", requireAdmin, async (req, res) => {
 	try {
 		const [rows] = await pool.query(
-			`
-			SELECT
+			`SELECT
 				c.userID,
 				c.username,
 				c.email,
@@ -347,19 +420,17 @@ router.get("/users", requireAdmin, async (req, res) => {
 				c.legalLastName,
 				c.userType,
 				c.createdAt,
-
 				s.staffID AS linkedStaffID,
-
+				CASE WHEN s.staffID IS NULL THEN 0 ELSE 1 END AS alreadyLinkedToStaff,
 				COUNT(a.appointmentID) AS totalReservations,
-				COALESCE(SUM(CASE WHEN a.date < NOW() THEN 1 ELSE 0 END), 0) AS pastReservations,
-				COALESCE(SUM(CASE WHEN a.date >= NOW() THEN 1 ELSE 0 END), 0) AS upcomingReservations
-			FROM customer c
-			LEFT JOIN staff s
+				SUM(CASE WHEN a.date < NOW() THEN 1 ELSE 0 END) AS pastReservations,
+				SUM(CASE WHEN a.date >= NOW() THEN 1 ELSE 0 END) AS upcomingReservations
+			 FROM customer c
+			 LEFT JOIN staff s
 				ON s.userID = c.userID
-			LEFT JOIN appointment a
+			 LEFT JOIN appointment a
 				ON a.userID = c.userID
-			WHERE c.userType <> 'ADMIN'
-			GROUP BY
+			 GROUP BY
 				c.userID,
 				c.username,
 				c.email,
@@ -368,35 +439,13 @@ router.get("/users", requireAdmin, async (req, res) => {
 				c.userType,
 				c.createdAt,
 				s.staffID
-			ORDER BY c.userID ASC
-			`
+			 ORDER BY c.userID ASC`
 		);
 
-		/*
-			Shapes the SQL rows into the response object the frontend expects.
-
-			alreadyLinkedToStaff is derived from linkedStaffID.
-			The reservation counts come back from SQL and are turned into numbers here.
-		*/
-		const shaped = rows.map((row) => ({
-			userID: row.userID,
-			username: row.username,
-			email: row.email,
-			legalFirstName: row.legalFirstName,
-			legalLastName: row.legalLastName,
-			userType: row.userType,
-			createdAt: row.createdAt,
-			linkedStaffID: row.linkedStaffID,
-			alreadyLinkedToStaff: row.linkedStaffID !== null,
-			totalReservations: Number(row.totalReservations ?? 0),
-			pastReservations: Number(row.pastReservations ?? 0),
-			upcomingReservations: Number(row.upcomingReservations ?? 0),
-		}));
-
-		res.json(shaped);
+		res.json(rows);
 	} catch (err) {
 		console.error("GET /api/staff/users error:", err);
-		res.status(500).json({ error: "failed to load users" });
+		res.status(500).send("Server error fetching user accounts.");
 	}
 });
 

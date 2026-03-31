@@ -585,6 +585,10 @@ export default function Reservation() {
 
 			const resp = await createReservation(payload);
 
+			// This refreshes saved pets so a brand new pet can be picked right away on the next appointment
+			const refreshedPets = await getPetsForUser(currentUser.userID);
+			setPets(refreshedPets);
+
 			setIsSubmitted(true);
 			setSubmitMessage(
 				`Appointment confirmed for ${labelForReason(resp.reasonKey)} on ${resp.date} (${resp.durationMinutes} min).`

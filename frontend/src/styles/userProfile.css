@@ -1,230 +1,275 @@
 .profilePage {
-  max-width: 1320px;
-  margin: 0 auto;
-  padding: 24px;
+	max-width: 1320px;
+	margin: 0 auto;
+	padding: 24px;
 }
 
 .profileTitle {
-  margin-bottom: 16px;
+	margin-bottom: 16px;
 }
 
 .topRow {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+	display: grid;
+	grid-template-columns: 2fr 1fr;
+	gap: 16px;
+	margin-bottom: 16px;
 }
 
 .reservationsRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 16px;
-  margin-top: 16px;
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	gap: 16px;
+	margin-top: 16px;
 }
 
 .card {
-  border: 1px solid #333;
-  border-radius: 12px;
-  padding: 16px;
+	border: 1px solid #333;
+	border-radius: 12px;
+	padding: 16px;
 }
 
 .profileImg {
-  width: 100%;
-  max-width: 260px;
-  border-radius: 12px;
-  display: block;
-  margin: 0 auto;
-  object-fit: cover;
+	width: 100%;
+	max-width: 260px;
+	border-radius: 12px;
+	display: block;
+	margin: 0 auto;
+	object-fit: cover;
+	aspect-ratio: 1 / 1;
+	background: #f4f6f8;
+}
+
+.profilePictureArea {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+}
+
+.profilePictureActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	justify-content: center;
+}
+
+.profilePictureHint {
+	margin: 0;
+	font-size: 14px;
+	opacity: 0.82;
+	text-align: center;
+}
+
+.hiddenFileInput {
+	display: none;
+}
+
+.textBtn {
+	background: transparent;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+	text-decoration: underline;
+	font-size: 14px;
+}
+
+.secondaryBtn {
+	background: #eceff3;
+}
+
+.successBtnAlt {
+	background: #2f8f4e;
+	color: white;
 }
 
 .profileStaticInfo {
-  margin-bottom: 16px;
+	margin-bottom: 16px;
 }
 
 .infoGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px;
 }
 
 .fieldRow {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
 }
 
 .fieldRowWide {
-  grid-column: span 2;
+	grid-column: span 2;
 }
 
 .fieldRow label {
-  font-weight: 700;
+	font-weight: 700;
 }
 
 .fieldInput {
-  width: 100%;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid #9ba8b7;
-  background: #fff;
-  box-sizing: border-box;
+	width: 100%;
+	padding: 10px;
+	border-radius: 10px;
+	border: 1px solid #9ba8b7;
+	background: #fff;
+	box-sizing: border-box;
 }
 
 .fieldTextarea {
-  min-height: 90px;
-  resize: vertical;
+	min-height: 90px;
+	resize: vertical;
 }
 
 .fieldError {
-  margin: 0;
-  color: #b42318;
-  font-size: 14px;
+	margin: 0;
+	color: #b42318;
+	font-size: 14px;
 }
 
 .sectionActions {
-  margin-top: 14px;
-  display: flex;
-  justify-content: flex-end;
+	margin-top: 14px;
+	display: flex;
+	justify-content: flex-end;
 }
 
 .bioInput {
-  width: 100%;
-  padding: 10px;
-  border-radius: 10px;
-  margin-top: 8px;
-  margin-bottom: 10px;
-  box-sizing: border-box;
+	width: 100%;
+	padding: 10px;
+	border-radius: 10px;
+	margin-top: 8px;
+	margin-bottom: 10px;
+	box-sizing: border-box;
 }
 
 .primaryBtn {
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid #333;
-  cursor: pointer;
+	padding: 8px 14px;
+	border-radius: 10px;
+	border: 1px solid #333;
+	cursor: pointer;
 }
 
 .resList {
-  padding-left: 18px;
-  margin: 0;
+	padding-left: 18px;
+	margin: 0;
 }
 
 .resItem {
-  margin-bottom: 14px;
+	margin-bottom: 14px;
 }
 
 .resTime,
 .hint {
-  opacity: 0.8;
+	opacity: 0.8;
 }
 
 .errorBox {
-  padding: 16px;
-  border: 1px solid #5a2a2a;
-  border-radius: 12px;
-  color: #ffb3b3;
-  margin-bottom: 16px;
+	padding: 16px;
+	border: 1px solid #5a2a2a;
+	border-radius: 12px;
+	color: #ffb3b3;
+	margin-bottom: 16px;
 }
 
 .profileActionMessage {
-  margin-bottom: 16px;
-  padding: 12px 14px;
-  border: 1px solid #333;
-  border-radius: 12px;
+	margin-bottom: 16px;
+	padding: 12px 14px;
+	border: 1px solid #333;
+	border-radius: 12px;
 }
 
 .reservationActionRow {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-  flex-wrap: wrap;
+	display: flex;
+	gap: 10px;
+	margin-top: 10px;
+	flex-wrap: wrap;
 }
 
 .miniDangerBtn,
 .miniPrimaryBtn,
 .dangerBtn,
 .successBtn {
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid #333;
-  cursor: pointer;
+	padding: 8px 14px;
+	border-radius: 10px;
+	border: 1px solid #333;
+	cursor: pointer;
 }
 
 .miniDangerBtn,
 .dangerBtn {
-  background: #c94141;
-  color: white;
+	background: #c94141;
+	color: white;
 }
 
 .miniPrimaryBtn {
-  background: #4d79b9;
-  color: white;
+	background: #4d79b9;
+	color: white;
 }
 
 .successBtn {
-  background: #2f8f4e;
-  color: white;
+	background: #2f8f4e;
+	color: white;
 }
 
 .rescheduleSection {
-  margin-top: 24px;
-  width: 100%;
-  max-width: 100%;
+	margin-top: 24px;
+	width: 100%;
+	max-width: 100%;
 }
 
 .rescheduleCalendarWrap {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  overflow-x: auto;
-  margin-top: 16px;
-  padding-bottom: 4px;
+	display: flex;
+	justify-content: center;
+	width: 100%;
+	overflow-x: auto;
+	margin-top: 16px;
+	padding-bottom: 4px;
 }
 
 .rescheduleButtons {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 18px;
-  flex-wrap: wrap;
+	display: flex;
+	gap: 12px;
+	justify-content: center;
+	margin-top: 18px;
+	flex-wrap: wrap;
 }
 
 .petSection {
-  margin-top: 30px;
+	margin-top: 30px;
 }
 
 .petProfilesRow {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  margin-top: 15px;
+	display: flex;
+	gap: 20px;
+	flex-wrap: wrap;
+	margin-top: 15px;
 }
 
 .petBox {
-  width: 320px;
-  border: 2px solid #ccc;
-  border-radius: 12px;
-  padding: 16px;
-  background: white;
+	width: 320px;
+	border: 2px solid #ccc;
+	border-radius: 12px;
+	padding: 16px;
+	background: white;
 }
 
 .petBox h3 {
-  margin-top: 0;
+	margin-top: 0;
 }
 
 @media (max-width: 1100px) {
-  .topRow {
-    grid-template-columns: 1fr;
-  }
+	.topRow {
+		grid-template-columns: 1fr;
+	}
 
-  .reservationsRow {
-    grid-template-columns: 1fr;
-  }
+	.reservationsRow {
+		grid-template-columns: 1fr;
+	}
 
-  .infoGrid {
-    grid-template-columns: 1fr;
-  }
+	.infoGrid {
+		grid-template-columns: 1fr;
+	}
 
-  .fieldRowWide {
-    grid-column: span 1;
-  }
+	.fieldRowWide {
+		grid-column: span 1;
+	}
 }

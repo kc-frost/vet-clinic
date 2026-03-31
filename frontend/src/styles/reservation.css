@@ -421,3 +421,32 @@
 		width: 100%;
 	}
 }
+
+/* This keeps the consent area left aligned with the review text */
+.consentRow {
+	align-items: flex-start;
+}
+
+.consentLabel {
+	display: flex;
+	align-items: flex-start;
+	justify-content: flex-start;
+	gap: 10px;
+	text-align: left;
+	font-weight: 800;
+}
+
+.consentLabel input[type="checkbox"] {
+	width: 16px;
+	height: 16px;
+	margin-top: 3px;
+	accent-color: #4d79b9;
+	flex: 0 0 auto;
+}
+
+.reservation-warning-text {
+	margin: 0 0 14px 0;
+	font-size: 15px;
+	font-weight: 700;
+	color: #b42318;
+}

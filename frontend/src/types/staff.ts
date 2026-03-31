@@ -1,13 +1,13 @@
 /*
-	These are the staff role keys for scheduling.
-	This is not the same thing as customer.userType.
+	These are the staff role keys for scheduling
+	This is not the same thing as customer.userType
 
 	userType is:
 	- CUSTOMER
 	- STAFF
 	- ADMIN
 
-	These are the actual staff capabilities.
+	These are the actual staff capabilities
 */
 export type StaffRoleKey =
 	| "GENERAL"
@@ -21,25 +21,11 @@ export type StaffRoleKey =
 
 export type UserType = "CUSTOMER" | "STAFF" | "ADMIN";
 
-/*
-	This is the staff shape returned from GET /api/staff.
-
-	It is not just one raw staff row anymore.
-	The backend now builds this from:
-	- staff
-	- customer
-	- staff_role
-
-	So customer has the profile/contact info,
-	staff has the employee-specific info,
-	and staff_role gives the roleKeys array.
-*/
 export interface Staff {
 	staffID: number;
 	userID: number;
 	staffNumber: string | null;
 	positionTitle: string | null;
-
 	legalFirstName: string | null;
 	legalLastName: string | null;
 	email: string | null;
@@ -48,19 +34,10 @@ export interface Staff {
 	city: string | null;
 	state: string | null;
 	zipCode: string | null;
-
 	userType: UserType;
 	roleKeys: StaffRoleKey[];
 }
 
-/*
-	This is what gets sent when admin creates a staff profile.
-
-	The admin is not typing all the person info into staff anymore.
-	The user already has an account.
-	We just link that userID, give them a staff number,
-	a display title, and the role keys they can do.
-*/
 export interface StaffCreate {
 	userID: number;
 	staffNumber: string;
@@ -68,13 +45,6 @@ export interface StaffCreate {
 	roleKeys: StaffRoleKey[];
 }
 
-/*
-	This is for the admin side when picking which existing user
-	account should be linked to a staff profile.
-
-	It gives enough info for the admin to tell who the account is
-	and whether that user was already linked before.
-*/
 export interface StaffUserCandidate {
 	userID: number;
 	username: string | null;
@@ -89,3 +59,42 @@ export interface StaffUserCandidate {
 	pastReservations: number;
 	upcomingReservations: number;
 }
+
+export type MyStaffProfile = {
+	staffID: number;
+	userID: number;
+	staffNumber: string | null;
+	positionTitle: string | null;
+	legalFirstName: string | null;
+	legalLastName: string | null;
+	email: string | null;
+	phone: string | null;
+	roleKeys: StaffRoleKey[];
+};
+
+export type StaffAvailabilityRow = {
+	availabilityID?: number;
+	dayOfWeek: number;
+	startTime: string;
+	endTime: string;
+};
+
+export type StaffAppointment = {
+	appointmentID: number;
+	petName: string;
+	service: string;
+	appointmentDate: string;
+	appointmentTime: string;
+	appointmentDateTime: string;
+	assignedRoleKey: StaffRoleKey | string;
+};
+
+export type StaffNotification = {
+	notificationID: number;
+	type: string;
+	title: string;
+	message: string;
+	channel: string;
+	isRead: boolean;
+	createdAt: string;
+};

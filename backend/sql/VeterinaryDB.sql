@@ -42,10 +42,13 @@ create table customer(
 
 	-- createdAt is for storing date of user account registration
 	createdAt datetime not null default current_timestamp
+
+    -- stores file image path for user profile picture, pic is stored in server and retrieved
+    profileImagePath varchar(500)
 );
 
--- pets belong to a customer, one customer can have many pets.
--- pet table stores the current info/facts for the pet profile.
+-- pets belong to a customer, one customer can have many pets
+-- pet table stores the current info/facts for the pet profile
 -- fields update over time as pet info changes
 create table pet(
 	petID int auto_increment primary key,
@@ -62,7 +65,7 @@ create table pet(
 	height int, -- in inches
 	behavior varchar(255), -- stores behavior notes for pet
 
-	-- medical history fields (this is what autofills step 4 and shows in mini pet profile)
+	-- medical history fields
 	currentMedications text,
 	knownAllergies text,
 	pastInjuriesConditions text,
@@ -72,8 +75,8 @@ create table pet(
 	foreign key (userID) references customer(userID)
 );
 
--- staff is the clinic employee extension of a normal website account.
--- user profile/contact info should come from customer, not be duplicated here.
+-- staff is the clinic employee extension of a normal website account
+-- user profile/contact info should come from customer, not be duplicated here
 create table staff(
 	staffID int auto_increment primary key,
 	userID int not null unique,
@@ -82,7 +85,7 @@ create table staff(
 	foreign key (userID) references customer(userID)
 );
 
--- stores what staff scheduling capabilities a staff member possesses.
+-- stores what staff scheduling capabilities a staff member possesses
 -- examples: GENERAL, SURGEON, DENTIST, GROOMER, XRAY_TECH, ULTRASOUND_TECH
 create table staff_role(
 	staffID int not null,
@@ -91,9 +94,9 @@ create table staff_role(
 	foreign key (staffID) references staff(staffID)
 );
 
--- recurring weekly availability.
--- one continuous block per day per staff member.
--- if a day has no row for the staff member, they are unavailable that day.
+-- recurring weekly availability
+-- one continuous block per day per staff member
+-- if a day has no row for the staff member, they are unavailable that day
 create table staff_availability(
 	availabilityID int auto_increment primary key,
 	staffID int not null,
@@ -112,10 +115,9 @@ create table contactinfo(
 	foreign key (address) references veterinary(address)
 );
 
--- this table represents both consumables and non-consumables, Xray or bandages for example.
--- itemKey is the internal key used in backend logic (VACCINE_DOSE, XRAY_MACHINE, SHAMPOO_DOSE, etc)
--- isConsumable tells backend if quantity means "stock" vs "capacity" based.
--- since xrays can't be "consumed" but bandages do and have to get "restocked"
+-- this table represents both consumables and non-consumables
+-- itemKey is the internal key used in backend logic
+-- isConsumable tells backend if quantity means stock vs capacity based
 create table inventory(
 	itemID int auto_increment primary key,
 	itemType varchar(50),
@@ -141,16 +143,13 @@ create table rooms(
 	capacity int
 );
 
--- appointment rows provide scheduling date info and linking to room assignments.
--- staffID is kept temporarily during sprint 4 transition so old code does not break immediately.
--- long term, appointment_staff should become the true source of staff assignment.
+-- appointment rows provide the base appointment record
+-- staff assignments belong in appointment_staff
 create table appointment(
 	appointmentID int auto_increment primary key,
 
 	userID int not null,
 	petID int null,
-
-	staffID int null,
 	roomNumber int,
 
 	reasonKey varchar(100) not null,
@@ -159,12 +158,11 @@ create table appointment(
 
 	foreign key (userID) references customer(userID),
 	foreign key (petID) references pet(petID),
-	foreign key (staffID) references staff(staffID),
 	foreign key (roomNumber) references rooms(roomNumber)
 );
 
--- actual many-to-many staff assignments for appointments.
--- assignedRoleKey records which role the staff member is fulfilling on that appointment.
+-- actual many-to-many staff assignments for appointments
+-- assignedRoleKey stores which role the staff member is fulfilling on that appointment
 create table appointment_staff(
 	appointmentID int not null,
 	staffID int not null,
@@ -174,11 +172,11 @@ create table appointment_staff(
 	foreign key (staffID) references staff(staffID)
 );
 
--- essentially stores the full reservation fields as a snapshot
+-- stores the full reservation fields as a snapshot from booking time
 create table appointment_form(
 	appointmentID int primary key,
 
-	-- owner/contact info snapshot of what the user had filled in at booking time
+	-- owner/contact info snapshot
 	legalFirstName varchar(255) not null,
 	legalLastName varchar(255) not null,
 	email varchar(255) not null,
@@ -188,7 +186,7 @@ create table appointment_form(
 	state varchar(2) not null,
 	zipCode varchar(10) not null,
 
-	-- pet info snapshot, still stored even if pet profiles exist
+	-- pet info snapshot
 	petName varchar(255) not null,
 	petType varchar(50) not null,
 	breed varchar(255) not null,
@@ -199,7 +197,7 @@ create table appointment_form(
 	-- appointment details
 	reasonDetails text,
 
-	-- medical / safety snapshot of what the user had filled in at booking time
+	-- medical / safety snapshot
 	currentMedications text not null,
 	knownAllergies text not null,
 	pastInjuriesConditions text not null,
@@ -227,22 +225,35 @@ create table appointment_consumable(
 	foreign key (itemID) references inventory(itemID)
 );
 
--- persistent notifications tied to user accounts.
--- supports both customer reminders and staff in-app notifications.
+-- in-app notifications tied to one user account
+-- channel is kept so notification logic can distinguish reminder types cleanly
 create table notification(
 	notificationID int auto_increment primary key,
 	userID int not null,
 	appointmentID int not null,
-	notificationType varchar(50) not null,
+	type varchar(50) not null,
+	title varchar(255) not null,
 	message text not null,
+	channel varchar(30) not null default 'IN_APP',
+	isRead boolean not null default false,
 	createdAt datetime not null default current_timestamp,
-	scheduledFor datetime not null,
-	isDismissed boolean not null default false,
 	foreign key (userID) references customer(userID),
 	foreign key (appointmentID) references appointment(appointmentID)
 );
 
--- service catalog (what services exist in general)
+-- tracks emails that were sent so reminder logic does not duplicate sends
+create table email_log(
+	emailLogID int auto_increment primary key,
+	userID int not null,
+	appointmentID int not null,
+	type varchar(50) not null,
+	recipientEmail varchar(255) not null,
+	createdAt datetime not null default current_timestamp,
+	foreign key (userID) references customer(userID),
+	foreign key (appointmentID) references appointment(appointmentID)
+);
+
+-- service catalog
 create table service(
 	serviceID int auto_increment primary key,
 	serviceName varchar(255) unique,
@@ -267,7 +278,7 @@ create table insurance(
 	customerID int,
 	providerName varchar(255),
 	policyNumber varchar(255),
-	phoneNumber varchar(12),	
+	phoneNumber varchar(12),
 	planName varchar(255),
 	coveragePercent decimal(5,2),
 	isActive boolean,

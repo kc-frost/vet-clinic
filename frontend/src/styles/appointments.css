@@ -41,6 +41,81 @@
   color: #b42318;
 }
 
+.appointmentsFiltersShell {
+  background-color: #ffffff;
+  border: 2px solid #d9e4ef;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 10px 24px rgba(27, 55, 88, 0.12);
+  margin-bottom: 18px;
+}
+
+.appointmentsFiltersGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.appointmentsFilterField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.appointmentsFilterFieldWide {
+  grid-column: span 3;
+}
+
+.appointmentsFilterField label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #163b63;
+}
+
+.appointmentsFilterField input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #b9cde2;
+  background: #f8fbff;
+  color: #163b63;
+}
+
+.appointmentsFilterField input:focus {
+  outline: 2px solid #7fa3cb;
+  outline-offset: 1px;
+}
+
+.appointmentsFiltersActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.appointmentsClearBtn {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #7fa3cb;
+  background: #e8f1fb;
+  color: #163b63;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.appointmentsClearBtn:hover {
+  background: #dbeaf9;
+}
+
+.appointmentsFilterCount {
+  font-size: 14px;
+  font-weight: 700;
+  color: #4c5d71;
+}
+
 .appointmentsShell {
   background-color: #ffffff;
   border: 2px solid #d9e4ef;
@@ -80,6 +155,13 @@
 .staffCell,
 .roomCell {
   min-width: 110px;
+}
+
+.staffCell {
+  min-width: 250px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .cellSubText {
@@ -138,4 +220,28 @@
   padding: 0.5px;
   pointer-events: none;
   flex-shrink: 0;
+}
+
+@media (max-width: 1100px) {
+  .appointmentsFiltersGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .appointmentsFilterFieldWide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 700px) {
+  .appointmentsPage {
+    padding: 18px 12px 28px 12px;
+  }
+
+  .appointmentsFiltersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .appointmentsFilterFieldWide {
+    grid-column: span 1;
+  }
 }

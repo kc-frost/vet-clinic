@@ -125,16 +125,21 @@ export default function ReviewConfirmStep({
 				</p>
 			</div>
 
+			{/* This warning is for edits after submit */}
+			<p className="reservation-warning-text">
+				If you need to edit appointment information after creation, cancel the appointment and create a new one.
+			</p>
+
 			{/* final confirmation checkbox
 			   this is the only editable control on this step */}
-			<div className="form-row">
-				<label>
+			<div className="form-row consentRow">
+				<label className="consentLabel">
 					<input
 						type="checkbox"
 						checked={formData.consentToFormInfo}
 						onChange={(e) => onFieldChange("consentToFormInfo", e.target.checked)}
 					/>
-					I confirm the information above is accurate.
+					<span>I confirm the information above is accurate.</span>
 				</label>
 
 				{errors.consentToFormInfo ? <p className="field-error">{errors.consentToFormInfo}</p> : null}

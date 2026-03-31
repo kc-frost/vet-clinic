@@ -1,0 +1,225 @@
+.staffDashboardPage {
+	max-width: 1320px;
+	margin: 0 auto;
+	padding: 24px;
+}
+
+.staffDashboardTitle {
+	margin-bottom: 16px;
+}
+
+.staffDashboardGrid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	margin-top: 16px;
+}
+
+.staffDashboardCard {
+	border: 1px solid #333;
+	border-radius: 12px;
+	padding: 16px;
+	background: #fff;
+}
+
+.staffDashboardCard h2 {
+	margin-top: 0;
+	margin-bottom: 12px;
+}
+
+.staffDashboardInfoGrid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px;
+}
+
+.staffDashboardField {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.staffDashboardFieldWide {
+	grid-column: span 2;
+}
+
+.staffDashboardLabel {
+	font-weight: 700;
+}
+
+.staffDashboardValue,
+.staffDashboardInput {
+	width: 100%;
+	padding: 10px;
+	border-radius: 10px;
+	border: 1px solid #9ba8b7;
+	background: #fff;
+	box-sizing: border-box;
+}
+
+.staffDashboardList {
+	padding-left: 18px;
+	margin: 0;
+}
+
+.staffDashboardListItem {
+	margin-bottom: 12px;
+}
+
+.staffDashboardError {
+	padding: 16px;
+	border: 1px solid #5a2a2a;
+	border-radius: 12px;
+	color: #b42318;
+	margin-bottom: 16px;
+}
+
+.staffDashboardMessage {
+	margin-top: 14px;
+	padding: 12px 14px;
+	border: 1px solid #333;
+	border-radius: 12px;
+}
+
+.availabilitySubtext {
+	opacity: 0.8;
+	margin-bottom: 14px;
+}
+
+.availabilityList {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.availabilityRow {
+	display: grid;
+	grid-template-columns: 160px 1fr;
+	gap: 14px;
+	align-items: center;
+}
+
+.availabilityDay {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 700;
+}
+
+.availabilityTimes {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.availabilityTimes select {
+	padding: 10px;
+	border-radius: 10px;
+	border: 1px solid #9ba8b7;
+	background: #fff;
+	box-sizing: border-box;
+}
+
+.staffDashboardActions {
+	margin-top: 14px;
+	display: flex;
+	justify-content: flex-end;
+}
+
+.staffDashboardPrimaryBtn,
+.staffDashboardSecondaryBtn {
+	padding: 8px 14px;
+	border-radius: 10px;
+	border: 1px solid #333;
+	cursor: pointer;
+}
+
+.staffDashboardPrimaryBtn {
+	background: #4d79b9;
+	color: white;
+}
+
+.staffDashboardSecondaryBtn {
+	background: #eef5fc;
+	color: #163b63;
+}
+
+.staffDashboardPrimaryBtn:disabled,
+.staffDashboardSecondaryBtn:disabled {
+	opacity: 0.7;
+	cursor: not-allowed;
+}
+
+.staffFilterPanel {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+	align-items: end;
+	padding: 12px;
+	margin-bottom: 14px;
+	border: 1px solid #d9e4ef;
+	border-radius: 12px;
+	background: #f8fbff;
+}
+
+.staffFilterField {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.staffFilterButtonRow {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.staffNotificationItem {
+	list-style: none;
+	padding: 12px;
+	border: 1px solid #d9e4ef;
+	border-radius: 12px;
+	background: #f8fbff;
+}
+
+.staffNotificationTitle {
+	font-weight: 700;
+	margin-bottom: 6px;
+}
+
+.staffNotificationMessage {
+	margin-bottom: 8px;
+}
+
+.staffNotificationMeta {
+	font-size: 14px;
+	opacity: 0.75;
+	margin-bottom: 10px;
+}
+
+.staffNotificationActions {
+	display: flex;
+	justify-content: flex-end;
+}
+
+@media (max-width: 1100px) {
+	.staffDashboardGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.staffDashboardInfoGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.staffDashboardFieldWide {
+		grid-column: span 1;
+	}
+
+	.availabilityRow {
+		grid-template-columns: 1fr;
+	}
+
+	.staffFilterPanel {
+		grid-template-columns: 1fr;
+	}
+}
