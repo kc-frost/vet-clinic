@@ -4,63 +4,95 @@ import "../styles/publicLayout.css";
 import NavButton from "../components/NavButton";
 import { getCurrentUser, type AuthUser } from "../api/auth";
 
-// public layout used for the main site header and outlet pages
-// admin-only nav buttons are rendered only when the logged in user has admin access
 export default function PublicLayout() {
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
-  const location = useLocation();
+	/*
+		currentUser stores the logged-in user if a valid session exists.
+	*/
+	const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+	const location = useLocation();
 
-  useEffect(() => {
-    let alive = true;
+	useEffect(() => {
+		/*
+			alive prevents state updates if this effect gets cleaned up
+			before the current-user request finishes.
+		*/
+		let alive = true;
 
-    (async () => {
-      try {
-        const me = await getCurrentUser();
-        if (!alive) return;
-        setCurrentUser(me);
-      } catch {
-        if (!alive) return;
-        setCurrentUser(null);
-      }
-    })();
+		(async () => {
+			try {
+				/*
+					Check who is currently logged in so the navbar can
+					render the correct links for this page load.
+				*/
+				const me = await getCurrentUser();
+				if (!alive) return;
 
-    return () => {
-      alive = false;
-    };
-  }, [location.pathname]);
+				setCurrentUser(me);
+			} catch {
+				/*
+					If the request fails, treat the visitor as logged out.
+				*/
+				if (!alive) return;
+				setCurrentUser(null);
+			}
+		})();
 
-  const isAdmin = !!currentUser?.isAdmin;
+		return () => {
+			alive = false;
+		};
+	}, [location.pathname]);
 
-  return (
-    <>
-      <header className="public-header">
-        <nav className="public-nav">
-          <NavButton to="/" className="nav-brand">
-            Vet Clinic
-          </NavButton>
+	/*
+		These booleans make the navbar conditions easier to read.
+	*/
+	const isLoggedIn = !!currentUser;
+	const isAdmin = !!currentUser?.isAdmin;
+	const isStaff = !!currentUser?.isStaff;
 
-          <div className="nav-right">
-            <button type="button" className="nav-btn">About</button>
-            <button type="button" className="nav-btn">Services</button>
-            <button type="button" className="nav-btn">Contact</button>
+	return (
+		<>
+			<header className="public-header">
+				<nav className="public-nav">
+					<NavButton to="/" className="nav-brand">
+						Vet Clinic
+					</NavButton>
 
-            {isAdmin ? (
-              <>
-                <NavButton to="/staff/inventory" className="nav-btn">Inventory</NavButton>
-                <NavButton to="/staff/users" className="nav-btn">View Users</NavButton>
-                <NavButton to="/staff/appointments" className="nav-btn">View Appointments</NavButton>
-              </>
-            ) : null}
+					<div className="nav-right">
+						<button type="button" className="nav-btn">About</button>
+						<button type="button" className="nav-btn">Services</button>
+						<button type="button" className="nav-btn">Contact</button>
 
-            <NavButton to="/reservation" className="nav-btn">Create Appointment</NavButton>
-            <NavButton to="/login" className="nav-btn">Login</NavButton>
-            <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
-            <NavButton to="/userprofile" className="nav-btn">My Profile</NavButton>
-          </div>
-        </nav>
-      </header>
+						{/* Only admins should see the admin-only navigation links. */}
+						{isAdmin ? (
+							<>
+								<NavButton to="/staff/inventory" className="nav-btn">Inventory</NavButton>
+								<NavButton to="/staff/users" className="nav-btn">View Users</NavButton>
+								<NavButton to="/staff/appointments" className="nav-btn">View Appointments</NavButton>
+							</>
+						) : null}
 
-      <Outlet />
-    </>
-  );
+						{/* Staff users get the staff dashboard link. */}
+						{isStaff ? (
+							<NavButton to="/staff/dashboard" className="nav-btn">Staff Dashboard</NavButton>
+						) : null}
+
+						{/* Logged-in users see appointment/profile links. Guests see login/register. */}
+						{isLoggedIn ? (
+							<>
+								<NavButton to="/reservation" className="nav-btn">Create Appointment</NavButton>
+								<NavButton to="/userprofile" className="nav-btn">My Profile</NavButton>
+							</>
+						) : (
+							<>
+								<NavButton to="/login" className="nav-btn">Login</NavButton>
+								<NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
+							</>
+						)}
+					</div>
+				</nav>
+			</header>
+
+			<Outlet />
+		</>
+	);
 }

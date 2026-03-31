@@ -41,7 +41,7 @@ create table customer(
 	userType varchar(20) not null default 'CUSTOMER',
 
 	-- createdAt is for storing date of user account registration
-	createdAt datetime not null default current_timestamp
+	createdAt datetime not null default current_timestamp,
 
     -- stores file image path for user profile picture, pic is stored in server and retrieved
     profileImagePath varchar(500)

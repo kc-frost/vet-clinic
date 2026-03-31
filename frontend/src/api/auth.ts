@@ -1,58 +1,74 @@
 import { api } from "./client";
 
-// shape returned by /api/auth/me (and also embedded in login/register responses)
+/*
+	This is the authenticated user shape returned by the backend.
+
+	It includes the core identity fields plus convenient booleans
+	the frontend can use for role-based rendering checks.
+*/
 export type AuthUser = {
 	userID: number;
 	email: string;
+	userType: "CUSTOMER" | "STAFF" | "ADMIN" | string;
 	isAdmin: boolean;
+	isStaff: boolean;
 };
 
-// POST /api/auth/login response shape
-// message is a short status string like "logged in"
-// user contains the session user fields the frontend cares about
+/*
+	Response shape returned by the login route.
+	The backend sends a status message plus the authenticated user.
+*/
 export type LoginResponse = {
 	message: string;
 	user: AuthUser;
 };
 
-// POST /api/auth/register response shape
-// message is a short status string like "registered"
-// user contains the new user fields and is also used to seed the session
+/*
+	Response shape returned by the register route.
+	The backend sends a status message plus the newly authenticated user.
+*/
 export type RegisterResponse = {
 	message: string;
 	user: AuthUser;
 };
 
-// POST /api/auth/register
-// sends credentials to the backend and expects a RegisterResponse back
-// adminCode is optional and is only used if the backend has ADMIN_CODE configured
 export async function register(email: string, password: string, adminCode?: string) {
+	/*
+		Send the registration request to the backend.
+
+		adminCode is optional because most users register as normal
+		customer accounts, while only special cases should become admin.
+	*/
 	return api<RegisterResponse>("/auth/register", {
 		method: "POST",
 		body: { email, password, adminCode },
 	});
 }
 
-// POST /api/auth/login
-// sends credentials to the backend and expects a LoginResponse back
-// backend will attach session cookies if express-session is enabled
 export async function login(email: string, password: string) {
+	/*
+		Send login credentials to the backend and return the
+		authenticated user payload on success.
+	*/
 	return api<LoginResponse>("/auth/login", {
 		method: "POST",
 		body: { email, password },
 	});
 }
 
-// POST /api/auth/logout
-// backend destroys/ rids of the session so /api/auth/me returns 401 afterward
 export async function logout() {
+	/*
+		Tell the backend to destroy the current session so this user
+		is no longer considered logged in on later requests.
+	*/
 	return api<{ message: string }>("/auth/logout", { method: "POST" });
 }
 
-// GET /api/auth/me
-// used on page load to detect if the browser currently has a valid session
-// if the user is not logged in, the backend returns 401 and api() should throw
 export async function getCurrentUser() {
+	/*
+		Ask the backend who is currently logged in based on the
+		existing session cookie.
+	*/
 	return api<AuthUser>("/auth/me", {
 		method: "GET",
 	});

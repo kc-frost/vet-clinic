@@ -1,7 +1,3 @@
-// AppRouter.tsx
-// main routing configuration for the frontend application
-// defines public routes protected routes and admin routes
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ViewAllUsers from "../pages/staff/ViewAllUsers";
 
@@ -20,37 +16,44 @@ import UserProfile from "../pages/public/UserProfile";
 
 import RequireAuth from "../components/auth/RequireAuth";
 import RequireAdmin from "../components/auth/RequireAdmin";
+import RequireStaff from "../components/auth/RequireStaff";
 
 export default function AppRouter() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        {/* public routes */}
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+	return (
+		<BrowserRouter>
+			<Routes>
+				{/* Public layout wraps the normal public-facing pages. */}
+				<Route element={<PublicLayout />}>
+					<Route path="/" element={<Home />} />
+					<Route path="/login" element={<Login />} />
+					<Route path="/register" element={<Register />} />
 
-          {/* logged in user routes */}
-          <Route element={<RequireAuth />}>
-            <Route path="/reservation" element={<Reservation />} />
-            <Route path="/userprofile" element={<UserProfile />} />
-            <Route path="/staff/dashboard" element={<StaffDashboard />} />
-          </Route>
-        </Route>
+					{/* These pages require any logged-in user. */}
+					<Route element={<RequireAuth />}>
+						<Route path="/reservation" element={<Reservation />} />
+						<Route path="/userprofile" element={<UserProfile />} />
+					</Route>
 
-        {/* admin routes */}
-        <Route element={<RequireAdmin />}>
-          <Route path="/staff" element={<StaffLayout />}>
-            <Route index element={<Navigate to="inventory" replace />} />
-            <Route path="inventory" element={<Inventory />} />
-            <Route path="users" element={<ViewAllUsers />} />
-            <Route path="appointments" element={<ViewAppointments />} />
-          </Route>
-        </Route>
+					{/* Staff-only route inside the public layout area. */}
+					<Route element={<RequireStaff />}>
+						<Route path="/staff/dashboard" element={<StaffDashboard />} />
+					</Route>
+				</Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
-  );
+				{/* Admin-only staff management area. */}
+				<Route element={<RequireAdmin />}>
+					<Route path="/staff" element={<StaffLayout />}>
+						{/* Visiting /staff should immediately go to /staff/inventory. */}
+						<Route index element={<Navigate to="inventory" replace />} />
+						<Route path="inventory" element={<Inventory />} />
+						<Route path="users" element={<ViewAllUsers />} />
+						<Route path="appointments" element={<ViewAppointments />} />
+					</Route>
+				</Route>
+
+				{/* Catch-all fallback for unknown routes. */}
+				<Route path="*" element={<Navigate to="/" replace />} />
+			</Routes>
+		</BrowserRouter>
+	);
 }

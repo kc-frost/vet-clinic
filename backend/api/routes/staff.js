@@ -1,12 +1,12 @@
 import express from "express";
 import { pool } from "../db.js";
-import { requireAdmin, requireAuth } from "../lib/authMiddleware.js";
+import { requireAdmin, requireStaff } from "../lib/authMiddleware.js";
 
 const router = express.Router();
 
 /*
-	These are the valid scheduling role keys a staff member can have
-	These are what later reservation logic will check against
+	These are the only valid scheduling role keys staff members
+	are allowed to have in the database.
 */
 const VALID_ROLE_KEYS = new Set([
 	"GENERAL",
@@ -20,18 +20,22 @@ const VALID_ROLE_KEYS = new Set([
 ]);
 
 function cleanText(value) {
+	/*
+		Normalize incoming text values by trimming whitespace.
+		If the value is not a string, return an empty string.
+	*/
 	return typeof value === "string" ? value.trim() : "";
 }
 
 function uniqueRoleKeys(rawRoleKeys) {
 	/*
-		The incoming role array can be messy
-		It might have duplicates spaces lowercase text or non strings
+		The incoming roleKeys array may contain duplicate values,
+		lowercase text, extra spaces, or even non-string values.
 
-		So first clean every value
-		Then turn them all into uppercase
-		Then remove duplicates
-		Then return the final clean array
+		So first keep only string values.
+		Then trim and uppercase each one.
+		Then remove blank values.
+		Then remove duplicates.
 	*/
 	if (!Array.isArray(rawRoleKeys)) return [];
 
@@ -44,6 +48,13 @@ function uniqueRoleKeys(rawRoleKeys) {
 }
 
 function buildStaffProfileFromRows(rows) {
+	/*
+		This route query returns one row per roleKey, so one staff
+		member can appear multiple times.
+
+		Use the first row for the shared staff/profile fields, then
+		collect the distinct role keys into one roleKeys array.
+	*/
 	const first = rows[0];
 
 	return {
@@ -59,8 +70,12 @@ function buildStaffProfileFromRows(rows) {
 	};
 }
 
-router.get("/me", requireAuth, async (req, res) => {
+router.get("/me", requireStaff, async (req, res) => {
 	try {
+		/*
+			Use the logged-in session userID to find the matching
+			staff profile for this authenticated staff member.
+		*/
 		const userID = Number(req.session.userID);
 
 		const [rows] = await pool.query(
@@ -84,6 +99,10 @@ router.get("/me", requireAuth, async (req, res) => {
 			[userID]
 		);
 
+		/*
+			If the logged-in account is marked as staff but does not
+			have a matching staff profile row, return not found.
+		*/
 		if (rows.length === 0) {
 			return res.status(404).json({ message: "No staff profile found for this user" });
 		}
@@ -95,8 +114,12 @@ router.get("/me", requireAuth, async (req, res) => {
 	}
 });
 
-router.get("/me/appointments", requireAuth, async (req, res) => {
+router.get("/me/appointments", requireStaff, async (req, res) => {
 	try {
+		/*
+			First resolve the logged-in user's linked staffID.
+			The appointment_staff table is keyed by staffID, not userID.
+		*/
 		const userID = Number(req.session.userID);
 
 		const [staffRows] = await pool.query(`SELECT staffID FROM staff WHERE userID = ? LIMIT 1`, [userID]);
@@ -106,6 +129,11 @@ router.get("/me/appointments", requireAuth, async (req, res) => {
 
 		const staffID = Number(staffRows[0].staffID);
 
+		/*
+			Load upcoming appointments assigned to this staff member.
+			This joins appointment data plus pet/form fallback info
+			so the frontend can display a complete schedule row.
+		*/
 		const [rows] = await pool.query(
 			`SELECT
 				a.appointmentID,
@@ -135,8 +163,12 @@ router.get("/me/appointments", requireAuth, async (req, res) => {
 	}
 });
 
-router.get("/me/notifications", requireAuth, async (req, res) => {
+router.get("/me/notifications", requireStaff, async (req, res) => {
 	try {
+		/*
+			Load unread in-app notifications for the logged-in staff user.
+			These are notification rows tied directly to the session userID.
+		*/
 		const userID = Number(req.session.userID);
 
 		const [rows] = await pool.query(
@@ -163,8 +195,12 @@ router.get("/me/notifications", requireAuth, async (req, res) => {
 	}
 });
 
-router.patch("/me/notifications/:notificationID/read", requireAuth, async (req, res) => {
+router.patch("/me/notifications/:notificationID/read", requireStaff, async (req, res) => {
 	try {
+		/*
+			Mark one notification as read, but only if that notification
+			belongs to the logged-in user and is an in-app notification.
+		*/
 		const userID = Number(req.session.userID);
 		const notificationID = Number(req.params.notificationID);
 
@@ -191,12 +227,12 @@ router.patch("/me/notifications/:notificationID/read", requireAuth, async (req, 
 /*
 	GET /api/staff
 
-	Returns the full staff list using the new schema shape
+	Return the full staff list using the current schema.
 
-	The data is built from:
-	- staff for employee-specific data
-	- customer for profile/contact info
-	- staff_role for one or more role keys
+	The data comes from:
+	- staff for employee-specific fields
+	- customer for account/profile/contact info
+	- staff_role for one or more role keys per staff member
 */
 router.get("/", requireAdmin, async (req, res) => {
 	try {
@@ -224,6 +260,10 @@ router.get("/", requireAdmin, async (req, res) => {
 			 ORDER BY COALESCE(c.legalLastName, ''), COALESCE(c.legalFirstName, ''), s.staffID, sr.roleKey`
 		);
 
+		/*
+			Because the join returns one row per roleKey, collapse those
+			rows back into one object per staffID with a roleKeys array.
+		*/
 		const byStaffID = new Map();
 
 		for (const row of rows) {
@@ -246,6 +286,10 @@ router.get("/", requireAdmin, async (req, res) => {
 				});
 			}
 
+			/*
+				Only push roleKey values that actually exist.
+				A LEFT JOIN can produce null roleKey values.
+			*/
 			if (row.roleKey) {
 				byStaffID.get(row.staffID).roleKeys.push(row.roleKey);
 			}
@@ -262,7 +306,7 @@ router.get("/", requireAdmin, async (req, res) => {
 /*
 	POST /api/staff
 
-	Creates one new staff profile by linking an existing customer account
+	Create one new staff profile by linking an existing customer account.
 
 	Expected request body:
 	- userID
@@ -274,6 +318,10 @@ router.post("/", requireAdmin, async (req, res) => {
 	let conn;
 
 	try {
+		/*
+			Clean and normalize the incoming request fields before
+			validation and database work.
+		*/
 		const parsedUserID = Number(req.body?.userID);
 		const cleanStaffNumber = cleanText(req.body?.staffNumber);
 		const cleanPositionTitle = cleanText(req.body?.positionTitle);
@@ -295,6 +343,9 @@ router.post("/", requireAdmin, async (req, res) => {
 			return res.status(400).send("At least one roleKey is required.");
 		}
 
+		/*
+			Reject any roleKey that is not one of the allowed values.
+		*/
 		for (const roleKey of roleKeys) {
 			if (!VALID_ROLE_KEYS.has(roleKey)) {
 				return res.status(400).send(`Invalid roleKey: ${roleKey}`);
@@ -304,6 +355,10 @@ router.post("/", requireAdmin, async (req, res) => {
 		conn = await pool.getConnection();
 		await conn.beginTransaction();
 
+		/*
+			Make sure the selected customer account actually exists
+			before trying to link it to a staff profile.
+		*/
 		const [userRows] = await conn.query(
 			`SELECT userID, userType
 			 FROM customer
@@ -317,6 +372,10 @@ router.post("/", requireAdmin, async (req, res) => {
 			return res.status(404).send("The selected user account does not exist.");
 		}
 
+		/*
+			Do not allow one customer account to be linked to more than
+			one staff profile row.
+		*/
 		const [existingStaffRows] = await conn.query(
 			`SELECT staffID
 			 FROM staff
@@ -330,6 +389,9 @@ router.post("/", requireAdmin, async (req, res) => {
 			return res.status(409).send("This user account is already linked to a staff profile.");
 		}
 
+		/*
+			staffNumber must also be unique across staff records.
+		*/
 		const [numberRows] = await conn.query(
 			`SELECT staffID
 			 FROM staff
@@ -344,8 +406,10 @@ router.post("/", requireAdmin, async (req, res) => {
 		}
 
 		/*
-			Insert the main staff row first
-			This is for getting the new staffID before role rows get inserted
+			Insert the main staff row first.
+
+			We need the new staffID generated by this insert before
+			we can insert the related staff_role rows.
 		*/
 		const [staffInsert] = await conn.query(
 			`
@@ -358,8 +422,10 @@ router.post("/", requireAdmin, async (req, res) => {
 		const newStaffID = staffInsert.insertId;
 
 		/*
-			Insert one row per selected roleKey
-			This is what makes staff capabilities many-to-many now
+			Insert one row per selected roleKey.
+
+			This is what makes the staff-to-role relationship
+			many-to-many in the new schema.
 		*/
 		for (const roleKey of roleKeys) {
 			await conn.query(
@@ -372,8 +438,8 @@ router.post("/", requireAdmin, async (req, res) => {
 		}
 
 		/*
-			Update the linked user account type
-			This marks the account as STAFF in the website identity sense
+			Update the linked customer account so its website identity
+			is now marked as STAFF.
 		*/
 		await conn.query(
 			`
@@ -402,12 +468,13 @@ router.post("/", requireAdmin, async (req, res) => {
 /*
 	GET /api/staff/users
 
-	Returns user accounts for the admin linking step
+	Return customer accounts that the admin can choose from during
+	the staff-linking flow.
 
 	This helps the frontend show:
-	- who exists
-	- who is already linked
-	- some profile basics for selecting the right account
+	- which users exist
+	- which ones are already linked to staff
+	- basic profile/account info for choosing the right person
 */
 router.get("/users", requireAdmin, async (req, res) => {
 	try {

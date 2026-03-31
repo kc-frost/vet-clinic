@@ -1,49 +1,94 @@
-// RequireAdmin.tsx
-// React component used to protect routes that require
-// administrator privileges.
-
 import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { getCurrentUser, type AuthUser } from "../../api/auth";
 
 export default function RequireAdmin() {
-  // Holds the currently authenticated user
-  const [user, setUser] = useState<AuthUser | null>(null);
-  // Indicates whether the authentication check is still running
-  const [loading, setLoading] = useState(true);
-  // Tracks whether the user is authorized to access the route
-  const [authorized, setAuthorized] = useState(false);
+	/*
+		user stores the authenticated user object returned by /auth/me.
+		If this stays null after loading, we treat the visitor as not logged in.
+	*/
+	const [user, setUser] = useState<AuthUser | null>(null);
 
-  useEffect(() => {
-    // Function that checks if the logged in user is an admin
-    async function checkAdmin() {
-      try {
-        // Request the currently logged in user from the backend
-        const me = await getCurrentUser();
-        setUser(me);
-        // Verify the user has admin privileges
-        setAuthorized(me.isAdmin);
-      } catch {
-        // If an error occurs, the user is not authorized
-        setAuthorized(false);
-      } finally {
-        // Authentication check is complete
-        setLoading(false);
-      }
-    }
+	/*
+		loading keeps this guard from redirecting too early before the
+		auth check request has finished.
+	*/
+	const [loading, setLoading] = useState(true);
 
-    checkAdmin();
-  }, []);
-  // While loading, render nothing
-  if (loading) return <div>Loading...</div>;
+	/*
+		authorized stores whether the logged-in user passed the admin check.
+		This lets the component separately track login state and permission state.
+	*/
+	const [authorized, setAuthorized] = useState(false);
 
-  if (!user) {
-    return <Navigate to="/register" replace />;
-  }
-  // If the user is not authorized redirect to login
-  if (!authorized) {
-    return <Navigate to="/" replace />;
-  }
-  // If authorized, render the protected route
-  return <Outlet context={user} />;
+	useEffect(() => {
+		async function checkAdmin() {
+			try {
+				/*
+					Ask the backend who is currently logged in based on the
+					existing session cookie.
+				*/
+				const me = await getCurrentUser();
+
+				/*
+					Save the returned user object so this route guard knows
+					the visitor is authenticated.
+				*/
+				setUser(me);
+
+				/*
+					Only admins should be allowed through this guard.
+				*/
+				setAuthorized(me.isAdmin);
+			} catch {
+				/*
+					If the request fails, treat the visitor as not authorized.
+					This usually means they are not logged in or the session expired.
+				*/
+				setAuthorized(false);
+			} finally {
+				/*
+					The auth check is done whether it succeeded or failed,
+					so stop showing the loading state.
+				*/
+				setLoading(false);
+			}
+		}
+
+		/*
+			Run the admin check once when this route guard first mounts.
+		*/
+		checkAdmin();
+	}, []);
+
+	/*
+		While the current-user request is still in flight, render a small
+		loading state instead of redirecting too early.
+	*/
+	if (loading) return <div>Loading...</div>;
+
+	/*
+		If no authenticated user object was loaded, send the visitor
+		to the login page.
+	*/
+	if (!user) {
+		return <Navigate to="/login" replace />;
+	}
+
+	/*
+		If the user is logged in but is not an admin, block access and
+		send them back to the public home page.
+	*/
+	if (!authorized) {
+		return <Navigate to="/" replace />;
+	}
+
+	/*
+		The user is authenticated and is an admin, so render the nested
+		protected admin route content.
+
+		Pass the user through Outlet context so child admin pages can
+		read the authenticated admin info if needed.
+	*/
+	return <Outlet context={user} />;
 }

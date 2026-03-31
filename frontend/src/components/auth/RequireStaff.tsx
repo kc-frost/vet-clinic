@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { getCurrentUser, type AuthUser } from "../../api/auth";
 
-export default function RequireAuth() {
+export default function RequireStaff() {
 	/*
 		user stores the current authenticated user returned by /auth/me.
 	*/
@@ -10,30 +10,29 @@ export default function RequireAuth() {
 
 	/*
 		loading prevents redirect logic from running before the
-		auth check finishes.
+		staff check finishes.
 	*/
 	const [loading, setLoading] = useState(true);
 
 	/*
-		authorized tracks whether the current visitor is allowed
-		through this protected route.
+		authorized tracks whether the logged-in user is actually staff.
 	*/
 	const [authorized, setAuthorized] = useState(false);
 
 	useEffect(() => {
-		async function checkAuth() {
+		async function checkStaff() {
 			try {
 				/*
-					Ask the backend who is currently logged in based on
-					the existing session cookie.
+					Ask the backend who is currently logged in, then
+					check whether that user has the staff role.
 				*/
 				const me = await getCurrentUser();
 
 				setUser(me);
-				setAuthorized(true);
+				setAuthorized(me.isStaff);
 			} catch {
 				/*
-					If the request fails, treat the visitor as not authenticated.
+					If the request fails, treat the visitor as not authorized.
 				*/
 				setAuthorized(false);
 			} finally {
@@ -41,21 +40,29 @@ export default function RequireAuth() {
 			}
 		}
 
-		checkAuth();
+		checkStaff();
 	}, []);
 
 	if (loading) return <div>Loading...</div>;
 
 	/*
-		If the user is not authenticated, send them to the login page.
+		If nobody is logged in, send the visitor to the login page.
 	*/
-	if (!authorized) {
+	if (!user) {
 		return <Navigate to="/login" replace />;
 	}
 
 	/*
-		The user passed the auth check, so render the protected route
-		and pass the user through Outlet context.
+		If the user is logged in but is not staff, block access
+		and send them back to the home page.
+	*/
+	if (!authorized) {
+		return <Navigate to="/" replace />;
+	}
+
+	/*
+		The user passed the staff check, so render the protected
+		staff route and pass the user through Outlet context.
 	*/
 	return <Outlet context={user} />;
 }

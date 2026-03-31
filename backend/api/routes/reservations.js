@@ -1,22 +1,23 @@
 import express from "express";
 import { pool } from "../db.js";
+import { requireAuth } from "../lib/authMiddleware.js";
 
 const router = express.Router();
 
-// clinic hours expressed in minutes so time math stays consistent
-// open is 9:00am and close is 5:00pm
-// slots are generated on a 15 minute grid
+/*
+	Store clinic hours as minutes since midnight so all scheduling
+	calculations use one consistent unit.
+*/
 const OPEN_MINUTES = 9 * 60;
 const CLOSE_MINUTES = 17 * 60;
 const SLOT_STEP_MINUTES = 15;
 
-// scheduling rules per appointment reason
-// reasonKey matches what the frontend sends (or gets normalized to it)
-// staffRole is used to pick staff
-// roomType is used to pick rooms
-// nonConsumables are capacity-based (no stock decrement, just need capacity available)
-// consumables are stock-based (inventory.quantity is decremented on booking)
-
+/*
+	These are the scheduling rules for each appointment reason.
+	Each rule says how long the appointment is, what staff roles
+	are needed, what type of room is needed, and what inventory
+	is required.
+*/
 const REASON_RULES = {
 	WELLNESS_EXAM: {
 		reasonKey: "WELLNESS_EXAM",
@@ -173,6 +174,10 @@ const REASON_RULES = {
 	},
 };
 
+/*
+	Allow more forgiving input from the frontend by mapping alternate
+	reason spellings to the single canonical rule key used here.
+*/
 const REASON_ALIASES = {
 	wellness_exam: "WELLNESS_EXAM",
 	rabies_vaccination: "RABIES_VACCINATION",
@@ -189,129 +194,176 @@ const REASON_ALIASES = {
 };
 
 function normalizeReasonKey(raw) {
-	// normalize to a canonical rule key
-	// 1) trim
-	// 2) try direct match in REASON_RULES
-	// 3) try alias map
-	// 4) fallback to uppercase string
+	/*
+		Normalize any incoming reason key into the exact canonical
+		key used inside REASON_RULES.
+	*/
 	if (!raw) return "";
+
 	const key = String(raw).trim();
 	if (!key) return "";
+
 	const upper = key.toUpperCase();
 	if (REASON_RULES[upper]) return upper;
+
 	const lower = key.toLowerCase();
 	if (REASON_ALIASES[lower]) return REASON_ALIASES[lower];
+
 	return upper;
 }
 
 function getRule(reasonKeyRaw) {
-	// returns the rule object for a reasonKey, or null if no match
+	/*
+		Return the matching scheduling rule for the given reason,
+		or null if there is no supported rule.
+	*/
 	const key = normalizeReasonKey(reasonKeyRaw);
 	return REASON_RULES[key] || null;
 }
 
 function pad2(n) {
-	// used for formatting dates/times so "9" becomes "09"
+	/*
+		Pad one-digit date or time numbers so values like 9 become 09.
+	*/
 	return String(n).padStart(2, "0");
 }
 
 function isValidDateOnly(dateStr) {
-	// strict YYYY-MM-DD
+	/*
+		Require strict YYYY-MM-DD format for date-only values.
+	*/
 	return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
 }
 
 function isValidTimeOnly(timeStr) {
-	// strict HH:MM
+	/*
+		Require strict HH:MM format for time-only values.
+	*/
 	return /^\d{2}:\d{2}$/.test(timeStr);
 }
 
 function timeStrToMinutes(timeStr) {
-	// "HH:MM" -> minutes since midnight
+	/*
+		Convert a time like HH:MM into minutes since midnight so
+		time math can be done numerically.
+	*/
 	const [hStr, mStr] = timeStr.split(":");
 	const h = Number(hStr);
 	const m = Number(mStr);
+
 	if (!Number.isFinite(h) || !Number.isFinite(m)) return NaN;
 	return h * 60 + m;
 }
 
 function minutesToTimeStr(totalMinutes) {
-	// minutes since midnight -> "HH:MM"
+	/*
+		Convert minutes since midnight back into HH:MM string form.
+	*/
 	const h = Math.floor(totalMinutes / 60);
 	const m = totalMinutes % 60;
 	return `${pad2(h)}:${pad2(m)}`;
 }
 
 function formatSqlDateTime(dateStr, timeStr) {
-	// mysql datetime format "YYYY-MM-DD HH:MM:SS"
+	/*
+		Build the MySQL DATETIME string format used by the database.
+	*/
 	return `${dateStr} ${timeStr}:00`;
 }
 
 function parseSlotId(slotId) {
-	// expected format: slot_YYYY-MM-DD_HHMM_HHMM
-	// only date and startTime are needed for booking
+	/*
+		Read a generated slot ID and pull out just the appointment
+		date and start time needed for booking.
+	*/
 	if (!slotId) return null;
+
 	const str = String(slotId);
 	const parts = str.split("_");
 	if (parts.length < 4) return null;
+
 	const date = parts[1];
-  	const startHHMM = parts[2];
+	const startHHMM = parts[2];
+
 	if (!isValidDateOnly(date)) return null;
 	if (!/^\d{4}$/.test(startHHMM)) return null;
+
 	const startTime = `${startHHMM.slice(0, 2)}:${startHHMM.slice(2, 4)}`;
 	if (!isValidTimeOnly(startTime)) return null;
+
 	return { date, startTime };
 }
 
 function addDays(dateStr, days) {
-	// dateStr is YYYY-MM-DD (local time)
+	/*
+		Add a number of days to a YYYY-MM-DD string and return
+		the resulting YYYY-MM-DD date.
+	*/
 	const [y, m, d] = dateStr.split("-").map((v) => Number(v));
 	const dt = new Date(y, m - 1, d);
 	dt.setDate(dt.getDate() + days);
+
 	return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
 }
 
 function getTodayDateStr() {
-	// today as YYYY-MM-DD (local)
+	/*
+		Get today's local date in YYYY-MM-DD format.
+	*/
 	const now = new Date();
 	return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
 }
 
 function getNowMinutesOfDay() {
-	// minutes since midnight (local)
+	/*
+		Get the current local time as minutes since midnight.
+	*/
 	const now = new Date();
 	return now.getHours() * 60 + now.getMinutes();
 }
 
 function minutesOverlap(aStart, aEnd, bStart, bEnd) {
-	// overlap check for [start, end) intervals
+	/*
+		Check whether two [start, end) minute ranges overlap.
+	*/
 	return aStart < bEnd && bStart < aEnd;
 }
 
 function clampInt(value, min, max, fallback) {
-	// parse and clamp query values like days
+	/*
+		Parse an incoming value as an integer and clamp it into the
+		allowed range. If parsing fails, use the fallback.
+	*/
 	const n = Number(value);
 	if (!Number.isFinite(n)) return fallback;
+
 	return Math.max(min, Math.min(max, Math.trunc(n)));
 }
 
 function buildSlotsForDay(dateStr, durationMinutes) {
-	// generate candidate slot start times for a single day
-	// only include starts where start + duration <= close time
+	/*
+		Generate every valid appointment start time for a day,
+		only keeping starts whose full duration fits before close.
+	*/
 	const slots = [];
+
 	for (let startMin = OPEN_MINUTES; startMin + durationMinutes <= CLOSE_MINUTES; startMin += SLOT_STEP_MINUTES) {
 		slots.push({ date: dateStr, startMin });
 	}
+
 	return slots;
 }
 
 function sqlDateTimeToDate(value) {
-	// mysql may return a Date object or a string depending on config
+	/*
+		Convert a database DATETIME value into a JavaScript Date
+		whether MySQL returned it as a Date or as a string.
+	*/
 	if (value instanceof Date) return value;
 
 	const str = String(value || "");
 	if (!str) return new Date(NaN);
 
-	// mysql DATETIME often looks like "YYYY-MM-DD HH:mm:ss"
 	if (/^\d{4}-\d{2}-\d{2} /.test(str)) {
 		return new Date(str.replace(" ", "T"));
 	}
@@ -320,24 +372,30 @@ function sqlDateTimeToDate(value) {
 }
 
 function parseSqlDateTimeToMinutes(sqlDateTime) {
-	// datetime -> minutes since midnight (local)
+	/*
+		Convert a SQL DATETIME value into minutes since midnight.
+	*/
 	const dt = sqlDateTimeToDate(sqlDateTime);
+
 	if (!Number.isNaN(dt.getTime())) {
 		return dt.getHours() * 60 + dt.getMinutes();
 	}
 
-	// fallback parse if Date parsing fails
 	const timePart = String(sqlDateTime || "").split(" ")[1] || "";
 	const pieces = timePart.split(":");
 	const hh = Number(pieces[0]);
 	const mm = Number(pieces[1]);
+
 	if (!Number.isFinite(hh) || !Number.isFinite(mm)) return 0;
 	return hh * 60 + mm;
 }
 
 function getDateOnly(sqlDateTime) {
-	// datetime -> "YYYY-MM-DD"
+	/*
+		Pull just the YYYY-MM-DD date portion out of a SQL DATETIME value.
+	*/
 	const dt = sqlDateTimeToDate(sqlDateTime);
+
 	if (!Number.isNaN(dt.getTime())) {
 		return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
 	}
@@ -346,9 +404,12 @@ function getDateOnly(sqlDateTime) {
 }
 
 async function withTransaction(workFn) {
-	// runs workFn(conn) inside a mysql transaction
-	// commit on success, rollback on error, always release connection
+	/*
+		Run the provided database work inside one transaction so all
+		changes either succeed together or roll back together.
+	*/
 	const conn = await pool.getConnection();
+
 	try {
 		await conn.beginTransaction();
 		const result = await workFn(conn);
@@ -358,7 +419,10 @@ async function withTransaction(workFn) {
 		try {
 			await conn.rollback();
 		} catch (_) {
-			// if rollback fails, there is nothing else to do here
+			/*
+				If rollback itself fails, there is nothing more this
+				helper can safely do here.
+			*/
 		}
 		throw err;
 	} finally {
@@ -367,36 +431,44 @@ async function withTransaction(workFn) {
 }
 
 async function fetchInventoryByKeys(conn, itemKeys, isConsumable) {
-	// fetch inventory rows by itemKey list and consumable flag
-	// isConsumable is stored as 1/0 in mysql
+	/*
+		Load inventory rows for a list of item keys, filtered by whether
+		they are consumable or non-consumable.
+	*/
 	if (!itemKeys.length) return [];
+
 	const placeholders = itemKeys.map(() => "?").join(",");
 	const sql = `select itemID, itemKey, isConsumable, quantity from inventory where itemKey in (${placeholders}) and isConsumable = ?`;
 	const [rows] = await conn.execute(sql, [...itemKeys, isConsumable ? 1 : 0]);
+
 	return rows;
 }
 
 function buildItemKeyToRowMap(rows) {
-	// build map: itemKey -> row for fast lookups
+	/*
+		Build a fast lookup map so itemKey can directly return
+		its matching inventory row.
+	*/
 	const map = new Map();
+
 	for (const row of rows) {
 		map.set(row.itemKey, row);
 	}
+
 	return map;
 }
 
 function validateRequiredInventory(rule, consumableRows, nonConsumableRows) {
-	// quick pre-check for "do required items exist" and "is stock/capacity non-zero"
-	// if required inventory is missing or empty, no slots are bookable
-
-	// consumables check (stock based)
+	/*
+		Before generating slots, make sure every required inventory item
+		exists and currently has enough stock or capacity.
+	*/
 	for (const need of rule.consumables) {
 		const row = consumableRows.get(need.itemKey);
 		if (!row) return { ok: false, error: `missing consumable inventory itemKey ${need.itemKey}` };
 		if (Number(row.quantity) < need.qty) return { ok: false, error: `not enough stock for ${need.itemKey}` };
 	}
 
-	// non-consumables check (capacity based)
 	for (const key of rule.nonConsumables) {
 		const row = nonConsumableRows.get(key);
 		if (!row) return { ok: false, error: `missing non-consumable inventory itemKey ${key}` };
@@ -406,116 +478,171 @@ function validateRequiredInventory(rule, consumableRows, nonConsumableRows) {
 	return { ok: true, error: "" };
 }
 
-
 function parseTimeValueToMinutes(value) {
-	// mysql TIME may come back as HH:MM:SS or HH:MM
+	/*
+		Convert a MySQL TIME value like HH:MM or HH:MM:SS into
+		minutes since midnight.
+	*/
 	const raw = String(value || "").trim();
 	const match = raw.match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+
 	if (!match) return NaN;
 	return Number(match[1]) * 60 + Number(match[2]);
 }
 
 function getDayOfWeekFromDateStr(dateStr) {
-	// js getDay is 0=Sunday ... 6=Saturday
-	// backend availability uses 1=Monday ... 7=Sunday
+	/*
+		Convert a YYYY-MM-DD date into the backend day numbering
+		where Monday is 1 and Sunday is 7.
+	*/
 	const [y, m, d] = String(dateStr).split("-").map((v) => Number(v));
 	const dt = new Date(y, m - 1, d);
 	const jsDay = dt.getDay();
+
 	return jsDay === 0 ? 7 : jsDay;
 }
 
 function expandRequiredStaffSlots(rule) {
-	// one staff member can only fill one required slot on one appointment
+	/*
+		Expand a rule like qty: 2 into two separate required staff slots
+		so one staff member cannot fill multiple required positions.
+	*/
 	const slots = [];
+
 	for (const need of rule.requiredStaff || []) {
 		const qty = Number(need.qty || 0);
 		for (let i = 0; i < qty; i++) {
 			slots.push({ roleKey: need.roleKey, slotIndex: i });
 		}
 	}
+
 	return slots;
 }
 
 function shuffleArray(values) {
-	// this is for random-enough distribution without building every full combination
+	/*
+		Shuffle candidates so staff assignment is not always biased
+		toward the same earliest IDs.
+	*/
 	const copy = [...values];
+
 	for (let i = copy.length - 1; i > 0; i--) {
 		const j = Math.floor(Math.random() * (i + 1));
 		[copy[i], copy[j]] = [copy[j], copy[i]];
 	}
+
 	return copy;
 }
 
 function buildStaffRoleMap(roleRows) {
-	// map roleKey -> [staffID]
+	/*
+		Build a map from roleKey to all staff IDs that can fill that role.
+	*/
 	const map = new Map();
+
 	for (const row of roleRows) {
 		const roleKey = String(row.roleKey || "");
 		const staffID = Number(row.staffID);
+
 		if (!roleKey || !Number.isFinite(staffID)) continue;
 		if (!map.has(roleKey)) map.set(roleKey, []);
 		map.get(roleKey).push(staffID);
 	}
+
 	return map;
 }
 
 function buildStaffAvailabilityMap(rows) {
-	// map staffID -> map(dayOfWeek -> { startMin, endMin })
+	/*
+		Build a map of each staff member's weekly availability blocks
+		organized by day of week.
+	*/
 	const map = new Map();
+
 	for (const row of rows) {
 		const staffID = Number(row.staffID);
 		const dayOfWeek = Number(row.dayOfWeek);
 		const startMin = parseTimeValueToMinutes(row.startTime);
 		const endMin = parseTimeValueToMinutes(row.endTime);
+
 		if (!Number.isFinite(staffID) || !Number.isFinite(dayOfWeek)) continue;
 		if (!Number.isFinite(startMin) || !Number.isFinite(endMin)) continue;
+
 		if (!map.has(staffID)) map.set(staffID, new Map());
 		map.get(staffID).set(dayOfWeek, { startMin, endMin });
 	}
+
 	return map;
 }
 
 function buildAppointmentStaffMap(rows) {
-	// map appointmentID -> [staffID]
+	/*
+		Build a map from appointmentID to the staff members already
+		assigned to that appointment.
+	*/
 	const map = new Map();
+
 	for (const row of rows) {
 		const appointmentID = Number(row.appointmentID);
 		const staffID = Number(row.staffID);
+
 		if (!Number.isFinite(appointmentID) || !Number.isFinite(staffID)) continue;
 		if (!map.has(appointmentID)) map.set(appointmentID, []);
 		map.get(appointmentID).push(staffID);
 	}
+
 	return map;
 }
 
 function staffHasWeeklyAvailability(staffAvailabilityById, staffID, dayOfWeek, startMin, endMin) {
-	// staff must cover the full appointment window
+	/*
+		A staff member is only usable if their saved weekly availability
+		covers the full requested appointment time window.
+	*/
 	const byDay = staffAvailabilityById.get(staffID);
 	if (!byDay) return false;
+
 	const block = byDay.get(dayOfWeek);
 	if (!block) return false;
+
 	return block.startMin <= startMin && block.endMin >= endMin;
 }
 
 function appointmentHasStaffOverlap(appt, assignedStaffIds, staffID, startMin, endMin) {
-	// assignedStaffIds comes from appointment_staff rows for that appointment
+	/*
+		Check whether one staff member is already assigned to another
+		overlapping appointment.
+	*/
 	if (!assignedStaffIds.includes(staffID)) return false;
+
 	const apptStartMin = parseSqlDateTimeToMinutes(appt.date);
 	const apptEndMin = apptStartMin + Number(appt.durationMinutes || 0);
+
 	return minutesOverlap(apptStartMin, apptEndMin, startMin, endMin);
 }
 
 function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, dayOfWeek, dayAppts, appointmentStaffByAppt, startMin, endMin) {
-	// this returns one valid assignment set or null
-	// shuffle first, then backtrack into the first valid full set
+	/*
+		Try to find one complete valid set of staff assignments for
+		the requested appointment window.
+	*/
 	const requiredSlots = expandRequiredStaffSlots(rule);
 	if (!requiredSlots.length) return null;
 
 	const preparedSlots = requiredSlots.map((slot, index) => {
 		const rawCandidates = roleToStaffIds.get(slot.roleKey) || [];
+
 		const filteredCandidates = rawCandidates.filter((staffID) => {
+			/*
+				Reject staff who are not available for the full weekly
+				time block on this day.
+			*/
 			if (!staffHasWeeklyAvailability(staffAvailabilityById, staffID, dayOfWeek, startMin, endMin)) return false;
 
+			/*
+				Reject staff who are already assigned to an overlapping
+				appointment on that same day.
+			*/
 			for (const appt of dayAppts) {
 				const assignedStaffIds = appointmentStaffByAppt.get(Number(appt.appointmentID)) || [];
 				if (appointmentHasStaffOverlap(appt, assignedStaffIds, staffID, startMin, endMin)) return false;
@@ -532,6 +659,10 @@ function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, 
 		};
 	});
 
+	/*
+		Assign the hardest slots first so the backtracking search
+		fails sooner when no valid combination exists.
+	*/
 	preparedSlots.sort((a, b) => {
 		if (a.candidates.length !== b.candidates.length) return a.candidates.length - b.candidates.length;
 		return a.randomTie - b.randomTie;
@@ -542,15 +673,25 @@ function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, 
 	const usedStaffIds = new Set();
 
 	function assign(slotIndex) {
+		/*
+			If all required slots were filled, return the full assignment.
+		*/
 		if (slotIndex >= preparedSlots.length) return [];
 
 		const slot = preparedSlots[slotIndex];
+
 		for (const staffID of slot.candidates) {
+			/*
+				Do not allow one person to fill multiple required slots
+				on the same appointment.
+			*/
 			if (usedStaffIds.has(staffID)) continue;
 
 			usedStaffIds.add(staffID);
 			const rest = assign(slotIndex + 1);
+
 			if (rest) return [{ staffID, assignedRoleKey: slot.roleKey }, ...rest];
+
 			usedStaffIds.delete(staffID);
 		}
 
@@ -561,67 +702,91 @@ function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, 
 }
 
 function findFreeResourceId(resourceIds, busyById, startBucket, bucketCount) {
-	// used for staff and rooms
-	// returns first id that is free across the full bucket window
+	/*
+		Find the first resource whose entire bucket window is free.
+		This is used for rooms and any similar bucket-tracked resource.
+	*/
 	for (const id of resourceIds) {
 		const busy = busyById.get(id);
 		if (!busy) continue;
+
 		let ok = true;
+
 		for (let i = 0; i < bucketCount; i++) {
 			if (busy[startBucket + i]) {
 				ok = false;
 				break;
 			}
 		}
+
 		if (ok) return id;
 	}
+
 	return null;
 }
 
 function bucketIndexFromMinutes(minutes) {
-	// minutes since midnight -> 15-min bucket index starting at OPEN_MINUTES
+	/*
+		Convert a minute-of-day value into its 15-minute bucket index
+		relative to clinic opening time.
+	*/
 	return Math.floor((minutes - OPEN_MINUTES) / SLOT_STEP_MINUTES);
 }
 
 function bucketCountFromDuration(durationMinutes) {
-	// duration -> number of 15-min buckets (round up)
+	/*
+		Convert an appointment duration into the number of 15-minute
+		buckets it occupies, rounding up when needed.
+	*/
 	return Math.ceil(durationMinutes / SLOT_STEP_MINUTES);
 }
 
 function isStartAligned(minutes) {
-	// start times must align to the slot grid
+	/*
+		Only allow appointment starts exactly on the 15-minute grid.
+	*/
 	return minutes % SLOT_STEP_MINUTES === 0;
 }
 
 function getUserIdFromSession(req) {
-	// session shape could be { user: { userID } } or { userID } depending on auth implementation
+	/*
+		Read the authenticated user ID from whichever session shape
+		the current auth implementation is using.
+	*/
 	const sessionUser = req.session?.user || null;
 	const raw = sessionUser?.userID ?? req.session?.userID ?? null;
+
 	if (raw === null || raw === undefined || raw === "") return null;
+
 	const n = Number(raw);
 	if (!Number.isFinite(n) || n <= 0) return null;
+
 	return n;
 }
 
-function resolveUserIdFromRequest(req, fallback) {
-	// prefer session userID if present, fallback to query param for local/dev use
-	const fromSession = getUserIdFromSession(req);
-	if (fromSession) return fromSession;
-
-	const n = Number(fallback);
-	if (!Number.isFinite(n) || n <= 0) return null;
-	return n;
+function resolveUserIdFromRequest(req) {
+	/*
+		Only trust the logged-in session user ID for reservation routes.
+	*/
+	return getUserIdFromSession(req);
 }
 
-// fetch current user profile fields for the reservation wizard autofill
-router.get("/profile", async (req, res) => {
+router.get("/profile", requireAuth, async (req, res) => {
 	try {
-		const userID = resolveUserIdFromRequest(req, req.query.userID);
+		/*
+			Use the authenticated session user only for profile autofill.
+		*/
+		const userID = resolveUserIdFromRequest(req);
+
 		if (!userID) {
 			res.status(400).json({ error: "missing userID" });
 			return;
 		}
 
+		/*
+			Load the current user's saved profile fields so the reservation
+			wizard can prefill owner details.
+		*/
 		const [rows] = await pool.execute(
 			`select userID, email, legalFirstName, legalLastName, phone, addressLine1, city, state, zipCode
 			 from customer
@@ -652,15 +817,22 @@ router.get("/profile", async (req, res) => {
 	}
 });
 
-// fetch saved pets for the reservation wizard dropdown
-router.get("/pets", async (req, res) => {
+router.get("/pets", requireAuth, async (req, res) => {
 	try {
-		const userID = resolveUserIdFromRequest(req, req.query.userID);
+		/*
+			Use the authenticated session user only when loading pets
+			for the reservation wizard dropdown.
+		*/
+		const userID = resolveUserIdFromRequest(req);
+
 		if (!userID) {
 			res.status(400).json({ error: "missing userID" });
 			return;
 		}
 
+		/*
+			Load all saved pets for this user in alphabetical order.
+		*/
 		const [rows] = await pool.execute(
 			`select
 				petID,
@@ -710,11 +882,12 @@ router.get("/pets", async (req, res) => {
 	}
 });
 
-// updates one existing pet profile for the logged in user
-// used by the user profile page for editable mini pet profile cards
-router.patch("/pets/:petID", async (req, res) => {
+router.patch("/pets/:petID", requireAuth, async (req, res) => {
 	try {
-		const userID = resolveUserIdFromRequest(req, req.query.userID);
+		/*
+			Only allow the logged-in user to update one of their own pets.
+		*/
+		const userID = resolveUserIdFromRequest(req);
 		const petID = Number(req.params.petID);
 
 		if (!userID) {
@@ -729,6 +902,9 @@ router.patch("/pets/:petID", async (req, res) => {
 
 		const body = req.body || {};
 
+		/*
+			Normalize all incoming editable pet fields before saving.
+		*/
 		const petName = String(body.petName || "");
 		const petType = String(body.petType || "");
 		const breed = String(body.breed || "");
@@ -744,6 +920,9 @@ router.patch("/pets/:petID", async (req, res) => {
 		const vaccinationsUpToDate = String(body.vaccinationsUpToDate || "");
 		const heartwormPreventionCurrent = String(body.heartwormPreventionCurrent || "");
 
+		/*
+			Update the pet only if it belongs to the currently logged-in user.
+		*/
 		const [result] = await pool.execute(
 			`update pet set
 				petName = ?,
@@ -780,6 +959,10 @@ router.patch("/pets/:petID", async (req, res) => {
 			return;
 		}
 
+		/*
+			Re-read the updated pet so the response matches the exact
+			current database state.
+		*/
 		const [rows] = await pool.execute(
 			`select
 				petID,
@@ -831,11 +1014,11 @@ router.patch("/pets/:petID", async (req, res) => {
 	}
 });
 
-
-
-// returns availability slots for a reasonKey
-router.get("/availability", async (req, res) => {
+router.get("/availability", requireAuth, async (req, res) => {
 	try {
+		/*
+			Resolve the appointment rule from the incoming reason key.
+		*/
 		const reasonKeyRaw = req.query.reasonKey;
 		const rule = getRule(reasonKeyRaw);
 
@@ -844,13 +1027,22 @@ router.get("/availability", async (req, res) => {
 			return;
 		}
 
+		/*
+			If a petID was provided, validate it so pet double-booking
+			can also be checked during slot generation.
+		*/
 		const bookingPetIDRaw = req.query.petID;
 		const bookingPetID = bookingPetIDRaw === null || bookingPetIDRaw === undefined || bookingPetIDRaw === "" ? null : Number(bookingPetIDRaw);
+
 		if (bookingPetIDRaw !== null && bookingPetIDRaw !== undefined && bookingPetIDRaw !== "" && (!Number.isFinite(bookingPetID) || bookingPetID <= 0)) {
 			res.status(400).json({ error: "invalid petID" });
 			return;
 		}
 
+		/*
+			Use the requested date range if present, otherwise default
+			to a forward-looking window starting today.
+		*/
 		const days = clampInt(req.query.days, 1, 120, 30);
 		let startDate = String(req.query.startDate || "");
 		let endDate = String(req.query.endDate || "");
@@ -866,10 +1058,18 @@ router.get("/availability", async (req, res) => {
 		}
 
 		const conn = await pool.getConnection();
+
 		try {
+			/*
+				Load the required inventory keys for this appointment type.
+			*/
 			const requiredConsumableKeys = rule.consumables.map((c) => c.itemKey);
 			const requiredNonConsumableKeys = rule.nonConsumables;
 
+			/*
+				Load all staff role rows and organize them by role so we know
+				who could possibly fill each required appointment role.
+			*/
 			const [staffRoleRows] = await conn.execute(
 				`select staffID, roleKey
 				 from staff_role
@@ -877,36 +1077,56 @@ router.get("/availability", async (req, res) => {
 			);
 			const roleToStaffIds = buildStaffRoleMap(staffRoleRows);
 
+			/*
+				Load the saved weekly availability blocks for all staff.
+			*/
 			const [staffAvailabilityRows] = await conn.execute(
 				`select staffID, dayOfWeek, startTime, endTime
 				 from staff_availability`
 			);
 			const staffAvailabilityById = buildStaffAvailabilityMap(staffAvailabilityRows);
 
+			/*
+				If even one required role has no matching staff at all,
+				then this appointment type currently has no possible slots.
+			*/
 			const requiredRoleKeys = [...new Set((rule.requiredStaff || []).map((need) => need.roleKey))];
 			if (requiredRoleKeys.some((roleKey) => !(roleToStaffIds.get(roleKey) || []).length)) {
 				res.json({ ok: true, reasonKey: rule.reasonKey, durationMinutes: rule.durationMinutes, timezone: "local", range: { startDate, days }, slots: [] });
 				return;
 			}
 
+			/*
+				Load all rooms of the needed type for this appointment rule.
+			*/
 			const [roomRows] = await conn.execute(
 				"select roomNumber from rooms where roomType = ? order by roomNumber asc",
 				[rule.roomType]
 			);
 			const roomNumbers = roomRows.map((r) => Number(r.roomNumber));
+
 			if (!roomNumbers.length) {
 				res.json({ ok: true, reasonKey: rule.reasonKey, durationMinutes: rule.durationMinutes, timezone: "local", range: { startDate, days }, slots: [] });
 				return;
 			}
 
+			/*
+				Load required consumable and non-consumable inventory rows
+				and reject slot generation if required items are missing.
+			*/
 			const consumableRows = buildItemKeyToRowMap(await fetchInventoryByKeys(conn, requiredConsumableKeys, true));
 			const nonConsumableRows = buildItemKeyToRowMap(await fetchInventoryByKeys(conn, requiredNonConsumableKeys, false));
 			const invCheck = validateRequiredInventory(rule, consumableRows, nonConsumableRows);
+
 			if (!invCheck.ok) {
 				res.json({ ok: true, reasonKey: rule.reasonKey, durationMinutes: rule.durationMinutes, timezone: "local", range: { startDate, days }, slots: [] });
 				return;
 			}
 
+			/*
+				Load all appointments that overlap the requested date range
+				so conflicts can be computed day by day.
+			*/
 			const rangeStart = `${startDate} 00:00:00`;
 			const endExclusive = addDays(endDate, 1);
 			const rangeEndExclusive = `${endExclusive} 00:00:00`;
@@ -918,8 +1138,13 @@ router.get("/availability", async (req, res) => {
 				[rangeStart, rangeEndExclusive]
 			);
 
+			/*
+				Load the staff assignments already attached to those
+				existing appointments.
+			*/
 			const appointmentIds = apptRows.map((row) => Number(row.appointmentID)).filter((id) => Number.isFinite(id));
 			let appointmentStaffRows = [];
+
 			if (appointmentIds.length) {
 				const placeholders = appointmentIds.map(() => "?").join(",");
 				const [rows] = await conn.execute(
@@ -930,9 +1155,15 @@ router.get("/availability", async (req, res) => {
 				);
 				appointmentStaffRows = rows;
 			}
+
 			const appointmentStaffByAppt = buildAppointmentStaffMap(appointmentStaffRows);
 
+			/*
+				Group appointments by their date-only value so each day can
+				be processed independently.
+			*/
 			const apptsByDate = new Map();
+
 			for (const row of apptRows) {
 				const dateOnly = getDateOnly(row.date);
 				if (!apptsByDate.has(dateOnly)) apptsByDate.set(dateOnly, []);
@@ -945,7 +1176,11 @@ router.get("/availability", async (req, res) => {
 			const nowMinutes = getNowMinutesOfDay();
 
 			let curDate = startDate;
+
 			while (curDate <= endDate) {
+				/*
+					Prepare all conflict tracking structures for this one day.
+				*/
 				const dayAppts = apptsByDate.get(curDate) || [];
 				const dayOfWeek = getDayOfWeekFromDateStr(curDate);
 
@@ -957,11 +1192,15 @@ router.get("/availability", async (req, res) => {
 				const equipBusyCount = new Map();
 				for (const key of requiredNonConsumableKeys) equipBusyCount.set(key, Array(64).fill(0));
 
+				/*
+					Mark buckets already occupied by existing appointments.
+				*/
 				for (const appt of dayAppts) {
 					const apptStartMin = parseSqlDateTimeToMinutes(appt.date);
 					const apptEndMin = apptStartMin + Number(appt.durationMinutes || 0);
 					const startClamped = Math.max(apptStartMin, OPEN_MINUTES);
 					const endClamped = Math.min(apptEndMin, CLOSE_MINUTES);
+
 					if (endClamped <= startClamped) continue;
 
 					const startBucket = bucketIndexFromMinutes(startClamped);
@@ -978,6 +1217,7 @@ router.get("/availability", async (req, res) => {
 
 					const apptRule = getRule(appt.reasonKey);
 					if (!apptRule) continue;
+
 					for (const equipKey of apptRule.nonConsumables || []) {
 						const arr = equipBusyCount.get(equipKey);
 						if (!arr) continue;
@@ -985,45 +1225,77 @@ router.get("/availability", async (req, res) => {
 					}
 				}
 
+				/*
+					Generate all possible starts for the day and then filter
+					them down by pet, room, equipment, and staff availability.
+				*/
 				const dayCandidates = buildSlotsForDay(curDate, rule.durationMinutes);
+
 				for (const c of dayCandidates) {
 					const startMin = c.startMin;
 					const startBucket = bucketIndexFromMinutes(startMin);
 
+					/*
+						Do not offer past times on the current day.
+					*/
 					if (curDate === today && startMin < nowMinutes) continue;
 
+					/*
+						If a pet was selected, reject any slot where that same pet
+						already has an overlapping appointment.
+					*/
 					if (petBusy) {
 						let petOk = true;
+
 						for (let i = 0; i < bucketCount; i++) {
 							if (petBusy[startBucket + i]) {
 								petOk = false;
 								break;
 							}
 						}
+
 						if (!petOk) continue;
 					}
 
+					/*
+						Reject the slot if no room stays free across the full
+						appointment bucket window.
+					*/
 					const freeRoomNumber = findFreeResourceId(roomNumbers, roomBusy, startBucket, bucketCount);
 					if (!freeRoomNumber) continue;
 
+					/*
+						Reject the slot if any required non-consumable item would
+						exceed its allowed capacity during this time window.
+					*/
 					let equipOk = true;
+
 					for (const equipKey of requiredNonConsumableKeys) {
 						const capRow = nonConsumableRows.get(equipKey);
 						const capacity = Number(capRow?.quantity || 0);
 						const usageArr = equipBusyCount.get(equipKey) || [];
+
 						for (let i = 0; i < bucketCount; i++) {
 							if ((usageArr[startBucket + i] || 0) >= capacity) {
 								equipOk = false;
 								break;
 							}
 						}
+
 						if (!equipOk) break;
 					}
+
 					if (!equipOk) continue;
 
+					/*
+						Try to find a full staff assignment for this slot.
+					*/
 					const staffAssignment = findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, dayOfWeek, dayAppts, appointmentStaffByAppt, startMin, startMin + rule.durationMinutes);
 					if (!staffAssignment) continue;
 
+					/*
+						Build the final slot object returned to the frontend.
+					*/
 					const startTime = minutesToTimeStr(startMin);
 					const endTime = minutesToTimeStr(startMin + rule.durationMinutes);
 					const slotId = `slot_${curDate}_${startTime.replace(":", "")}_${endTime.replace(":", "")}`;
@@ -1053,52 +1325,74 @@ router.get("/availability", async (req, res) => {
 	}
 });
 
-
 function pickFormData(body) {
-	// support either { formData: {...} } or a flattened payload
+	/*
+		Support either a flattened request body or a nested
+		{ formData: {...} } payload shape.
+	*/
 	if (body && typeof body.formData === "object" && body.formData) return body.formData;
 	return body || {};
 }
 
 function stringOrEmpty(v) {
-	// normalize null/undefined into "" so string ops dont crash
+	/*
+		Normalize nullish values into empty strings so string operations
+		do not crash later.
+	*/
 	if (v === null || v === undefined) return "";
 	return String(v);
 }
 
 function trimOrNull(v) {
-	// trim string and return null if empty
+	/*
+		Trim a value and return null if it ends up empty.
+	*/
 	const s = stringOrEmpty(v).trim();
 	return s ? s : null;
 }
 
 function requireField(value, fieldName, errors) {
-	// basic required field validation for form payloads
+	/*
+		Require a non-empty string field and record its field name
+		if it is missing or blank.
+	*/
 	const s = stringOrEmpty(value).trim();
 	if (!s) errors.push(fieldName);
 	return s;
 }
 
 function requireBoolean(value, fieldName, errors) {
-	// required boolean validation (must be true/false, not missing)
+	/*
+		Require a real boolean value rather than allowing missing
+		or ambiguous truthy/falsy input.
+	*/
 	if (value === true) return true;
 	if (value === false) return false;
+
 	errors.push(fieldName);
 	return false;
 }
 
 function toIntOrNull(value) {
-	// parse int but allow null for blank/missing
+	/*
+		Parse a whole number when present, but allow null for
+		missing or blank values.
+	*/
 	if (value === "" || value === null || value === undefined) return null;
+
 	const n = Number(value);
 	if (!Number.isFinite(n)) return null;
+
 	return Math.trunc(n);
 }
 
-async function resolveUserId(conn, body) {
-	// userID is the primary linker for customer
-	// email is stored as a snapshot field in appointment_form, not the join key
-	const raw = body?.userID;
+async function resolveUserId(conn, req) {
+	/*
+		Resolve and verify the logged-in user's userID against the database
+		before allowing booking or cancellation work.
+	*/
+	const raw = req?.session?.userID;
+
 	if (raw === null || raw === undefined || raw === "") return null;
 
 	const userID = Number(raw);
@@ -1110,9 +1404,11 @@ async function resolveUserId(conn, body) {
 	return userID;
 }
 
-
 async function selectAvailableStaffAssignment(conn, rule, appointmentDate, startSql, endSql) {
-	// this picks one full valid assignment set inside the transaction
+	/*
+		Inside the booking transaction, pick one full valid staff
+		assignment set for the requested appointment window.
+	*/
 	const dayOfWeek = getDayOfWeekFromDateStr(appointmentDate);
 	const startMin = parseSqlDateTimeToMinutes(startSql);
 	const endMin = parseSqlDateTimeToMinutes(endSql);
@@ -1132,6 +1428,10 @@ async function selectAvailableStaffAssignment(conn, rule, appointmentDate, start
 	);
 	const staffAvailabilityById = buildStaffAvailabilityMap(staffAvailabilityRows);
 
+	/*
+		Lock overlapping appointments so assignment stays safe even if
+		multiple booking attempts happen at the same time.
+	*/
 	const [apptRows] = await conn.execute(
 		`select appointmentID, date, durationMinutes
 		 from appointment
@@ -1143,6 +1443,7 @@ async function selectAvailableStaffAssignment(conn, rule, appointmentDate, start
 
 	const appointmentIds = apptRows.map((row) => Number(row.appointmentID)).filter((id) => Number.isFinite(id));
 	let appointmentStaffRows = [];
+
 	if (appointmentIds.length) {
 		const placeholders = appointmentIds.map(() => "?").join(",");
 		const [rows] = await conn.execute(
@@ -1154,13 +1455,16 @@ async function selectAvailableStaffAssignment(conn, rule, appointmentDate, start
 		);
 		appointmentStaffRows = rows;
 	}
+
 	const appointmentStaffByAppt = buildAppointmentStaffMap(appointmentStaffRows);
 
 	return findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, dayOfWeek, apptRows, appointmentStaffByAppt, startMin, endMin);
 }
 
 async function insertAppointmentStaffRows(conn, appointmentID, assignments) {
-	// one row per staff assignment on the appointment
+	/*
+		Store one row per staff member assigned to the appointment.
+	*/
 	for (const assignment of assignments) {
 		await conn.execute(
 			`insert into appointment_staff (appointmentID, staffID, assignedRoleKey)
@@ -1171,7 +1475,10 @@ async function insertAppointmentStaffRows(conn, appointmentID, assignments) {
 }
 
 async function selectAvailableRoom(conn, roomType, startSql, endSql) {
-	// select one room with no overlapping appointment
+	/*
+		Find one room of the needed type that has no overlapping
+		appointment during the requested time window.
+	*/
 	const [rows] = await conn.execute(
 		`select r.roomNumber
 		 from rooms r
@@ -1193,13 +1500,19 @@ async function selectAvailableRoom(conn, roomType, startSql, endSql) {
 }
 
 async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSql) {
-	// non-consumables are capacity-based
-	// capacity must not be exceeded in any 15-min bucket during the requested interval
+	/*
+		Check whether every required non-consumable item has enough
+		capacity for the full requested interval.
+	*/
 	if (!rule.nonConsumables.length) return { ok: true, error: "" };
 
-	// lock inventory rows so capacity can't change mid-booking
 	const neededKeys = rule.nonConsumables;
 	const placeholders = neededKeys.map(() => "?").join(",");
+
+	/*
+		Lock the needed inventory rows so capacity cannot change while
+		this booking transaction is still deciding.
+	*/
 	const [invRows] = await conn.execute(
 		`select itemID, itemKey, quantity from inventory
 		 where isConsumable = 0 and itemKey in (${placeholders})
@@ -1208,13 +1521,17 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 	);
 
 	const capMap = buildItemKeyToRowMap(invRows);
+
 	for (const key of neededKeys) {
 		const row = capMap.get(key);
 		if (!row) return { ok: false, error: `missing non-consumable inventory itemKey ${key}` };
 		if (Number(row.quantity) < 1) return { ok: false, error: `no capacity for ${key}` };
 	}
 
-	// lock overlapping appointments so usage counts stay consistent during this transaction
+	/*
+		Lock overlapping appointments so equipment usage counts stay
+		consistent during this same booking transaction.
+	*/
 	const [overlapRows] = await conn.execute(
 		`select reasonKey, date, durationMinutes from appointment
 		 where date < ? and date_add(date, interval durationMinutes minute) > ?
@@ -1222,13 +1539,16 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 		[endSql, startSql]
 	);
 
-	// build bucket windows only for the requested interval
 	const startDt = new Date(startSql.replace(" ", "T"));
 	const endDt = new Date(endSql.replace(" ", "T"));
 	const intervalMinutes = Math.round((endDt.getTime() - startDt.getTime()) / 60000);
 	const bucketCount = bucketCountFromDuration(intervalMinutes);
 
 	function bucketWindow(i) {
+		/*
+			Build the exact start and end time of one 15-minute bucket
+			inside the requested interval.
+		*/
 		const bStart = new Date(startDt.getTime() + i * SLOT_STEP_MINUTES * 60000);
 		const bEnd = new Date(bStart.getTime() + SLOT_STEP_MINUTES * 60000);
 		return { bStart, bEnd };
@@ -1241,6 +1561,7 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 			const { bStart, bEnd } = bucketWindow(i);
 
 			let used = 0;
+
 			for (const appt of overlapRows) {
 				const apptRule = getRule(appt.reasonKey);
 				if (!apptRule) continue;
@@ -1252,7 +1573,10 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 				if (bStart < apptEnd && apptStart < bEnd) used += 1;
 			}
 
-			// the new appointment would add +1 usage, so used must be < capacity for the full window
+			/*
+				The new appointment would add one more usage, so existing
+				usage must stay strictly below capacity in every bucket.
+			*/
 			if (used >= capacity) {
 				return { ok: false, error: `no capacity for ${equipKey} in that time window` };
 			}
@@ -1263,8 +1587,10 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 }
 
 async function reserveConsumables(conn, rule) {
-	// consumables are stock-based
-	// quantity is decremented inside the transaction and recorded for refund on cancel
+	/*
+		Reserve and decrement consumable stock inside the transaction
+		so double-booking the same stock cannot happen.
+	*/
 	if (!rule.consumables.length) return { ok: true, error: "", reserved: [] };
 
 	const itemKeys = rule.consumables.map((c) => c.itemKey);
@@ -1285,7 +1611,10 @@ async function reserveConsumables(conn, rule) {
 		if (Number(row.quantity) < need.qty) return { ok: false, error: `not enough stock for ${need.itemKey}`, reserved: [] };
 	}
 
-	// decrement stock
+	/*
+		Now that stock checks passed, decrement inventory for each
+		required consumable item.
+	*/
 	for (const need of rule.consumables) {
 		await conn.execute(
 			"update inventory set quantity = quantity - ? where itemKey = ? and isConsumable = 1",
@@ -1303,8 +1632,10 @@ async function reserveConsumables(conn, rule) {
 }
 
 async function insertAppointmentForm(conn, appointmentID, form) {
-	// snapshot of everything from the reservation wizard
-	// this stores the exact submitted info even if profiles change later
+	/*
+		Store a snapshot of the submitted reservation form so the exact
+		booking-time information is preserved even if profiles change later.
+	*/
 	const sql = `insert into appointment_form (
 		appointmentID,
 		legalFirstName,
@@ -1363,8 +1694,10 @@ async function insertAppointmentForm(conn, appointmentID, form) {
 }
 
 async function maybeFillCustomerProfileIfEmpty(conn, userID, form) {
-	// only fill customer profile fields if they are currently empty
-	// booking should not overwrite existing profile info
+	/*
+		Use booking form data to fill in missing customer profile fields,
+		but never overwrite profile fields that already have values.
+	*/
 	const [rows] = await conn.execute(
 		`select legalFirstName, legalLastName, phone, addressLine1, city, state, zipCode
 		 from customer where userID = ?
@@ -1389,6 +1722,10 @@ async function maybeFillCustomerProfileIfEmpty(conn, userID, form) {
 	const params = [];
 
 	for (const [k, v] of Object.entries(update)) {
+		/*
+			Only include fields that are currently empty in the profile
+			and have a usable non-blank value from the form.
+		*/
 		if (v !== null && v !== undefined && String(v).trim()) {
 			setParts.push(`${k} = ?`);
 			params.push(v);
@@ -1402,8 +1739,11 @@ async function maybeFillCustomerProfileIfEmpty(conn, userID, form) {
 }
 
 async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
-	// pet profile logic is optional
-	// if disabled, appointment.petID stays null and appointment_form holds the snapshot
+	/*
+		Pet profile behavior is optional. If pet profiles are disabled and
+		no existing petID was chosen, the appointment just stores the
+		snapshot form data and leaves appointment.petID as null.
+	*/
 	const createPetProfile = body?.createPetProfile === true || body?.enablePetProfiles === true;
 
 	if (!createPetProfile && !body?.petID) return { petID: null };
@@ -1426,7 +1766,10 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 	};
 
 	if (petID) {
-		// update existing pet record for this user so pet profile stays current
+		/*
+			If an existing pet was chosen, update that saved pet profile
+			so it matches the newest submitted information.
+		*/
 		await conn.execute(
 			`update pet set
 			petName = ?,
@@ -1461,7 +1804,9 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 		return { petID };
 	}
 
-	// create a new pet record for this user
+	/*
+		Otherwise create a brand-new saved pet profile for this user.
+	*/
 	const [result] = await conn.execute(
 		`insert into pet (
 			userID,
@@ -1497,7 +1842,10 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 }
 
 function validateAndBuildForm(body) {
-	// validate required wizard fields and produce a cleaned form object
+	/*
+		Validate required reservation wizard fields and return a cleaned
+		form object ready for saving if everything passes.
+	*/
 	const form = pickFormData(body);
 	const missing = [];
 
@@ -1567,10 +1915,14 @@ function validateAndBuildForm(body) {
 	};
 }
 
-// create appointment booking
-router.post("/", async (req, res) => {
+router.post("/", requireAuth, async (req, res) => {
 	try {
 		const body = req.body || {};
+
+		/*
+			Resolve the appointment rule from either reasonKey or
+			reasonForVisit, depending on what the frontend sent.
+		*/
 		const rule = getRule(body.reasonKey || body.reasonForVisit);
 
 		if (!rule) {
@@ -1578,16 +1930,19 @@ router.post("/", async (req, res) => {
 			return;
 		}
 
-		// date/time comes from schedule picker (backend still validates)
+		/*
+			The frontend may send date/time directly or may send a slot ID
+			that needs to be parsed back into date and start time.
+		*/
 		let appointmentDate = String(body.appointmentDate || "");
 		let startTime = String(body.startTime || "");
 
-		// allow slotId formats too (frontend may send slotId instead of date+time)
 		if ((!appointmentDate || !startTime) && body.slotId) {
 			const parsed = parseSlotId(body.slotId);
 			appointmentDate = parsed?.date || appointmentDate;
 			startTime = parsed?.startTime || startTime;
 		}
+
 		if ((!appointmentDate || !startTime) && body.appointmentTimeSlot) {
 			const parsed = parseSlotId(body.appointmentTimeSlot);
 			appointmentDate = parsed?.date || appointmentDate;
@@ -1599,7 +1954,12 @@ router.post("/", async (req, res) => {
 			return;
 		}
 
+		/*
+			Make sure the requested start time sits exactly on the 15-minute grid
+			and that the full appointment stays inside clinic hours.
+		*/
 		const startMinutes = timeStrToMinutes(startTime);
+
 		if (!Number.isFinite(startMinutes) || !isStartAligned(startMinutes)) {
 			res.status(400).json({ error: "startTime must be on a 15 minute boundary" });
 			return;
@@ -1615,6 +1975,9 @@ router.post("/", async (req, res) => {
 		const endTime = minutesToTimeStr(endMinutes);
 		const endSql = formatSqlDateTime(appointmentDate, endTime);
 
+		/*
+			Validate and normalize all reservation wizard form fields.
+		*/
 		const formResult = validateAndBuildForm(body);
 		if (!formResult.ok) {
 			res.status(400).json({ error: formResult.error });
@@ -1623,18 +1986,25 @@ router.post("/", async (req, res) => {
 
 		const form = formResult.form;
 
-		// booking is done in a transaction so staff/room/inventory cant be double-allocated
+		/*
+			Run booking inside a transaction so staff, room, and inventory
+			cannot be double-allocated by overlapping requests.
+		*/
 		const result = await withTransaction(async (conn) => {
-			const userID = await resolveUserId(conn, body);
+			const userID = await resolveUserId(conn, req);
 			if (!userID) {
 				return { ok: false, status: 400, error: "missing or invalid userID" };
 			}
 
-			// optional pet profiles
+			/*
+				Create or update the pet profile if pet profiles are being used.
+			*/
 			const petResult = await maybeCreateOrUpdatePetProfile(conn, userID, body, form);
 			const petID = petResult.petID;
 
-			// same pet cannot be double-booked on overlapping appointments
+			/*
+				Do not allow the same saved pet to have overlapping appointments.
+			*/
 			if (petID) {
 				const [petOverlapRows] = await conn.execute(
 					`select appointmentID
@@ -1651,7 +2021,10 @@ router.post("/", async (req, res) => {
 				}
 			}
 
-			// staff and room are assigned automatically based on availability
+			/*
+				Automatically choose available staff and a room based on the
+				scheduling rule and requested time.
+			*/
 			const staffAssignments = await selectAvailableStaffAssignment(conn, rule, appointmentDate, startSql, endSql);
 			if (!staffAssignments) {
 				return { ok: false, status: 409, error: "no staff available for that time" };
@@ -1662,22 +2035,32 @@ router.post("/", async (req, res) => {
 				return { ok: false, status: 409, error: "no room available for that time" };
 			}
 
-			// non-consumables: capacity check across the whole time interval
+			/*
+				Non-consumables are checked by time-window capacity.
+			*/
 			const equipCheck = await checkNonConsumableCapacityForInterval(conn, rule, startSql, endSql);
 			if (!equipCheck.ok) {
 				return { ok: false, status: 409, error: equipCheck.error };
 			}
 
-			// consumables: decrement stock inside the transaction
+			/*
+				Consumables are checked and decremented immediately inside
+				the transaction.
+			*/
 			const consumableReserve = await reserveConsumables(conn, rule);
 			if (!consumableReserve.ok) {
 				return { ok: false, status: 409, error: consumableReserve.error };
 			}
 
-			// fill customer profile only if empty (does not overwrite existing values)
+			/*
+				Fill blank customer profile fields from the submitted form
+				without overwriting existing profile values.
+			*/
 			await maybeFillCustomerProfileIfEmpty(conn, userID, form);
 
-			// create appointment row (scheduling record)
+			/*
+				Create the main appointment row first.
+			*/
 			const [apptInsert] = await conn.execute(
 				`insert into appointment (
 					userID,
@@ -1692,13 +2075,13 @@ router.post("/", async (req, res) => {
 
 			const appointmentID = Number(apptInsert.insertId);
 
-			// snapshot the submitted form fields
+			/*
+				Store the submitted form snapshot, the assigned staff,
+				and the reserved consumables for this appointment.
+			*/
 			await insertAppointmentForm(conn, appointmentID, form);
-
-			// store the actual staff assignments for this appointment
 			await insertAppointmentStaffRows(conn, appointmentID, staffAssignments);
 
-			// store reserved consumables so cancel can refund stock correctly
 			for (const r of consumableReserve.reserved || []) {
 				await conn.execute(
 					"insert into appointment_consumable (appointmentID, itemID, qtyUsed) values (?,?,?)",
@@ -1740,17 +2123,23 @@ router.post("/", async (req, res) => {
 	}
 });
 
-// cancel appointment and refund consumables
-router.delete("/:appointmentID", async (req, res) => {
+router.delete("/:appointmentID", requireAuth, async (req, res) => {
 	try {
+		/*
+			Validate the appointment ID before attempting cancellation.
+		*/
 		const appointmentID = Number(req.params.appointmentID);
+
 		if (!Number.isFinite(appointmentID)) {
 			res.status(400).json({ error: "invalid appointmentID" });
 			return;
 		}
 
 		const result = await withTransaction(async (conn) => {
-			// lock appointment so cancel is safe even if two requests happen at once
+			/*
+				Lock the appointment row first so cancellation stays safe
+				even if two cancellation requests happen at once.
+			*/
 			const [apptRows] = await conn.execute(
 				"select appointmentID from appointment where appointmentID = ? for update",
 				[appointmentID]
@@ -1760,7 +2149,10 @@ router.delete("/:appointmentID", async (req, res) => {
 				return { ok: false, status: 404, error: "appointment not found" };
 			}
 
-			// lock appointment_consumable rows and corresponding inventory rows for refund
+			/*
+				Load and lock any consumable usage rows so those item
+				quantities can be refunded correctly.
+			*/
 			const [consRows] = await conn.execute(
 				`select ac.itemID, ac.qtyUsed, i.itemKey
 				 from appointment_consumable ac
@@ -1770,7 +2162,9 @@ router.delete("/:appointmentID", async (req, res) => {
 				[appointmentID]
 			);
 
-			// refund stock
+			/*
+				Refund the consumed stock back into inventory.
+			*/
 			for (const row of consRows) {
 				await conn.execute(
 					"update inventory set quantity = quantity + ? where itemID = ? and isConsumable = 1",
@@ -1778,7 +2172,9 @@ router.delete("/:appointmentID", async (req, res) => {
 				);
 			}
 
-			// delete children first, then delete the appointment row
+			/*
+				Delete child rows first, then delete the appointment row itself.
+			*/
 			await conn.execute("delete from appointment_consumable where appointmentID = ?", [appointmentID]);
 			await conn.execute("delete from appointment_staff where appointmentID = ?", [appointmentID]);
 			await conn.execute("delete from appointment_form where appointmentID = ?", [appointmentID]);

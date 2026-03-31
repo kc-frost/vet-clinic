@@ -3,6 +3,9 @@ import { pool } from "../db.js";
 import { sendEmail } from "./mailer.js";
 
 function toSqlDateTimeString(value) {
+	/*
+		Convert a Date-like value into MySQL datetime text.
+	*/
 	const dt = value instanceof Date ? value : new Date(value);
 
 	const year = dt.getFullYear();
@@ -16,6 +19,9 @@ function toSqlDateTimeString(value) {
 }
 
 function toDisplayDateTime(value) {
+	/*
+		Format a Date-like value into readable text for notification messages.
+	*/
 	const dt = value instanceof Date ? value : new Date(value);
 
 	return dt.toLocaleString("en-US", {
@@ -28,10 +34,19 @@ function toDisplayDateTime(value) {
 }
 
 function formatReasonLabel(reasonKey) {
+	/*
+		Turn a reason key like WELLNESS_EXAM into display text.
+	*/
 	return String(reasonKey || "").replaceAll("_", " ");
 }
 
 function buildWindow(hoursAhead, windowMinutes) {
+	/*
+		Build the future time window the scheduler should search in.
+
+		start is the target time offset from now.
+		end is the end of that reminder window.
+	*/
 	const now = new Date();
 	const start = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
 	const end = new Date(start.getTime() + windowMinutes * 60 * 1000);
@@ -49,6 +64,9 @@ export async function createInAppNotification({
 	title,
 	message,
 }) {
+	/*
+		Insert one unread in-app notification row for a user.
+	*/
 	await pool.execute(
 		`INSERT INTO notification
 			(userID, appointmentID, type, title, message, channel, isRead)
@@ -58,6 +76,10 @@ export async function createInAppNotification({
 }
 
 async function inAppNotificationExists({ userID, appointmentID, type }) {
+	/*
+		Check whether this exact in-app notification was already created
+		so the scheduler does not create duplicates.
+	*/
 	const [rows] = await pool.execute(
 		`SELECT notificationID
 		 FROM notification
@@ -73,6 +95,10 @@ async function inAppNotificationExists({ userID, appointmentID, type }) {
 }
 
 async function emailAlreadySent({ appointmentID, type, recipientEmail }) {
+	/*
+		Check the email log first so the same reminder email is not
+		sent more than once to the same recipient.
+	*/
 	const [rows] = await pool.execute(
 		`SELECT emailLogID
 		 FROM email_log
@@ -87,6 +113,9 @@ async function emailAlreadySent({ appointmentID, type, recipientEmail }) {
 }
 
 async function logEmail({ userID, appointmentID, type, recipientEmail }) {
+	/*
+		Record that an email reminder was sent.
+	*/
 	await pool.execute(
 		`INSERT INTO email_log (userID, appointmentID, type, recipientEmail)
 		 VALUES (?, ?, ?, ?)`,
@@ -95,6 +124,10 @@ async function logEmail({ userID, appointmentID, type, recipientEmail }) {
 }
 
 async function createStaffOneHourReminders() {
+	/*
+		Find appointments starting about one hour from now and create
+		in-app reminders for assigned staff members.
+	*/
 	const window = buildWindow(1, 1);
 
 	const [rows] = await pool.execute(
@@ -124,6 +157,9 @@ async function createStaffOneHourReminders() {
 	);
 
 	for (const row of rows) {
+		/*
+			Skip rows that already have this reminder notification.
+		*/
 		const exists = await inAppNotificationExists({
 			userID: row.staffUserID,
 			appointmentID: row.appointmentID,
@@ -155,6 +191,10 @@ async function createStaffOneHourReminders() {
 }
 
 async function sendCustomer24HourEmails() {
+	/*
+		Find appointments about 24 hours ahead and send customer
+		reminder emails if one has not already been sent.
+	*/
 	const window = buildWindow(24, 60);
 
 	const [rows] = await pool.execute(
@@ -179,6 +219,10 @@ async function sendCustomer24HourEmails() {
 	);
 
 	for (const row of rows) {
+		/*
+			Skip emails that were already sent for this appointment,
+			email type, and recipient.
+		*/
 		const alreadySent = await emailAlreadySent({
 			appointmentID: row.appointmentID,
 			type: "CUSTOMER_24_HOUR_REMINDER_EMAIL",
@@ -211,12 +255,18 @@ async function sendCustomer24HourEmails() {
 let schedulerStarted = false;
 
 export function startNotificationScheduler() {
+	/*
+		Only start the cron scheduler once for the server process.
+	*/
 	if (schedulerStarted) {
 		return;
 	}
 
 	schedulerStarted = true;
 
+	/*
+		Run the reminder checks once every minute.
+	*/
 	cron.schedule("* * * * *", async () => {
 		try {
 			await createStaffOneHourReminders();
