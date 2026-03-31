@@ -86,7 +86,7 @@ create table staff(
 );
 
 -- stores what staff scheduling capabilities a staff member possesses
--- examples: GENERAL, SURGEON, DENTIST, GROOMER, XRAY_TECH, ULTRASOUND_TECH
+-- examples: GP_VET, SURGEON, DENTIST, GROOMER, XRAY_TECH, ULTRASOUND_TECH, SURGEON_ASSISTANT
 create table staff_role(
 	staffID int not null,
 	roleKey varchar(50) not null,

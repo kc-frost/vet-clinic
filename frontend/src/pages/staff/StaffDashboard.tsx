@@ -37,7 +37,7 @@ const MOCK_STAFF_PROFILE: MyStaffProfile = {
 	positionTitle: "Veterinary Assistant",
 	email: "demo.staff@vetclinic.com",
 	phone: "555-123-4567",
-	roleKeys: ["TECHNICIAN", "GENERAL"],
+	roleKeys: ["XRAY_TECH", "GP_VET"],
 };
 
 const INITIAL_AVAILABILITY: AvailabilityDay[] = [

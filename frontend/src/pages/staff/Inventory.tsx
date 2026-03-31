@@ -12,14 +12,13 @@ import { getInventory, createInventoryItem, updateInventoryItem } from "../../ap
 
 // Must match the backend role validation list in /api/staff
 const STAFF_ROLE_OPTIONS: { value: StaffRoleKey; label: string }[] = [
-	{ value: "GENERAL", label: "GENERAL" },
+	{ value: "GP_VET", label: "GP_VET" },
 	{ value: "SURGEON", label: "SURGEON" },
 	{ value: "DENTIST", label: "DENTIST" },
 	{ value: "GROOMER", label: "GROOMER" },
 	{ value: "XRAY_TECH", label: "XRAY_TECH" },
 	{ value: "ULTRASOUND_TECH", label: "ULTRASOUND_TECH" },
 	{ value: "SURGEON_ASSISTANT", label: "SURGEON_ASSISTANT" },
-	{ value: "TECHNICIAN", label: "TECHNICIAN" },
 ];
 
 // Must match backend validation in /api/rooms

@@ -9,14 +9,13 @@ const router = express.Router();
 	are allowed to have in the database.
 */
 const VALID_ROLE_KEYS = new Set([
-	"GENERAL",
+	"GP_VET",
 	"SURGEON",
 	"DENTIST",
 	"GROOMER",
 	"XRAY_TECH",
 	"ULTRASOUND_TECH",
 	"SURGEON_ASSISTANT",
-	"TECHNICIAN",
 ]);
 
 function cleanText(value) {

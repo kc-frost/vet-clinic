@@ -22,7 +22,7 @@ const REASON_RULES = {
 	WELLNESS_EXAM: {
 		reasonKey: "WELLNESS_EXAM",
 		durationMinutes: 45,
-		requiredStaff: [{ roleKey: "GENERAL", qty: 1 }],
+		requiredStaff: [{ roleKey: "GP_VET", qty: 1 }],
 		roomType: "EXAM",
 		nonConsumables: [],
 		consumables: [{ itemKey: "EXAM_SUPPLY_KIT", qty: 1 }],
@@ -31,7 +31,7 @@ const REASON_RULES = {
 	RABIES_VACCINATION: {
 		reasonKey: "RABIES_VACCINATION",
 		durationMinutes: 15,
-		requiredStaff: [{ roleKey: "GENERAL", qty: 1 }],
+		requiredStaff: [{ roleKey: "GP_VET", qty: 1 }],
 		roomType: "EXAM",
 		nonConsumables: [],
 		consumables: [
@@ -45,7 +45,7 @@ const REASON_RULES = {
 	BORDETELLA_VACCINATION: {
 		reasonKey: "BORDETELLA_VACCINATION",
 		durationMinutes: 15,
-		requiredStaff: [{ roleKey: "GENERAL", qty: 1 }],
+		requiredStaff: [{ roleKey: "GP_VET", qty: 1 }],
 		roomType: "EXAM",
 		nonConsumables: [],
 		consumables: [
@@ -60,7 +60,7 @@ const REASON_RULES = {
 		reasonKey: "DENTAL_CLEANING",
 		durationMinutes: 75,
 		requiredStaff: [
-			{ roleKey: "SURGEON", qty: 1 },
+			{ roleKey: "DENTIST", qty: 1 },
 			{ roleKey: "SURGEON_ASSISTANT", qty: 1 },
 		],
 		roomType: "SURGERY",
@@ -76,9 +76,8 @@ const REASON_RULES = {
 		reasonKey: "DENTAL_EXTRACTION",
 		durationMinutes: 90,
 		requiredStaff: [
-			{ roleKey: "SURGEON", qty: 1 },
+			{ roleKey: "DENTIST", qty: 1 },
 			{ roleKey: "SURGEON_ASSISTANT", qty: 1 },
-			{ roleKey: "TECHNICIAN", qty: 1 },
 		],
 		roomType: "SURGERY",
 		nonConsumables: ["ANESTHESIA_MACHINE", "ORAL_SURGICAL_INSTRUMENT_SET"],
@@ -94,7 +93,7 @@ const REASON_RULES = {
 		reasonKey: "XRAY_EVALUATION",
 		durationMinutes: 45,
 		requiredStaff: [
-			{ roleKey: "GENERAL", qty: 1 },
+			{ roleKey: "GP_VET", qty: 1 },
 			{ roleKey: "XRAY_TECH", qty: 1 },
 		],
 		roomType: "IMAGING",
@@ -106,7 +105,7 @@ const REASON_RULES = {
 		reasonKey: "CAST_CHANGE",
 		durationMinutes: 30,
 		requiredStaff: [
-			{ roleKey: "GENERAL", qty: 1 },
+			{ roleKey: "GP_VET", qty: 1 },
 			{ roleKey: "XRAY_TECH", qty: 1 },
 		],
 		roomType: "EXAM",
@@ -148,7 +147,6 @@ const REASON_RULES = {
 		requiredStaff: [
 			{ roleKey: "SURGEON", qty: 1 },
 			{ roleKey: "SURGEON_ASSISTANT", qty: 1 },
-			{ roleKey: "TECHNICIAN", qty: 1 },
 		],
 		roomType: "SURGERY",
 		nonConsumables: ["ANESTHESIA_MACHINE"],
@@ -165,7 +163,7 @@ const REASON_RULES = {
 		reasonKey: "ULTRASOUND",
 		durationMinutes: 45,
 		requiredStaff: [
-			{ roleKey: "GENERAL", qty: 1 },
+			{ roleKey: "GP_VET", qty: 1 },
 			{ roleKey: "ULTRASOUND_TECH", qty: 1 },
 		],
 		roomType: "IMAGING",

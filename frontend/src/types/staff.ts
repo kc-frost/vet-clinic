@@ -10,14 +10,13 @@
 	These are the actual staff capabilities
 */
 export type StaffRoleKey =
-	| "GENERAL"
+	| "GP_VET"
 	| "SURGEON"
 	| "DENTIST"
 	| "GROOMER"
 	| "XRAY_TECH"
 	| "ULTRASOUND_TECH"
-	| "SURGEON_ASSISTANT"
-	| "TECHNICIAN";
+	| "SURGEON_ASSISTANT";
 
 export type UserType = "CUSTOMER" | "STAFF" | "ADMIN";
 
