@@ -627,15 +627,19 @@ export default function UserProfile() {
 		return !shallowEqual(profileDraft, normalizeUserInfo(profile));
 	}, [profile, profileDraft]);
 
-	const currentProfileImageSrc = useMemo(() => {
-		/*
-			Show the preview image first if one is selected, otherwise use
-			the saved profile image, then finally fall back to a default.
-		*/
-		if (picturePreviewUrl) return picturePreviewUrl;
-		if (profile?.profileImagePath) return profile.profileImagePath;
-		return "/default-profile.svg";
-	}, [picturePreviewUrl, profile?.profileImagePath]);
+    const [pictureVersion, setPictureVersion] = useState(0);
+
+    const currentProfileImageSrc = useMemo(() => {
+        /*
+            Show the preview image first if one is selected, otherwise use
+            the saved profile image, then finally fall back to a default.
+            Add a cache-busting query string for saved profile pictures so
+            the browser does not keep showing an older cached image.
+        */
+        if (picturePreviewUrl) return picturePreviewUrl;
+        if (profile?.profileImagePath) return `${profile.profileImagePath}?v=${pictureVersion}`;
+        return "/default-profile.svg";
+    }, [picturePreviewUrl, profile?.profileImagePath, pictureVersion]);
 
 	async function onSaveBio() {
 		/*
@@ -834,6 +838,7 @@ export default function UserProfile() {
 
 			const updatedProfile = await uploadProfileImage(authUser.userID, selectedPictureFile);
 			setProfile(updatedProfile);
+            setPictureVersion(Date.now());
 			setPictureEditOpen(false);
 			clearPictureSelection();
 			setActionMessage("profile picture updated");
