@@ -78,16 +78,16 @@ export default function PublicLayout() {
 
 						{/* Logged-in users see appointment/profile links. Guests see login/register. */}
             {isLoggedIn ? (
-                <>
-                  <NavButton to="/reservation" className="nav-btn">Create Appointment</NavButton>
-                  <NavButton to="/userprofile" className="nav-btn">My Profile</NavButton>
-                </>
-              ) : (
-                <>
-                  <NavButton to="/login" className="nav-btn">Login</NavButton>
-                  <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
-                </>
-            )}
+              <>
+                <NavButton to="/reservation" className="nav-btn">Create Appointment</NavButton>
+                <NavButton to="/userprofile" className="nav-btn">My Profile</NavButton>
+              </>
+            ) : null}
+
+            <NavButton to="/login" className="nav-btn">Login</NavButton>
+            <NavButton to="/register" className="nav-btn nav-btn--cta">Register</NavButton>
+
+
 					</div>
 				</nav>
 			</header>

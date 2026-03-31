@@ -20,8 +20,8 @@ export default function Register() {
 			// adminCode is optional and will be undefined if the user left it blank
 			await register(email, password, adminCode);
 
-			// successful register does not automatically log the user in here
-			// instead, redirect to the login page so they can log in normally
+			// successful register automatically logs in the user in here
+			// redirects to the home page
 			navigate("/");
 		} catch (err) {
 			// AuthForm expects onSubmit to throw if something fails
