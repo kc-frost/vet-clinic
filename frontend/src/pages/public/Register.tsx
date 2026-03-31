@@ -22,7 +22,7 @@ export default function Register() {
 
 			// successful register does not automatically log the user in here
 			// instead, redirect to the login page so they can log in normally
-			navigate("/login");
+			navigate("/");
 		} catch (err) {
 			// AuthForm expects onSubmit to throw if something fails
 			// throwing here lets AuthForm show a single "formError" message box
