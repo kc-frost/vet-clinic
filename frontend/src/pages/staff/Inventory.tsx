@@ -627,7 +627,8 @@ export default function Inventory() {
 				<section className="card">
 					<h2 className="card-title">Staff</h2>
 
-					<div className="form">
+					<div className="panelBlock">
+						<div className="subsectionTitle">Link User Account</div>
 						<label className="label">Search User To Link</label>
 						<input
 							className="input"
@@ -641,11 +642,12 @@ export default function Inventory() {
 						/>
 
 						{/* Search result list for unlinked users only */}
-						<div className="list">
+						<div className="list compactUserList">
 							{filteredStaffUsers.map((user) => (
-								<div key={user.userID} className="row">
+								<div key={user.userID} className="row compactUserRow">
 									<div className="row-main">
 										<div className="row-title">User ID {user.userID}</div>
+										<div className="row-meta compactUserMeta">Email: {showOrNA(user.email)}</div>
 									</div>
 									<button className="btn" type="button" onClick={() => handlePickStaffUser(user)} disabled={loading}>
 										Select
@@ -695,8 +697,8 @@ export default function Inventory() {
 					</div>
 
 					{/* This is for filtering the existing staff list only */}
-					<div className="form">
-						<div className="label">Filter Existing Staff</div>
+					<div className="panelBlock subsectionDivider">
+						<div className="subsectionTitle">Filter Existing Staff</div>
 
 						<div className="form">
 							<label className="checkboxRow">
@@ -761,7 +763,9 @@ export default function Inventory() {
 						) : null}
 					</div>
 
-					<div className="list">
+					<div className="resultsBlock subsectionDivider">
+						<div className="subsectionTitle">Existing Staff</div>
+						<div className="list">
 						{/* Existing staff cards */}
 						{filteredStaff.map((s) => {
 							const displayName = buildDisplayName(s.legalFirstName, s.legalLastName, `Staff ID ${s.staffID}`);
@@ -789,6 +793,7 @@ export default function Inventory() {
 
 						{/* Empty state for no staff at all */}
 						{staff.length === 0 ? <div className="empty">No staff yet.</div> : null}
+						</div>
 					</div>
 				</section>
 
@@ -796,7 +801,8 @@ export default function Inventory() {
 				<section className="card">
 					<h2 className="card-title">Rooms</h2>
 
-					<div className="form">
+					<div className="panelBlock">
+						<div className="subsectionTitle">Add Room</div>
 						<label className="label">Room Number</label>
 						<input className="input" type="number" min={1} value={rRoomNumber} onChange={(e) => setRRoomNumber(Number(e.target.value))} disabled={loading} />
 
@@ -818,8 +824,8 @@ export default function Inventory() {
 					</div>
 
 					{/* This is for filtering the existing room list only */}
-					<div className="form">
-						<div className="label">Filter Rooms</div>
+					<div className="panelBlock subsectionDivider">
+						<div className="subsectionTitle">Filter Rooms</div>
 
 						<div className="form">
 							<label className="checkboxRow">
@@ -860,7 +866,9 @@ export default function Inventory() {
 						) : null}
 					</div>
 
-					<div className="list">
+					<div className="resultsBlock subsectionDivider">
+						<div className="subsectionTitle">Existing Rooms</div>
+						<div className="list">
 						{filteredRooms.map((r) => (
 							<div key={r.roomNumber} className="row">
 								<div className="row-main">
@@ -872,6 +880,7 @@ export default function Inventory() {
 
 						{rooms.length > 0 && filteredRooms.length === 0 ? <div className="empty">No rooms match the current filter.</div> : null}
 						{rooms.length === 0 ? <div className="empty">No rooms yet.</div> : null}
+						</div>
 					</div>
 				</section>
 
@@ -879,7 +888,8 @@ export default function Inventory() {
 				<section className="card">
 					<h2 className="card-title">Inventory Items</h2>
 
-					<div className="form">
+					<div className="panelBlock">
+						<div className="subsectionTitle">Add Inventory Item</div>
 						<label className="checkboxRow">
 							<input type="checkbox" checked={iIsConsumable} onChange={(e) => setIIsConsumable(e.target.checked)} disabled={loading} />
 							Consumable (stock-based)
@@ -906,8 +916,8 @@ export default function Inventory() {
 					</div>
 
 					{/* This is for filtering the existing inventory list only */}
-					<div className="form">
-						<div className="label">Filter Inventory Items</div>
+					<div className="panelBlock subsectionDivider">
+						<div className="subsectionTitle">Filter Inventory Items</div>
 
 						<div className="form">
 							<label className="checkboxRow">
@@ -1000,7 +1010,9 @@ export default function Inventory() {
 						) : null}
 					</div>
 
-					<div className="list">
+					<div className="resultsBlock subsectionDivider">
+						<div className="subsectionTitle">Existing Inventory Items</div>
+						<div className="list">
 						{/* Inventory rows with inline quantity editing */}
 						{filteredItems.map((it) => (
 							<div key={it.itemID} className="row">
@@ -1036,6 +1048,7 @@ export default function Inventory() {
 
 						{items.length > 0 && filteredItems.length === 0 ? <div className="empty">No inventory items match the current filter.</div> : null}
 						{items.length === 0 ? <div className="empty">No inventory items yet.</div> : null}
+						</div>
 					</div>
 				</section>
 			</div>

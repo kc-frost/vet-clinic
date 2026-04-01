@@ -53,27 +53,21 @@ const INITIAL_AVAILABILITY: AvailabilityDay[] = [
 function generateTimeOptions(): TimeOption[] {
 	const options: TimeOption[] = [];
 
-	for (let hour = 9; hour <= 18; hour++) {
-		for (const minute of [0, 30]) {
-			if (hour === 18 && minute === 30) continue;
+	for (let hour = 9; hour <= 17; hour++) {
+		const hour24 = String(hour).padStart(2, "0");
+		const value = `${hour24}:00:00`;
+		const hour12 = hour === 12 ? 12 : hour % 12 === 0 ? 12 : hour % 12;
+		const ampm = hour < 12 ? "AM" : "PM";
+		const label = `${hour12}:00 ${ampm}`;
 
-			const hour24 = String(hour).padStart(2, "0");
-			const minuteStr = String(minute).padStart(2, "0");
-			const value = `${hour24}:${minuteStr}:00`;
-
-			const hour12 = hour === 12 ? 12 : hour % 12 === 0 ? 12 : hour % 12;
-			const ampm = hour < 12 ? "AM" : "PM";
-			const label = `${hour12}:${minuteStr} ${ampm}`;
-
-			options.push({ value, label });
-		}
+		options.push({ value, label });
 	}
 
 	return options;
 }
 
 const TIME_OPTIONS = generateTimeOptions();
-const START_TIME_OPTIONS = TIME_OPTIONS.filter((option) => option.value !== "18:00:00");
+const START_TIME_OPTIONS = TIME_OPTIONS.filter((option) => option.value !== "17:00:00");
 
 function getEndTimeOptions(startTime: string): TimeOption[] {
 	const startIndex = TIME_OPTIONS.findIndex((option) => option.value === startTime);
@@ -129,6 +123,26 @@ function formatNotificationTime(createdAt: string) {
 	if (Number.isNaN(dt.getTime())) return raw;
 
 	return dt.toLocaleString();
+}
+
+function getFriendlyAvailabilityMessage(error: unknown) {
+	/*
+		Show one readable message for schedule conflicts instead of
+		showing raw API error text to the staff user.
+	*/
+	const rawMessage = error instanceof Error ? error.message : "";
+	const normalizedMessage = rawMessage.toLowerCase();
+
+	if (
+		normalizedMessage.includes("availability conflicts with future appointments") ||
+		normalizedMessage.includes("conflict with an assigned future appointment") ||
+		normalizedMessage.includes('"message":"forbidden"') ||
+		normalizedMessage.includes("forbidden")
+	) {
+		return "Cannot edit schedule because it conflicts with your future existing appointments.";
+	}
+
+	return error instanceof Error ? error.message : "Failed to save availability";
 }
 
 export default function StaffDashboard() {
@@ -281,7 +295,7 @@ export default function StaffDashboard() {
 			const result = await saveMyStaffAvailability(payload);
 			setAvailabilityMessage(result.message || "Availability saved successfully");
 		} catch (err) {
-			setAvailabilityMessage(err instanceof Error ? err.message : "Failed to save availability");
+			setAvailabilityMessage(getFriendlyAvailabilityMessage(err));
 		}
 	}
 

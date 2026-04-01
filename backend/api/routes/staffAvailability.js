@@ -190,7 +190,7 @@ router.put("/me/availability", requireStaff, async (req, res) => {
 				then that future appointment would be uncovered.
 			*/
 			if (!matchingDay) {
-				return res.status(400).json({ message: "New availability would conflict with an assigned future appointment" });
+				return res.status(409).json({ message: "Availability conflicts with future appointments" });
 			}
 
 			/*
@@ -209,7 +209,7 @@ router.put("/me/availability", requireStaff, async (req, res) => {
 				availability window, not just partially overlap it.
 			*/
 			if (!minutesOverlap(availabilityStart, availabilityEnd, startMinutes, endMinutes) || availabilityStart > startMinutes || availabilityEnd < endMinutes) {
-				return res.status(400).json({ message: "New availability would conflict with an assigned future appointment" });
+				return res.status(409).json({ message: "Availability conflicts with future appointments" });
 			}
 		}
 
