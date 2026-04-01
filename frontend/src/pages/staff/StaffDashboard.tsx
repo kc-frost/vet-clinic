@@ -54,20 +54,25 @@ function generateTimeOptions(): TimeOption[] {
 	const options: TimeOption[] = [];
 
 	for (let hour = 9; hour <= 17; hour++) {
-		const hour24 = String(hour).padStart(2, "0");
-		const value = `${hour24}:00:00`;
-		const hour12 = hour === 12 ? 12 : hour % 12 === 0 ? 12 : hour % 12;
-		const ampm = hour < 12 ? "AM" : "PM";
-		const label = `${hour12}:00 ${ampm}`;
+		for (let minute = 0; minute < 60; minute += 15) {
+			if (hour === 17 && minute > 0) break;
 
-		options.push({ value, label });
+			const hour24 = String(hour).padStart(2, "0");
+			const minuteText = String(minute).padStart(2, "0");
+			const value = `${hour24}:${minuteText}:00`;
+
+			const hour12 = hour === 12 ? 12 : hour % 12 === 0 ? 12 : hour % 12;
+			const ampm = hour < 12 ? "AM" : "PM";
+			const label = `${hour12}:${minuteText} ${ampm}`;
+
+			options.push({ value, label });
+		}
 	}
-
 	return options;
 }
 
 const TIME_OPTIONS = generateTimeOptions();
-const START_TIME_OPTIONS = TIME_OPTIONS.filter((option) => option.value !== "17:00:00");
+const START_TIME_OPTIONS = TIME_OPTIONS.filter((option) => option.value < "17:00:00");
 
 function getEndTimeOptions(startTime: string): TimeOption[] {
 	const startIndex = TIME_OPTIONS.findIndex((option) => option.value === startTime);

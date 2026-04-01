@@ -618,7 +618,7 @@ export default function Inventory() {
 				{pageError ? <div className="inventory-error">{pageError}</div> : null}
 
 				<div className="inventory-muted">
-					<b>Note:</b> delete actions are disabled for this sprint to avoid breaking existing appointments.
+					<b>Note:</b> delete actions are disabled to avoid breaking existing appointments.
 				</div>
 			</div>
 
