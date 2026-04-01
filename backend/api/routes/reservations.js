@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { requireAuth } from "../lib/authMiddleware.js";
+import { handleImmediateNotificationsForNewAppointment } from "../lib/notifications.js";
 
 const router = express.Router();
 
@@ -2102,6 +2103,22 @@ router.post("/", requireAuth, async (req, res) => {
 		if (!result.ok) {
 			res.status(result.status || 500).json({ error: result.error || "failed to create appointment" });
 			return;
+		}
+
+		/*
+			After the appointment is fully committed, run any immediate
+			notification rules for bookings that are already happening soon.
+			This is intentionally outside the transaction so reminder sending
+			never risks rolling back the successful appointment itself.
+		*/
+		try {
+			await handleImmediateNotificationsForNewAppointment(result.appointmentID);
+		} catch (notificationError) {
+			/*
+				Log reminder issues, but do not fail the actual appointment
+				creation response after the booking has already succeeded.
+			*/
+			console.error("immediate appointment notification error", notificationError);
 		}
 
 		res.json({

@@ -3,9 +3,7 @@ import { pool } from "../db.js";
 import { sendEmail } from "./mailer.js";
 
 function toSqlDateTimeString(value) {
-	/*
-		Convert a Date-like value into MySQL datetime text.
-	*/
+	/* Convert a Date-like value into MySQL DATETIME text. */
 	const dt = value instanceof Date ? value : new Date(value);
 
 	const year = dt.getFullYear();
@@ -19,9 +17,7 @@ function toSqlDateTimeString(value) {
 }
 
 function toDisplayDateTime(value) {
-	/*
-		Format a Date-like value into readable text for notification messages.
-	*/
+	/* Format a Date-like value into readable text for notifications. */
 	const dt = value instanceof Date ? value : new Date(value);
 
 	return dt.toLocaleString("en-US", {
@@ -34,17 +30,74 @@ function toDisplayDateTime(value) {
 }
 
 function formatReasonLabel(reasonKey) {
-	/*
-		Turn a reason key like WELLNESS_EXAM into display text.
-	*/
+	/* Turn a reason key like WELLNESS_EXAM into display text. */
 	return String(reasonKey || "").replaceAll("_", " ");
+}
+
+function getHoursUntil(dateValue) {
+	/*
+		Return the fractional number of hours from now until the
+		appointment time. A positive value means it is still upcoming.
+	*/
+	const appointmentDate = dateValue instanceof Date ? dateValue : new Date(dateValue);
+	return (appointmentDate.getTime() - Date.now()) / (60 * 60 * 1000);
+}
+
+async function loadAppointmentNotificationContext(appointmentID) {
+	/*
+		Load the shared appointment data needed for both customer
+		email reminders and staff in app reminders.
+	*/
+	const [appointmentRows] = await pool.execute(
+		`SELECT
+			a.appointmentID,
+			a.userID,
+			a.reasonKey,
+			a.date,
+			a.roomNumber,
+			c.email,
+			c.legalFirstName,
+			c.legalLastName,
+			p.petName
+		 FROM appointment a
+		 INNER JOIN customer c
+			on c.userID = a.userID
+		 LEFT JOIN pet p
+			on p.petID = a.petID
+		 WHERE a.appointmentID = ?
+		 LIMIT 1`,
+		[appointmentID]
+	);
+
+	if (!appointmentRows.length) {
+		return null;
+	}
+
+	const appointment = appointmentRows[0];
+
+	const [staffRows] = await pool.execute(
+		`SELECT
+			aps.staffID,
+			aps.assignedRoleKey,
+			s.userID AS staffUserID
+		 FROM appointment_staff aps
+		 INNER JOIN staff s
+			on s.staffID = aps.staffID
+		 WHERE aps.appointmentID = ?`,
+		[appointmentID]
+	);
+
+	return {
+		appointment,
+		staffRows,
+	};
 }
 
 function buildWindow(hoursAhead, windowMinutes) {
 	/*
-		Build the future time window the scheduler should search in.
+		Build the future time window the scheduler searches.
 
-		start is the target time offset from now.
+		start is the target offset from now.
 		end is the end of that reminder window.
 	*/
 	const now = new Date();
@@ -64,9 +117,7 @@ export async function createInAppNotification({
 	title,
 	message,
 }) {
-	/*
-		Insert one unread in-app notification row for a user.
-	*/
+	/* Insert one unread in app notification for a user. */
 	await pool.execute(
 		`INSERT INTO notification
 			(userID, appointmentID, type, title, message, channel, isRead)
@@ -77,7 +128,7 @@ export async function createInAppNotification({
 
 async function inAppNotificationExists({ userID, appointmentID, type }) {
 	/*
-		Check whether this exact in-app notification was already created
+		Check whether this exact in app notification already exists
 		so the scheduler does not create duplicates.
 	*/
 	const [rows] = await pool.execute(
@@ -113,9 +164,7 @@ async function emailAlreadySent({ appointmentID, type, recipientEmail }) {
 }
 
 async function logEmail({ userID, appointmentID, type, recipientEmail }) {
-	/*
-		Record that an email reminder was sent.
-	*/
+	/* Record that an email reminder was sent. */
 	await pool.execute(
 		`INSERT INTO email_log (userID, appointmentID, type, recipientEmail)
 		 VALUES (?, ?, ?, ?)`,
@@ -126,7 +175,7 @@ async function logEmail({ userID, appointmentID, type, recipientEmail }) {
 async function createStaffOneHourReminders() {
 	/*
 		Find appointments starting about one hour from now and create
-		in-app reminders for assigned staff members.
+		in app reminders for assigned staff members.
 	*/
 	const window = buildWindow(1, 1);
 
@@ -157,9 +206,7 @@ async function createStaffOneHourReminders() {
 	);
 
 	for (const row of rows) {
-		/*
-			Skip rows that already have this reminder notification.
-		*/
+		/* Skip rows that already have this reminder. */
 		const exists = await inAppNotificationExists({
 			userID: row.staffUserID,
 			appointmentID: row.appointmentID,
@@ -252,21 +299,137 @@ async function sendCustomer24HourEmails() {
 	}
 }
 
+async function createImmediateStaffSoonReminders(appointmentContext) {
+	/*
+		If a newly created appointment is already within the next hour,
+		create the in app reminder immediately instead of waiting for the
+		scheduler's normal 1 hour reminder window.
+	*/
+	const appointment = appointmentContext?.appointment;
+	const staffRows = appointmentContext?.staffRows || [];
+
+	if (!appointment || !staffRows.length) {
+		return;
+	}
+
+	const hoursUntilAppointment = getHoursUntil(appointment.date);
+	if (hoursUntilAppointment <= 0 || hoursUntilAppointment > 1) {
+		return;
+	}
+
+	const scheduledText = toDisplayDateTime(appointment.date);
+	const reasonLabel = formatReasonLabel(appointment.reasonKey);
+	const ownerName = [appointment.legalFirstName, appointment.legalLastName].filter(Boolean).join(" ").trim() || "Unknown Owner";
+	const petName = appointment.petName || "Unknown Pet";
+	const roomText = appointment.roomNumber ? `Room ${appointment.roomNumber}` : "No Room";
+
+	for (const row of staffRows) {
+		const exists = await inAppNotificationExists({
+			userID: row.staffUserID,
+			appointmentID: appointment.appointmentID,
+			type: "STAFF_SOON_AFTER_BOOKING",
+		});
+
+		if (exists) {
+			continue;
+		}
+
+		const roleText = row.assignedRoleKey || "Unspecified Role";
+		const title = "Upcoming appointment soon";
+		const message = `A newly scheduled appointment assigned to you is coming up soon. Service: ${reasonLabel}. Pet: ${petName}. Owner: ${ownerName}. Room: ${roomText}. Your role: ${roleText}. Time: ${scheduledText}`;
+
+		await createInAppNotification({
+			userID: row.staffUserID,
+			appointmentID: appointment.appointmentID,
+			type: "STAFF_SOON_AFTER_BOOKING",
+			title,
+			message,
+		});
+	}
+}
+
+async function sendImmediateCustomerSoonEmail(appointmentContext) {
+	/*
+		If a newly created appointment is already within the next 24 hours,
+		send the customer an immediate "coming up soon" email instead of
+		making them wait for the normal 24 hour scheduler reminder.
+	*/
+	const appointment = appointmentContext?.appointment;
+	if (!appointment) {
+		return;
+	}
+
+	const hoursUntilAppointment = getHoursUntil(appointment.date);
+	if (hoursUntilAppointment <= 0 || hoursUntilAppointment > 24) {
+		return;
+	}
+
+	const recipientEmail = String(appointment.email || "").trim();
+	if (!recipientEmail) {
+		return;
+	}
+
+	const alreadySent = await emailAlreadySent({
+		appointmentID: appointment.appointmentID,
+		type: "CUSTOMER_SOON_AFTER_BOOKING_EMAIL",
+		recipientEmail,
+	});
+
+	if (alreadySent) {
+		return;
+	}
+
+	const helloName = appointment.legalFirstName ? ` ${appointment.legalFirstName}` : "";
+	const reasonLabel = formatReasonLabel(appointment.reasonKey);
+	const petText = appointment.petName ? ` for ${appointment.petName}` : "";
+	const scheduledText = toDisplayDateTime(appointment.date);
+
+	await sendEmail({
+		to: recipientEmail,
+		subject: "Appointment scheduled - coming up soon",
+		text: `Hello${helloName}, your ${reasonLabel} appointment${petText} is scheduled for ${scheduledText}. Your appointment is coming up soon.`,
+	});
+
+	await logEmail({
+		userID: appointment.userID,
+		appointmentID: appointment.appointmentID,
+		type: "CUSTOMER_SOON_AFTER_BOOKING_EMAIL",
+		recipientEmail,
+	});
+}
+
+export async function handleImmediateNotificationsForNewAppointment(appointmentID) {
+	/*
+		Run the immediate notification rules after a booking succeeds.
+
+		Appointments happening soon dont wait for the normal scheduled reminder windows:
+		  customers get an email right away if the appointment is within 24 hours
+		  staff get an in app reminder right away if the appointment is within 1 hour
+	*/
+	if (!Number.isInteger(Number(appointmentID)) || Number(appointmentID) < 1) {
+		return;
+	}
+
+	const appointmentContext = await loadAppointmentNotificationContext(Number(appointmentID));
+	if (!appointmentContext) {
+		return;
+	}
+
+	await sendImmediateCustomerSoonEmail(appointmentContext);
+	await createImmediateStaffSoonReminders(appointmentContext);
+}
+
 let schedulerStarted = false;
 
 export function startNotificationScheduler() {
-	/*
-		Only start the cron scheduler once for the server process.
-	*/
+	/* Only start the cron scheduler once per server process. */
 	if (schedulerStarted) {
 		return;
 	}
 
 	schedulerStarted = true;
 
-	/*
-		Run the reminder checks once every minute.
-	*/
+	/* Run the reminder checks once every minute. */
 	cron.schedule("* * * * *", async () => {
 		try {
 			await createStaffOneHourReminders();
