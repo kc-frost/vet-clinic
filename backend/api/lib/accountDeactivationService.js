@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { createAppointmentIssues, markAppointmentUnderReview } from "./appointmentIssueService.js";
 
 function toPositiveInt(value) {
 	// Make sure IDs coming in are real positive integers before we trust them
@@ -147,7 +148,6 @@ async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
 }
 
 async function markStaffAssignmentsUnderReview(conn, staffID) {
-	// Find future active appointments where this staff member is assigned
 	const [rows] = await conn.query(
 		`SELECT
 			aps.appointmentID,
@@ -161,50 +161,26 @@ async function markStaffAssignmentsUnderReview(conn, staffID) {
 		[staffID]
 	);
 
-	// If they are not assigned anywhere upcoming, there is nothing to mark
 	if (!rows.length) {
 		return { underReviewAppointmentIDs: [] };
 	}
 
-	// One appointment can appear more than once if the staff member had multiple assignment rows
 	const appointmentIDs = [...new Set(rows.map((row) => Number(row.appointmentID)))];
-
-	// Mark those appointments under review because the staff member is no longer active
-	await conn.query(
-		`UPDATE appointment
-		 SET underReview = 1
-		 WHERE appointmentID IN (?)`,
-		[appointmentIDs]
-	);
-
-	const seen = new Set();
-	const issueRows = [];
+	const issuesByAppointmentID = new Map();
 
 	for (const row of rows) {
 		const appointmentID = Number(row.appointmentID);
-		const issueType = "STAFF_ROLE_MISSING";
-
-		// Keep a normalized issue key so missing-role issues are consistent
 		const issueKey = String(row.assignedRoleKey || "UNKNOWN_ROLE").trim().toUpperCase();
-
-		// Prevent duplicate issue rows for the same appointment and role
-		const dedupeKey = `${appointmentID}:${issueType}:${issueKey}`;
-		if (seen.has(dedupeKey)) continue;
-		seen.add(dedupeKey);
-
-		issueRows.push([appointmentID, issueType, issueKey]);
+		if (!issuesByAppointmentID.has(appointmentID)) issuesByAppointmentID.set(appointmentID, []);
+		issuesByAppointmentID.get(appointmentID).push({issueType: "STAFF_ROLE_MISSING", issueKey,});
 	}
 
-	if (issueRows.length) {
-		await conn.query(
-			`INSERT INTO appointment_issue
-				(appointmentID, issueType, issueKey)
-			 VALUES ?`,
-			[issueRows]
-		);
+	for (const appointmentID of appointmentIDs) {
+		await markAppointmentUnderReview(conn, appointmentID);
+		await createAppointmentIssues(conn, appointmentID, issuesByAppointmentID.get(appointmentID) || []);
 	}
 
-	return {underReviewAppointmentIDs: appointmentIDs,};
+	return { underReviewAppointmentIDs: appointmentIDs };
 }
 
 export async function deactivateAccount({ targetUserID, actorUserID }) {

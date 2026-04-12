@@ -16,6 +16,7 @@ import equipmentRoutes from "./routes/equipment.js";
 import appointmentsRoutes from "./routes/appointments.js";
 import reservationsRoutes from "./routes/reservations.js";
 import usersRoutes from "./routes/users.js";
+import appointmentIssuesRoutes from "./routes/appointmentIssues.js";
 
 import path from "path";
 import profileRoutes from "./routes/profile.js";
@@ -70,6 +71,7 @@ app.use("/api/equipment", equipmentRoutes);
 app.use("/api/appointments", appointmentsRoutes);
 app.use("/api/reservations", reservationsRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/appointment-issues", appointmentIssuesRoutes);
 
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api/profile", profileRoutes);
