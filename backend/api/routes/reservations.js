@@ -437,7 +437,11 @@ async function fetchInventoryByKeys(conn, itemKeys, isConsumable) {
 	if (!itemKeys.length) return [];
 
 	const placeholders = itemKeys.map(() => "?").join(",");
-	const sql = `select itemID, itemKey, isConsumable, quantity from inventory where itemKey in (${placeholders}) and isConsumable = ?`;
+	const sql = `select itemID, itemKey, isConsumable, quantity
+		from inventory
+		where itemKey in (${placeholders})
+		and isConsumable = ?
+		and coalesce(isActive, 1) = 1`;
 	const [rows] = await conn.execute(sql, [...itemKeys, isConsumable ? 1 : 0]);
 
 	return rows;
@@ -1070,9 +1074,15 @@ router.get("/availability", requireAuth, async (req, res) => {
 				who could possibly fill each required appointment role.
 			*/
 			const [staffRoleRows] = await conn.execute(
-				`select staffID, roleKey
-				 from staff_role
-				 order by staffID asc, roleKey asc`
+				`select sr.staffID, sr.roleKey
+				 from staff_role sr
+				 inner join staff s
+					on s.staffID = sr.staffID
+				 inner join customer c
+					on c.userID = s.userID
+				 where coalesce(s.isActive, 1) = 1
+				 and coalesce(c.isDeactivated, 0) = 0
+				 order by sr.staffID asc, sr.roleKey asc`
 			);
 			const roleToStaffIds = buildStaffRoleMap(staffRoleRows);
 
@@ -1080,8 +1090,14 @@ router.get("/availability", requireAuth, async (req, res) => {
 				Load the saved weekly availability blocks for all staff.
 			*/
 			const [staffAvailabilityRows] = await conn.execute(
-				`select staffID, dayOfWeek, startTime, endTime
-				 from staff_availability`
+				`select sa.staffID, sa.dayOfWeek, sa.startTime, sa.endTime
+				 from staff_availability sa
+				 inner join staff s
+					on s.staffID = sa.staffID
+				 inner join customer c
+					on c.userID = s.userID
+				 where coalesce(s.isActive, 1) = 1
+				 and coalesce(c.isDeactivated, 0) = 0`
 			);
 			const staffAvailabilityById = buildStaffAvailabilityMap(staffAvailabilityRows);
 
@@ -1099,7 +1115,11 @@ router.get("/availability", requireAuth, async (req, res) => {
 				Load all rooms of the needed type for this appointment rule.
 			*/
 			const [roomRows] = await conn.execute(
-				"select roomNumber from rooms where roomType = ? order by roomNumber asc",
+				`select roomNumber
+				 from rooms
+				 where roomType = ?
+				 and coalesce(isActive, 1) = 1
+				 order by roomNumber asc`,
 				[rule.roomType]
 			);
 			const roomNumbers = roomRows.map((r) => Number(r.roomNumber));
@@ -1133,7 +1153,8 @@ router.get("/availability", requireAuth, async (req, res) => {
 			const [apptRows] = await conn.execute(
 				`select appointmentID, userID, petID, roomNumber, reasonKey, date, durationMinutes
 				 from appointment
-				 where date >= ? and date < ?`,
+				 where date >= ? and date < ?
+				 and coalesce(isCanceled, 0) = 0`,
 				[rangeStart, rangeEndExclusive]
 			);
 
@@ -1397,7 +1418,10 @@ async function resolveUserId(conn, req) {
 	const userID = Number(raw);
 	if (!Number.isFinite(userID) || userID <= 0) return null;
 
-	const [rows] = await conn.execute("select userID from customer where userID = ?", [userID]);
+	const [rows] = await conn.execute(
+		"select userID from customer where userID = ? and coalesce(isDeactivated, 0) = 0",
+		[userID]
+	);
 	if (!rows.length) return null;
 
 	return userID;
@@ -1413,16 +1437,28 @@ async function selectAvailableStaffAssignment(conn, rule, appointmentDate, start
 	const endMin = parseSqlDateTimeToMinutes(endSql);
 
 	const [staffRoleRows] = await conn.execute(
-		`select staffID, roleKey
-		 from staff_role
-		 order by staffID asc, roleKey asc`
+		`select sr.staffID, sr.roleKey
+		 from staff_role sr
+		 inner join staff s
+			on s.staffID = sr.staffID
+		 inner join customer c
+			on c.userID = s.userID
+		 where coalesce(s.isActive, 1) = 1
+		 and coalesce(c.isDeactivated, 0) = 0
+		 order by sr.staffID asc, sr.roleKey asc`
 	);
 	const roleToStaffIds = buildStaffRoleMap(staffRoleRows);
 
 	const [staffAvailabilityRows] = await conn.execute(
-		`select staffID, dayOfWeek, startTime, endTime
-		 from staff_availability
-		 where dayOfWeek = ?`,
+		`select sa.staffID, sa.dayOfWeek, sa.startTime, sa.endTime
+		 from staff_availability sa
+		 inner join staff s
+			on s.staffID = sa.staffID
+		 inner join customer c
+			on c.userID = s.userID
+		 where sa.dayOfWeek = ?
+		 and coalesce(s.isActive, 1) = 1
+		 and coalesce(c.isDeactivated, 0) = 0`,
 		[dayOfWeek]
 	);
 	const staffAvailabilityById = buildStaffAvailabilityMap(staffAvailabilityRows);
@@ -1436,6 +1472,7 @@ async function selectAvailableStaffAssignment(conn, rule, appointmentDate, start
 		 from appointment
 		 where date < ?
 		 and date_add(date, interval durationMinutes minute) > ?
+		 and coalesce(isCanceled, 0) = 0
 		 for update`,
 		[endSql, startSql]
 	);
@@ -1482,11 +1519,13 @@ async function selectAvailableRoom(conn, roomType, startSql, endSql) {
 		`select r.roomNumber
 		 from rooms r
 		 where r.roomType = ?
+		 and coalesce(r.isActive, 1) = 1
 		 and not exists (
 			select 1 from appointment a
 			where a.roomNumber = r.roomNumber
 			and a.date < ?
 			and date_add(a.date, interval a.durationMinutes minute) > ?
+			and coalesce(a.isCanceled, 0) = 0
 		 )
 		 order by r.roomNumber asc
 		 limit 1
@@ -1514,7 +1553,9 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 	*/
 	const [invRows] = await conn.execute(
 		`select itemID, itemKey, quantity from inventory
-		 where isConsumable = 0 and itemKey in (${placeholders})
+		 where isConsumable = 0
+		 and itemKey in (${placeholders})
+		 and coalesce(isActive, 1) = 1
 		 for update`,
 		neededKeys
 	);
@@ -1533,7 +1574,9 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 	*/
 	const [overlapRows] = await conn.execute(
 		`select reasonKey, date, durationMinutes from appointment
-		 where date < ? and date_add(date, interval durationMinutes minute) > ?
+		 where date < ?
+		 and date_add(date, interval durationMinutes minute) > ?
+		 and coalesce(isCanceled, 0) = 0
 		 for update`,
 		[endSql, startSql]
 	);
@@ -1597,7 +1640,9 @@ async function reserveConsumables(conn, rule) {
 
 	const [rows] = await conn.execute(
 		`select itemID, itemKey, quantity from inventory
-		 where isConsumable = 1 and itemKey in (${placeholders})
+		 where isConsumable = 1
+		 and itemKey in (${placeholders})
+		 and coalesce(isActive, 1) = 1
 		 for update`,
 		itemKeys
 	);
@@ -1616,7 +1661,7 @@ async function reserveConsumables(conn, rule) {
 	*/
 	for (const need of rule.consumables) {
 		await conn.execute(
-			"update inventory set quantity = quantity - ? where itemKey = ? and isConsumable = 1",
+			"update inventory set quantity = quantity - ? where itemKey = ? and isConsumable = 1 and coalesce(isActive, 1) = 1",
 			[need.qty, need.itemKey]
 		);
 	}
