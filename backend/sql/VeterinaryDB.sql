@@ -22,6 +22,10 @@ create table customer(
 	email varchar(255) unique,
 	password varchar(255),
 
+	-- soft delete style account deactivation allows for history and or analytics 
+	isDeactivated boolean not null default false,
+	deactivatedAt datetime null,
+
 	-- profile/contact fields for the user
 	-- auto populated by first appointment form or filled out by user in user profile
 	legalFirstName varchar(255),
@@ -82,6 +86,11 @@ create table staff(
 	userID int not null unique,
 	staffNumber varchar(12) unique, -- includes dashes
 	positionTitle varchar(255), -- human readable job title for display
+
+	-- staff rows stay for history, but removed staff is not schedulable
+	isActive boolean not null default true,
+	deactivatedAt datetime null,
+
 	foreign key (userID) references customer(userID)
 );
 
@@ -125,7 +134,11 @@ create table inventory(
 	displayName varchar(255),
 	isConsumable boolean not null default false,
 	quantity int not null default 0,
-	itemDescription text
+	itemDescription text,
+
+	-- inventory rows stay for history and issue resolution
+	isActive boolean not null default true,
+	deactivatedAt datetime null
 );
 
 create table leasings(
@@ -140,7 +153,11 @@ create table leasings(
 create table rooms(
 	roomNumber int primary key,
 	roomType varchar(255),
-	capacity int
+	capacity int,
+
+	-- rooms stay for history and issue resolution
+	isActive boolean not null default true,
+	deactivatedAt datetime null
 );
 
 -- appointment rows provide the base appointment record
@@ -155,6 +172,12 @@ create table appointment(
 	reasonKey varchar(100) not null,
 	date datetime not null,
 	durationMinutes int not null,
+
+	-- canceled appointments remain in the system for history/analytics
+	isCanceled boolean not null default false,
+
+	-- under review appointments are temporarily invalid and need admin resolution
+	underReview boolean not null default false,
 
 	foreign key (userID) references customer(userID),
 	foreign key (petID) references pet(petID),
@@ -223,6 +246,29 @@ create table appointment_consumable(
 	primary key (appointmentID, itemID),
 	foreign key (appointmentID) references appointment(appointmentID),
 	foreign key (itemID) references inventory(itemID)
+);
+
+-- stores who canceled an appointment, when, and why if required
+-- one cancellation record per appointment
+create table appointment_cancellation(
+	appointmentID int primary key,
+	canceledByUserID int not null,
+	canceledByType varchar(20) not null,
+	cancellationReason text,
+	canceledAt datetime not null default current_timestamp,
+	foreign key (appointmentID) references appointment(appointmentID),
+	foreign key (canceledByUserID) references customer(userID)
+);
+
+-- active issue rows explain why an appointment is under review
+-- rows are removed when the appointment is resolved or canceled
+create table appointment_issue(
+	issueID int auto_increment primary key,
+	appointmentID int not null,
+	issueType varchar(50) not null,
+	issueKey varchar(100) not null,
+	createdAt datetime not null default current_timestamp,
+	foreign key (appointmentID) references appointment(appointmentID)
 );
 
 -- in-app notifications tied to one user account
