@@ -201,11 +201,15 @@ router.post("/register", async (req, res) => {
 			If so, do not allow a duplicate account to be created.
 		*/
 		const [existing] = await pool.execute(
-			"SELECT userID FROM customer WHERE email = ? LIMIT 1",
+			"SELECT userID, isDeactivated FROM customer WHERE email = ? LIMIT 1",
 			[email]
 		);
 
 		if (existing.length > 0) {
+			if (Number(existing[0].isDeactivated) === 1) {
+				return res.status(409).json({ message: "Cannot register with the email of a deactivated account" });
+			}
+
 			return res.status(409).json({ message: "Email already exists" });
 		}
 
@@ -284,7 +288,7 @@ router.post("/login", async (req, res) => {
 			password match the provided credentials.
 		*/
 		const [rows] = await pool.execute(
-			"SELECT userID, email, userType FROM customer WHERE email = ? AND password = ? LIMIT 1",
+			"SELECT userID, email, userType, isDeactivated FROM customer WHERE email = ? AND password = ? LIMIT 1",
 			[email, enc]
 		);
 
@@ -293,6 +297,10 @@ router.post("/login", async (req, res) => {
 		*/
 		if (rows.length === 0) {
 			return res.status(401).json({ message: "Invalid email or password" });
+		}
+
+		if (Number(rows[0].isDeactivated) === 1) {
+			return res.status(403).json({ message: "Cannot sign in to this account because it has been deactivated" });
 		}
 
 		/*
@@ -319,7 +327,7 @@ router.post("/login", async (req, res) => {
 	}
 });
 
-router.get("/me", (req, res) => {
+router.get("/me", async (req, res) => {
 	/*
 		Read the current session identity fields. These are what tell us
 		who is currently logged in for this request.
@@ -336,17 +344,35 @@ router.get("/me", (req, res) => {
 		return res.status(401).json({ message: "not authenticated" });
 	}
 
-	/*
-		Return the current authenticated user's session-based identity
-		in a frontend-friendly format.
-	*/
-	return res.json({
-		userID: Number(userID),
-		email: String(email),
-		userType,
-		isAdmin: userType === "ADMIN",
-		isStaff: userType === "STAFF",
-	});
+	const safeUserID = Number(userID);
+	if (!Number.isInteger(safeUserID) || safeUserID < 1) {
+		return res.status(401).json({ message: "not authenticated" });
+	}
+
+	try {
+		const [rows] = await pool.execute(
+			"SELECT isDeactivated FROM customer WHERE userID = ? LIMIT 1",
+			[safeUserID]
+		);
+
+		if (!rows.length || Number(rows[0].isDeactivated) === 1) {
+			if (req.session) {
+				req.session.destroy(() => {});
+			}
+			return res.status(401).json({ message: "not authenticated" });	
+		}
+
+		return res.json({
+			userID: Number(userID),
+			email: String(email),
+			userType,
+			isAdmin: userType === "ADMIN",
+			isStaff: userType === "STAFF",
+		});
+	} catch (err) {
+		console.error("me error:", err);
+		return res.status(500).json({ message: "Server error" });
+	}
 });
 
 router.post("/logout", (req, res) => {
