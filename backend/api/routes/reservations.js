@@ -3,6 +3,7 @@ import { pool } from "../db.js";
 import { requireAuth } from "../lib/authMiddleware.js";
 import { handleImmediateNotificationsForNewAppointment } from "../lib/notifications.js";
 import { getRule, REASON_RULES } from "../lib/reservationRules.js";
+import { cancelAppointment } from "../lib/appointmentCancellationService.js";
 
 const router = express.Router();
 
@@ -1978,76 +1979,45 @@ router.post("/", requireAuth, async (req, res) => {
 	}
 });
 
-router.delete("/:appointmentID", requireAuth, async (req, res) => {
+router.delete("/:appointmentID/cancel", requireAuth, async (req, res) => {
 	try {
-		/*
-			Validate the appointment ID before attempting cancellation.
-		*/
-		const appointmentID = Number(req.params.appointmentID);
-
-		if (!Number.isFinite(appointmentID)) {
-			res.status(400).json({ error: "invalid appointmentID" });
-			return;
-		}
-
-		const result = await withTransaction(async (conn) => {
-			/*
-				Lock the appointment row first so cancellation stays safe
-				even if two cancellation requests happen at once.
-			*/
-			const [apptRows] = await conn.execute(
-				"select appointmentID from appointment where appointmentID = ? for update",
-				[appointmentID]
-			);
-
-			if (!apptRows.length) {
-				return { ok: false, status: 404, error: "appointment not found" };
-			}
-
-			/*
-				Load and lock any consumable usage rows so those item
-				quantities can be refunded correctly.
-			*/
-			const [consRows] = await conn.execute(
-				`select ac.itemID, ac.qtyUsed, i.itemKey
-				 from appointment_consumable ac
-				 join inventory i on i.itemID = ac.itemID
-				 where ac.appointmentID = ?
-				 for update`,
-				[appointmentID]
-			);
-
-			/*
-				Refund the consumed stock back into inventory.
-			*/
-			for (const row of consRows) {
-				await conn.execute(
-					"update inventory set quantity = quantity + ? where itemID = ? and isConsumable = 1",
-					[Number(row.qtyUsed), Number(row.itemID)]
-				);
-			}
-
-			/*
-				Delete child rows first, then delete the appointment row itself.
-			*/
-			await conn.execute("delete from appointment_consumable where appointmentID = ?", [appointmentID]);
-			await conn.execute("delete from appointment_staff where appointmentID = ?", [appointmentID]);
-			await conn.execute("delete from appointment_form where appointmentID = ?", [appointmentID]);
-			await conn.execute("delete from appointment where appointmentID = ?", [appointmentID]);
-
-			return { ok: true };
-		});
-
-		if (!result.ok) {
-			res.status(result.status || 500).json({ error: result.error || "failed to cancel appointment" });
-			return;
-		}
-
-		res.json({ message: "appointment canceled" });
+	  const appointmentID = Number(req.params.appointmentID);
+	  const userID = Number(req.session.userID);
+  
+	  if (!Number.isInteger(appointmentID) || appointmentID <= 0) {
+		return res.status(400).json({ message: "Invalid appointment id" });
+	  }
+  
+	  const [rows] = await pool.query(
+		`SELECT appointmentID, userID
+		 FROM appointment
+		 WHERE appointmentID = ?
+		 LIMIT 1`,
+		[appointmentID]
+	  );
+  
+	  if (!rows.length) {
+		return res.status(404).json({ message: "Appointment not found" });
+	  }
+  
+	  if (Number(rows[0].userID) !== userID) {
+		return res.status(403).json({ message: "Not allowed to cancel this appointment" });
+	  }
+  
+	  const result = await cancelAppointment({
+		appointmentID,
+		canceledByUserID: userID,
+		canceledByType: "CUSTOMER",
+		cancellationReason: null,
+	  });
+  
+	  res.json({ message: "Appointment canceled", result });
 	} catch (err) {
-		console.error("cancel appointment error", err);
-		res.status(500).json({ error: "failed to cancel appointment" });
+	  const status = Number(err?.status || 500);
+	  res.status(status).json({
+		message: err instanceof Error ? err.message : "Failed to cancel appointment",
+	  });
 	}
-});
+  });
 
 export default router;

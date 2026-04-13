@@ -45,9 +45,9 @@ export default function AppRouter() {
 
 				{/* Admin-only staff management area. */}
 				<Route element={<RequireAdmin />}>
-					<Route path="/Admin" element={<AdminLayout />}>
+					<Route path="/admin" element={<AdminLayout />}>
 						{/* Visiting /staff should immediately go to /admin/analytics. */}
-						<Route index element={<Navigate to="inventory" replace />} />
+						<Route index element={<Navigate to="analytics" replace />} />
             			<Route path="analytics" element={<AdminAnalytics />} />
 						<Route path="inventory" element={<Inventory />} />
 						<Route path="users" element={<ViewAllUsers />} />

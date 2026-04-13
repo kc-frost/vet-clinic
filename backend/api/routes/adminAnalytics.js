@@ -160,17 +160,17 @@ router.get("/", requireAdmin, async (_req, res) => {
 
         /*
             10. Cancellations This Month by Category
-            Assumes appointment_cancellation.cancelerRole stores who canceled it,
+            Assumes appointment_cancellation.canceledByType stores who canceled it,
             such as Admin, Staff, or User.
         */
         const [cancellationsThisMonthByCategory] = await pool.query(
             `
             SELECT
-                cancelerRole AS category,
+                canceledByType AS category,
                 COUNT(*) AS count
             FROM appointment_cancellation
             WHERE canceledAt >= ? AND canceledAt < ?
-            GROUP BY cancelerRole
+            GROUP BY canceledByType
             ORDER BY count DESC, category ASC
             `,
             [monthStart, nextMonthStart]
