@@ -15,6 +15,8 @@ import "../../styles/staffDashboard.css";
 
 const DEV_BYPASS_AUTH = false;
 
+// Type for one row of staff availability in the frontend.
+// Each day stores the display name, database day number
 type AvailabilityDay = {
 	day: string;
 	dayOfWeek: number;
@@ -22,7 +24,9 @@ type AvailabilityDay = {
 	startTime: string;
 	endTime: string;
 };
-
+// Type for each dropdown time option.
+// "value" is what gets saved/sent to backend,
+// "label" is what the user sees in the UI
 type TimeOption = {
 	value: string;
 	label: string;
@@ -39,7 +43,9 @@ const MOCK_STAFF_PROFILE: MyStaffProfile = {
 	phone: "555-123-4567",
 	roleKeys: ["XRAY_TECH", "GP_VET"],
 };
-
+// Default weekly availability state for the page.
+// Starts with every day disabled, but each day already has
+// a default work range of 9:00 AM to 5:00 PM
 const INITIAL_AVAILABILITY: AvailabilityDay[] = [
 	{ day: "Monday", dayOfWeek: 1, enabled: false, startTime: "09:00:00", endTime: "17:00:00" },
 	{ day: "Tuesday", dayOfWeek: 2, enabled: false, startTime: "09:00:00", endTime: "17:00:00" },
@@ -50,6 +56,8 @@ const INITIAL_AVAILABILITY: AvailabilityDay[] = [
 	{ day: "Sunday", dayOfWeek: 7, enabled: false, startTime: "09:00:00", endTime: "17:00:00" },
 ];
 
+// Builds the dropdown options for availability times.
+// This generates 15-minute interval options from 9:00 AM to 5:00 PM
 function generateTimeOptions(): TimeOption[] {
 	const options: TimeOption[] = [];
 
@@ -70,36 +78,41 @@ function generateTimeOptions(): TimeOption[] {
 	}
 	return options;
 }
-
+// Full list of generated time options
 const TIME_OPTIONS = generateTimeOptions();
+// Start times cannot begin at 5:00 PM because there would be no valid end time after that
 const START_TIME_OPTIONS = TIME_OPTIONS.filter((option) => option.value < "17:00:00");
 
+// Returns only valid end times after the selected start time
 function getEndTimeOptions(startTime: string): TimeOption[] {
 	const startIndex = TIME_OPTIONS.findIndex((option) => option.value === startTime);
 	if (startIndex === -1) return TIME_OPTIONS;
 	return TIME_OPTIONS.slice(startIndex + 1);
 }
-
+// Converts an appointment's datetime string into a numeric timestamp
 function appointmentDateTimeValue(appointment: StaffAppointment) {
 	const raw = String(appointment.appointmentDateTime || "").trim();
 	if (!raw) return new Date(NaN).getTime();
 	return new Date(raw.replace(" ", "T")).getTime();
 }
-
+// Formats service/reason keys into a more readable label
 function formatReasonLabel(reasonKey: string) {
 	return String(reasonKey || "").replaceAll("_", " ");
 }
-
+// Returns the timestamp for the beginning of today.
+// Used to separate today's appointments from future ones
 function startOfTodayMs() {
 	const now = new Date();
 	return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
-
+// Returns the timestamp for the very end of today
 function endOfTodayMs() {
 	const now = new Date();
 	return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
 }
-
+// Converts a date input string (YYYY-MM-DD) into a timestamp.
+// Can return either the start of that day or the end of that day,
+// depending on how the date is being used in filters
 function dateStringToMs(dateText: string, useEndOfDay: boolean) {
 	if (!dateText) return null;
 
@@ -114,12 +127,13 @@ function dateStringToMs(dateText: string, useEndOfDay: boolean) {
 	if (useEndOfDay) return new Date(year, month, day, 23, 59, 59, 999).getTime();
 	return new Date(year, month, day, 0, 0, 0, 0).getTime();
 }
-
+// Checks whether an appointment matches the currently selected role filter.
+// If no role filter is selected, all appointments are allowed through
 function appointmentMatchesRole(appointment: StaffAppointment, roleFilter: string) {
 	if (!roleFilter) return true;
 	return String(appointment.assignedRoleKey || "").toUpperCase() === roleFilter.toUpperCase();
 }
-
+// Formats notification timestamps into a readable local date/time string
 function formatNotificationTime(createdAt: string) {
 	const raw = String(createdAt || "").trim();
 	if (!raw) return "";
@@ -151,16 +165,21 @@ function getFriendlyAvailabilityMessage(error: unknown) {
 }
 
 export default function StaffDashboard() {
+    // Main page state for staff profile and loading/error handling.
 	const [profile, setProfile] = useState<MyStaffProfile | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [pageError, setPageError] = useState("");
+
+	// Availability state stores one row per weekday.
 	const [availability, setAvailability] = useState<AvailabilityDay[]>(INITIAL_AVAILABILITY);
 	const [availabilityMessage, setAvailabilityMessage] = useState("");
+	// State for appointment and notification data loaded from backend.
 	const [appointments, setAppointments] = useState<StaffAppointment[]>([]);
 	const [notifications, setNotifications] = useState<StaffNotification[]>([]);
 	const [notificationMessage, setNotificationMessage] = useState("");
 	const [markingNotificationID, setMarkingNotificationID] = useState<number | null>(null);
 
+	// Filter state for today's appointments and future appointments.
 	const [todayRoleFilter, setTodayRoleFilter] = useState("");
 	const [futureRoleFilter, setFutureRoleFilter] = useState("");
 	const [futureStartDate, setFutureStartDate] = useState("");
@@ -169,6 +188,7 @@ export default function StaffDashboard() {
 	useEffect(() => {
 		let cancelled = false;
 
+		// Loads all dashboard data when the page first opens
 		async function loadProfile() {
 			try {
 				setLoading(true);
@@ -180,7 +200,7 @@ export default function StaffDashboard() {
 					}
 					return;
 				}
-
+				// Fetch all dashboard-related backend data
 				const profileData = await getMyStaffProfile();
 				const availabilityData = await getMyStaffAvailability();
 				const appointmentsData = await getMyStaffAppointments();
@@ -191,6 +211,9 @@ export default function StaffDashboard() {
 					setAppointments(appointmentsData);
 					setNotifications(notificationsData);
 
+                    // Merge backend availability into the default weekly structure.
+					// If a day exists in saved availability, mark it enabled
+					// and apply its saved start/end times.
 					const mappedAvailability = INITIAL_AVAILABILITY.map((day) => {
 						const savedDay = availabilityData.find((item) => item.dayOfWeek === day.dayOfWeek);
 						if (!savedDay) return day;
@@ -223,11 +246,14 @@ export default function StaffDashboard() {
 		};
 	}, []);
 
+	// Builds the dropdown options for role filters by extracting
+	// unique assigned roles from loaded appointments.
 	const roleOptions = useMemo(() => {
 		const uniqueRoles = [...new Set(appointments.map((appointment) => String(appointment.assignedRoleKey || "")).filter(Boolean))];
 		return uniqueRoles.sort((a, b) => a.localeCompare(b));
 	}, [appointments]);
 
+	// Creates a filtered/sorted list of appointments happening today.
 	const todayAppointments = useMemo(() => {
 		const startToday = startOfTodayMs();
 		const endToday = endOfTodayMs();
@@ -242,6 +268,8 @@ export default function StaffDashboard() {
 			.sort((a, b) => appointmentDateTimeValue(a) - appointmentDateTimeValue(b));
 	}, [appointments, todayRoleFilter]);
 
+	// Creates a filtered/sorted list of future appointments.
+	// Supports filtering by role and optional start/end date range.
 	const futureAppointments = useMemo(() => {
 		const endToday = endOfTodayMs();
 		const filterStartMs = dateStringToMs(futureStartDate, false);
@@ -259,11 +287,14 @@ export default function StaffDashboard() {
 			})
 			.sort((a, b) => appointmentDateTimeValue(a) - appointmentDateTimeValue(b));
 	}, [appointments, futureRoleFilter, futureStartDate, futureEndDate]);
-
+    // Toggles whether a weekday is enabled for availability.
 	function handleAvailabilityToggle(index: number) {
 		setAvailability((prev) => prev.map((item, i) => i === index ? { ...item, enabled: !item.enabled } : item));
 	}
 
+	// Updates the selected start or end time for a day.
+	// If the start time changes and the current end time is no longer valid,
+	// it automatically shifts the end time to the next valid option
 	function handleTimeChange(index: number, field: "startTime" | "endTime", value: string) {
 		setAvailability((prev) => prev.map((item, i) => {
 			if (i !== index) return item;
@@ -278,6 +309,9 @@ export default function StaffDashboard() {
 		}));
 	}
 
+	// Validates and saves the selected availability to the backend.
+	// Checks that at least one day is enabled and that each enabled day
+	// has a valid start/end time range.
 	async function handleSaveAvailability() {
 		setAvailabilityMessage("");
 
@@ -303,7 +337,9 @@ export default function StaffDashboard() {
 			setAvailabilityMessage(getFriendlyAvailabilityMessage(err));
 		}
 	}
-
+	
+	// Marks a notification as read and removes it from local state
+	// so the UI updates immediately after dismissal
 	async function handleDismissNotification(notificationID: number) {
 		try {
 			setNotificationMessage("");

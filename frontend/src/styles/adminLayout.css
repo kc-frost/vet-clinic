@@ -1,0 +1,78 @@
+.adminArea {
+	min-height: 100vh;
+	background: #fff8f1;
+}
+
+.adminHeader {
+	background: #c96512;
+	border-bottom: 1px solid #9e4f0e;
+	position: sticky;
+	top: 0;
+	z-index: 20;
+}
+
+.adminHeaderInner {
+	max-width: 1320px;
+	margin: 0 auto;
+	padding: 14px 24px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+	flex-wrap: wrap;
+}
+
+.adminBrand {
+	font-size: 1.2rem;
+	font-weight: 700;
+	color: white;
+}
+
+.adminNav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.adminNavLink {
+	text-decoration: none;
+	color: white;
+	padding: 10px 14px;
+	border-radius: 10px;
+	border: 1px solid transparent;
+	font-weight: 600;
+	transition: backround 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.adminNavLink:hover {
+	background: rgba(255, 255, 255, 0.12);
+	border-color: rgba(255, 255, 255, 0.2);
+}
+
+.adminNavLinkActive {
+	background: white;
+	color: #c96512;
+	border-color: white;
+}
+
+.adminMain {
+	max-width: 1320px;
+	margin: 0 auto;
+	padding: 24px;
+}
+.adminContent {
+	display: grid;
+	gap: 16px;
+}
+
+.adminContent > div,
+.adminContent section {
+	transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+
+.adminContent section:hover {
+	box-shadow: 0 4px 12px rgba(0
+	, 0, 0, .8
+	);
+}
