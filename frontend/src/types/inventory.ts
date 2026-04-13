@@ -9,6 +9,8 @@ export interface InventoryItem {
 	isConsumable: boolean;
 	quantity: number; // stock count (consumable) OR capacity count (non-consumable)
 	itemDescription: string | null;
+	isActive?: boolean;
+	deactivatedAt?: string | null;
 }
 
 export interface InventoryCreate {

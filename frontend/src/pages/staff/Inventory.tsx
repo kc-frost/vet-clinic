@@ -7,8 +7,9 @@ import type { Room, RoomCreate, RoomType } from "../../types/rooms";
 import type { InventoryCreate, InventoryItem } from "../../types/inventory";
 
 import { getStaff, createStaff, getStaffUsers } from "../../api/staff";
-import { getRooms, createRoom } from "../../api/rooms";
-import { getInventory, createInventoryItem, updateInventoryItem } from "../../api/inventory";
+import { deactivateUser } from "../../api/users";
+import { getRooms, createRoom, deactivateRoom, reactivateRoom } from "../../api/rooms";
+import { getInventory, createInventoryItem, updateInventoryItem, deactivateInventoryItem, reactivateInventoryItem } from "../../api/inventory";
 
 // Must match the backend role validation list in /api/staff
 const STAFF_ROLE_OPTIONS: { value: StaffRoleKey; label: string }[] = [
@@ -166,6 +167,23 @@ export default function Inventory() {
 	const [inventoryFilterDisplayName, setInventoryFilterDisplayName] = useState("");
 	const [inventoryFilterMaxQty, setInventoryFilterMaxQty] = useState("");
 
+	// These let the admin include removed rows in the current room and inventory lists
+	const [showRemovedRooms, setShowRemovedRooms] = useState(false);
+	const [showRemovedItems, setShowRemovedItems] = useState(false);
+
+	// Keep remove as a two step action so it is harder to click by accident
+	const [confirmingStaffUserID, setConfirmingStaffUserID] = useState<number | null>(null);
+	const [confirmingRoomNumber, setConfirmingRoomNumber] = useState<number | null>(null);
+	const [confirmingItemID, setConfirmingItemID] = useState<number | null>(null);
+
+	// Tracks whichever row is currently running a remove or restore request
+	const [workingStaffUserID, setWorkingStaffUserID] = useState<number | null>(null);
+	const [workingRoomNumber, setWorkingRoomNumber] = useState<number | null>(null);
+	const [workingItemID, setWorkingItemID] = useState<number | null>(null);
+
+	// Keep one readable success message near the top
+	const [pageMessage, setPageMessage] = useState("");
+
 	/*
 		These sorted lists are derived from the main state arrays
 		useMemo keeps the sort work from rerunning unless the source list changes
@@ -225,11 +243,25 @@ export default function Inventory() {
 		return unlinkedUsers.filter((user) => String(user.userID).includes(query)).slice(0, 25);
 	}, [sUserSearch, staffUsersSorted]);
 
-	// Rooms sort by room number
-	const roomsSorted = useMemo(() => [...rooms].sort((a, b) => a.roomNumber - b.roomNumber), [rooms]);
+	// Rooms sort active ones first, then by room number
+	const roomsSorted = useMemo(() => {
+		return [...rooms].sort((a, b) => {
+			const aInactive = a.isActive === false ? 1 : 0;
+			const bInactive = b.isActive === false ? 1 : 0;
+			if (aInactive !== bInactive) return aInactive - bInactive;
+			return a.roomNumber - b.roomNumber;
+		});
+	}, [rooms]);
 
-	// Inventory sorts by display name
-	const itemsSorted = useMemo(() => [...items].sort((a, b) => (a.displayName || "").localeCompare(b.displayName || "")), [items]);
+	// Inventory sorts active ones first, then by display name
+	const itemsSorted = useMemo(() => {
+		return [...items].sort((a, b) => {
+			const aInactive = a.isActive === false ? 1 : 0;
+			const bInactive = b.isActive === false ? 1 : 0;
+			if (aInactive !== bInactive) return aInactive - bInactive;
+			return (a.displayName || "").localeCompare(b.displayName || "");
+		});
+	}, [items]);
 
 	/*
 		This is the currently selected user account the admin is about to link
@@ -325,7 +357,7 @@ export default function Inventory() {
 		setPageError("");
 		setLoading(true);
 
-		const results = await Promise.allSettled([getStaff(), getStaffUsers(), getRooms(), getInventory()]);
+		const results = await Promise.allSettled([getStaff(), getStaffUsers(), getRooms({ includeInactive: showRemovedRooms }), getInventory({ includeInactive: showRemovedItems })]);
 
 		const errs: string[] = [];
 
@@ -361,10 +393,10 @@ export default function Inventory() {
 		setLoading(false);
 	}
 
-	// Initial page load
+	// Reload when the admin chooses to include removed rooms or inventory rows
 	useEffect(() => {
 		refreshAll();
-	}, []);
+	}, [showRemovedRooms, showRemovedItems]);
 
 	function handleBackToHome() {
 		navigate("/");
@@ -417,6 +449,7 @@ export default function Inventory() {
 	*/
 	async function handleAddStaff() {
 		setPageError("");
+		setPageMessage("");
 
 		const parsedUserID = Number(sSelectedUserID);
 		const cleanStaffNumber = sStaffNumber.trim();
@@ -480,6 +513,7 @@ export default function Inventory() {
 	*/
 	async function handleAddRoom() {
 		setPageError("");
+		setPageMessage("");
 
 		if (!Number.isFinite(rRoomNumber) || rRoomNumber < 1 || !Number.isInteger(rRoomNumber)) {
 			setPageError("Rooms: room number must be a whole number >= 1.");
@@ -516,6 +550,7 @@ export default function Inventory() {
 	*/
 	async function handleAddItem() {
 		setPageError("");
+		setPageMessage("");
 
 		const itemKey = normalizeItemKey(iItemKey);
 		const displayName = iDisplayName.trim();
@@ -580,6 +615,7 @@ export default function Inventory() {
 	*/
 	async function handleSaveQty(itemID: number) {
 		setPageError("");
+		setPageMessage("");
 
 		const raw = (qtyEdits[itemID] ?? "").trim();
 		const nextQty = Number(raw);
@@ -600,6 +636,105 @@ export default function Inventory() {
 		}
 	}
 
+
+	/*
+		Removing staff here means deactivating the linked user account
+
+		That lets the existing deactivation logic handle staff resource fallout too
+	*/
+	async function handleRemoveStaff(userID: number) {
+		setPageError("");
+		setPageMessage("");
+		setWorkingStaffUserID(userID);
+
+		try {
+			await deactivateUser(userID);
+			setConfirmingStaffUserID(null);
+			setPageMessage("Staff member removed.");
+			await refreshAll();
+		} catch (err) {
+			setPageError(errMsg(err));
+		} finally {
+			setWorkingStaffUserID(null);
+		}
+	}
+
+	/*
+		Room remove and restore both use the inactive state routes
+
+		That keeps room history in the db while taking the room out of scheduling
+	*/
+	async function handleRemoveRoom(roomNumber: number) {
+		setPageError("");
+		setPageMessage("");
+		setWorkingRoomNumber(roomNumber);
+
+		try {
+			await deactivateRoom(roomNumber);
+			setConfirmingRoomNumber(null);
+			setPageMessage("Room removed.");
+			await refreshAll();
+		} catch (err) {
+			setPageError(errMsg(err));
+		} finally {
+			setWorkingRoomNumber(null);
+		}
+	}
+
+	async function handleRestoreRoom(roomNumber: number) {
+		setPageError("");
+		setPageMessage("");
+		setWorkingRoomNumber(roomNumber);
+
+		try {
+			await reactivateRoom(roomNumber);
+			setPageMessage("Room restored.");
+			await refreshAll();
+		} catch (err) {
+			setPageError(errMsg(err));
+		} finally {
+			setWorkingRoomNumber(null);
+		}
+	}
+
+	/*
+		Inventory remove and restore use the inactive state too
+
+		Restore brings the row back active and the backend resets quantity to 0
+	*/
+	async function handleRemoveInventoryItem(itemID: number) {
+		setPageError("");
+		setPageMessage("");
+		setWorkingItemID(itemID);
+
+		try {
+			await deactivateInventoryItem(itemID);
+			setConfirmingItemID(null);
+			setPageMessage("Inventory item removed.");
+			await refreshAll();
+		} catch (err) {
+			setPageError(errMsg(err));
+		} finally {
+			setWorkingItemID(null);
+		}
+	}
+
+	async function handleRestoreInventoryItem(itemID: number) {
+		setPageError("");
+		setPageMessage("");
+		setWorkingItemID(itemID);
+
+		try {
+			await reactivateInventoryItem(itemID);
+			setPageMessage("Inventory item restored and set back to quantity 0.");
+			await refreshAll();
+		} catch (err) {
+			setPageError(errMsg(err));
+		} finally {
+			setWorkingItemID(null);
+		}
+	}
+
 	return (
 		<div className="inventory-page">
 			<div className="inventory-header">
@@ -616,9 +751,10 @@ export default function Inventory() {
 
 				{/* Top page error area */}
 				{pageError ? <div className="inventory-error">{pageError}</div> : null}
+			{pageMessage ? <div className="inventory-success">{pageMessage}</div> : null}
 
 				<div className="inventory-muted">
-					<b>Note:</b> delete actions are disabled to avoid breaking existing appointments.
+					<b>Note:</b> remove keeps rows in the database and uses the inactive state instead of hard deleting them.
 				</div>
 			</div>
 
@@ -783,6 +919,24 @@ export default function Inventory() {
 										<div className="row-meta">Phone: {showOrNA(s.phone)}</div>
 										<div className="row-meta">Address: {addressLine}</div>
 										<div className="row-meta">Roles: {s.roleKeys.length > 0 ? s.roleKeys.join(", ") : "N/A"}</div>
+										<div className="row-meta">Account status: {s.isDeactivated ? "Removed" : "Active"}</div>
+
+										<div className="row-actions">
+											{confirmingStaffUserID === s.userID ? (
+												<>
+													<button className="btn danger" type="button" onClick={() => handleRemoveStaff(s.userID)} disabled={loading || workingStaffUserID === s.userID}>
+														{workingStaffUserID === s.userID ? "Removing..." : "Confirm Remove"}
+													</button>
+													<button className="btn" type="button" onClick={() => setConfirmingStaffUserID(null)} disabled={loading || workingStaffUserID === s.userID}>
+														Cancel
+													</button>
+												</>
+											) : (
+												<button className="btn danger" type="button" onClick={() => setConfirmingStaffUserID(s.userID)} disabled={loading || !!s.isDeactivated}>
+													Remove
+												</button>
+											)}
+										</div>
 									</div>
 								</div>
 							);
@@ -868,12 +1022,38 @@ export default function Inventory() {
 
 					<div className="resultsBlock subsectionDivider">
 						<div className="subsectionTitle">Existing Rooms</div>
+						<label className="checkboxRow inventory-inlineToggle">
+							<input type="checkbox" checked={showRemovedRooms} onChange={(e) => setShowRemovedRooms(e.target.checked)} disabled={loading} />
+							Show removed rooms
+						</label>
 						<div className="list">
 						{filteredRooms.map((r) => (
 							<div key={r.roomNumber} className="row">
 								<div className="row-main">
 									<div className="row-title">Room #{r.roomNumber}</div>
 									<div className="row-meta">Type: {r.roomType} · Capacity: {r.capacity}</div>
+									<div className="row-meta">Status: {r.isActive === false ? "Removed" : "Active"}</div>
+
+									<div className="row-actions">
+										{r.isActive === false ? (
+											<button className="btn primary" type="button" onClick={() => handleRestoreRoom(r.roomNumber)} disabled={loading || workingRoomNumber === r.roomNumber}>
+												{workingRoomNumber === r.roomNumber ? "Restoring..." : "Restore"}
+											</button>
+										) : confirmingRoomNumber === r.roomNumber ? (
+											<>
+												<button className="btn danger" type="button" onClick={() => handleRemoveRoom(r.roomNumber)} disabled={loading || workingRoomNumber === r.roomNumber}>
+													{workingRoomNumber === r.roomNumber ? "Removing..." : "Confirm Remove"}
+												</button>
+												<button className="btn" type="button" onClick={() => setConfirmingRoomNumber(null)} disabled={loading || workingRoomNumber === r.roomNumber}>
+													Cancel
+												</button>
+											</>
+										) : (
+											<button className="btn danger" type="button" onClick={() => setConfirmingRoomNumber(r.roomNumber)} disabled={loading}>
+												Remove
+											</button>
+										)}
+									</div>
 								</div>
 							</div>
 						))}
@@ -1012,6 +1192,10 @@ export default function Inventory() {
 
 					<div className="resultsBlock subsectionDivider">
 						<div className="subsectionTitle">Existing Inventory Items</div>
+						<label className="checkboxRow inventory-inlineToggle">
+							<input type="checkbox" checked={showRemovedItems} onChange={(e) => setShowRemovedItems(e.target.checked)} disabled={loading} />
+							Show removed inventory items
+						</label>
 						<div className="list">
 						{/* Inventory rows with inline quantity editing */}
 						{filteredItems.map((it) => (
@@ -1021,6 +1205,7 @@ export default function Inventory() {
 									<div className="row-meta">
 										Key: {it.itemKey} · Type: {it.itemType} · {it.isConsumable ? "Consumable" : "Non-consumable"}
 									</div>
+									<div className="row-meta">Status: {it.isActive === false ? "Removed" : "Active"}</div>
 									<div className="row-desc">{it.itemDescription}</div>
 
 									<div className="row-meta" style={{ marginTop: 8 }}>
@@ -1036,11 +1221,32 @@ export default function Inventory() {
 											min={0}
 											value={qtyEdits[it.itemID] ?? ""}
 											onChange={(e) => setQtyEdit(it.itemID, e.target.value)}
-											disabled={loading || !!savingQty[it.itemID]}
+											disabled={loading || !!savingQty[it.itemID] || it.isActive === false}
 										/>
-										<button className="btn" type="button" onClick={() => handleSaveQty(it.itemID)} disabled={loading || !!savingQty[it.itemID]}>
+										<button className="btn" type="button" onClick={() => handleSaveQty(it.itemID)} disabled={loading || !!savingQty[it.itemID] || it.isActive === false}>
 											{savingQty[it.itemID] ? "Saving..." : "Save qty"}
 										</button>
+									</div>
+
+									<div className="row-actions">
+										{it.isActive === false ? (
+											<button className="btn primary" type="button" onClick={() => handleRestoreInventoryItem(it.itemID)} disabled={loading || workingItemID === it.itemID}>
+												{workingItemID === it.itemID ? "Restoring..." : "Restore"}
+											</button>
+										) : confirmingItemID === it.itemID ? (
+											<>
+												<button className="btn danger" type="button" onClick={() => handleRemoveInventoryItem(it.itemID)} disabled={loading || workingItemID === it.itemID}>
+													{workingItemID === it.itemID ? "Removing..." : "Confirm Remove"}
+												</button>
+												<button className="btn" type="button" onClick={() => setConfirmingItemID(null)} disabled={loading || workingItemID === it.itemID}>
+													Cancel
+												</button>
+											</>
+										) : (
+											<button className="btn danger" type="button" onClick={() => setConfirmingItemID(it.itemID)} disabled={loading}>
+												Remove
+											</button>
+										)}
 									</div>
 								</div>
 							</div>

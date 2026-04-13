@@ -34,6 +34,8 @@ export interface Staff {
 	state: string | null;
 	zipCode: string | null;
 	userType: UserType;
+	isActive?: boolean;
+	isDeactivated?: boolean;
 	roleKeys: StaffRoleKey[];
 }
 

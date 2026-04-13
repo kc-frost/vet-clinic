@@ -4,6 +4,8 @@ export interface Room {
 	roomNumber: number;
 	roomType: RoomType;
 	capacity: number;
+	isActive?: boolean;
+	deactivatedAt?: string | null;
 }
 
 export interface RoomCreate {
