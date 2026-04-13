@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ViewAllUsers from "../pages/staff/ViewAllUsers";
 
 import PublicLayout from "../layouts/PublicLayout";
-import StaffLayout from "../layouts/StaffLayout";
+import AdminLayout from "../layouts/AdminLayout";
 
 import Home from "../pages/public/Home";
 import Login from "../pages/public/Login";
@@ -17,6 +17,9 @@ import UserProfile from "../pages/public/UserProfile";
 import RequireAuth from "../components/auth/RequireAuth";
 import RequireAdmin from "../components/auth/RequireAdmin";
 import RequireStaff from "../components/auth/RequireStaff";
+
+import AdminAnalytics from "../pages/admin/AdminAnalytics";
+import AdminIssues from "../pages/admin/AdminIssues";
 
 export default function AppRouter() {
 	return (
@@ -42,12 +45,14 @@ export default function AppRouter() {
 
 				{/* Admin-only staff management area. */}
 				<Route element={<RequireAdmin />}>
-					<Route path="/staff" element={<StaffLayout />}>
-						{/* Visiting /staff should immediately go to /staff/inventory. */}
+					<Route path="/Admin" element={<AdminLayout />}>
+						{/* Visiting /staff should immediately go to /admin/analytics. */}
 						<Route index element={<Navigate to="inventory" replace />} />
+            			<Route path="analytics" element={<AdminAnalytics />} />
 						<Route path="inventory" element={<Inventory />} />
 						<Route path="users" element={<ViewAllUsers />} />
 						<Route path="appointments" element={<ViewAppointments />} />
+           			    <Route path="issues" element={<AdminIssues />} />
 					</Route>
 				</Route>
 
@@ -57,3 +62,6 @@ export default function AppRouter() {
 		</BrowserRouter>
 	);
 }
+
+
+// commented out auth wrappers for testing 

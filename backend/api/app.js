@@ -18,9 +18,11 @@ import reservationsRoutes from "./routes/reservations.js";
 import usersRoutes from "./routes/users.js";
 import appointmentIssuesRoutes from "./routes/appointmentIssues.js";
 
+import adminAnalyticsRoutes from "./routes/adminAnalytics.js";
+
 import path from "path";
 import profileRoutes from "./routes/profile.js";
-import { startNotificationScheduler } from "./lib/notifications.js";
+// import { startNotificationScheduler } from "./lib/notifications.js";
 
 dotenv.config();
 
@@ -76,8 +78,10 @@ app.use("/api/appointment-issues", appointmentIssuesRoutes);
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api/profile", profileRoutes);
 
+app.use("/api/admin/analytics", adminAnalyticsRoutes);
+
 // scheduler starts once when the api boots
-startNotificationScheduler();
+// startNotificationScheduler();
 
 const port = process.env.PORT || 3001;
 app.listen(port, "127.0.0.1", () => {
