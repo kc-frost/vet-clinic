@@ -235,12 +235,15 @@ router.patch("/me/notifications/:notificationID/read", requireStaff, async (req,
 */
 router.get("/", requireAdmin, async (req, res) => {
 	try {
+		const includeInactive = String(req.query.includeInactive || "").trim() === "1";
+		const whereClause = includeInactive ? "" : "WHERE COALESCE(s.isActive, 1) = 1 AND COALESCE(c.isDeactivated, 0) = 0";
 		const [rows] = await pool.query(
 			`SELECT
 				s.staffID,
 				s.userID,
 				s.staffNumber,
 				s.positionTitle,
+				COALESCE(s.isActive, 1) AS isActive,
 				c.legalFirstName,
 				c.legalLastName,
 				c.email,
@@ -250,12 +253,14 @@ router.get("/", requireAdmin, async (req, res) => {
 				c.state,
 				c.zipCode,
 				c.userType,
+				COALESCE(c.isDeactivated, 0) AS isDeactivated,
 				sr.roleKey
 			 FROM staff s
 			 INNER JOIN customer c
-				ON c.userID = s.userID
+				on c.userID = s.userID
 			 LEFT JOIN staff_role sr
-				ON sr.staffID = s.staffID
+				on sr.staffID = s.staffID
+			 ${whereClause}
 			 ORDER BY COALESCE(c.legalLastName, ''), COALESCE(c.legalFirstName, ''), s.staffID, sr.roleKey`
 		);
 
@@ -281,21 +286,16 @@ router.get("/", requireAdmin, async (req, res) => {
 					state: row.state,
 					zipCode: row.zipCode,
 					userType: row.userType,
+					isActive: Number(row.isActive) === 1,
+					isDeactivated: Number(row.isDeactivated) === 1,
 					roleKeys: [],
 				});
 			}
 
-			/*
-				Only push roleKey values that actually exist.
-				A LEFT JOIN can produce null roleKey values.
-			*/
-			if (row.roleKey) {
-				byStaffID.get(row.staffID).roleKeys.push(row.roleKey);
-			}
+			if (row.roleKey) byStaffID.get(row.staffID).roleKeys.push(row.roleKey);
 		}
 
-		const staffList = [...byStaffID.values()];
-		res.json(staffList);
+		res.json([...byStaffID.values()]);
 	} catch (err) {
 		console.error("GET /api/staff error:", err);
 		res.status(500).send("Server error fetching staff list.");
@@ -359,7 +359,7 @@ router.post("/", requireAdmin, async (req, res) => {
 			before trying to link it to a staff profile.
 		*/
 		const [userRows] = await conn.query(
-			`SELECT userID, userType
+			`SELECT userID, userType, COALESCE(isDeactivated, 0) AS isDeactivated
 			 FROM customer
 			 WHERE userID = ?
 			 LIMIT 1`,
@@ -369,6 +369,11 @@ router.post("/", requireAdmin, async (req, res) => {
 		if (userRows.length === 0) {
 			await conn.rollback();
 			return res.status(404).send("The selected user account does not exist.");
+		}
+
+		if (Number(userRows[0].isDeactivated) === 1) {
+			await conn.rollback();
+			return res.status(409).send("Cannot link a deactivated user account to staff.");
 		}
 
 		/*
@@ -494,8 +499,10 @@ router.get("/users", requireAdmin, async (req, res) => {
 			 FROM customer c
 			 LEFT JOIN staff s
 				ON s.userID = c.userID
+				AND COALESCE(s.isActive, 1) = 1
 			 LEFT JOIN appointment a
 				ON a.userID = c.userID
+			 WHERE COALESCE(c.isDeactivated, 0) = 0
 			 GROUP BY
 				c.userID,
 				c.username,

@@ -1,5 +1,5 @@
 import { pool } from "../db.js";
-import { createAppointmentIssues, markAppointmentUnderReview } from "./appointmentIssueService.js";
+import { processInactiveStaffAssignments } from "./appointmentIssueService.js";
 
 function toPositiveInt(value) {
 	// Make sure IDs coming in are real positive integers before we trust them
@@ -9,10 +9,10 @@ function toPositiveInt(value) {
 }
 
 function buildStaffCancellationMessage(appointment) {
-	// Support either a real Date object or a raw DB date value
+	// Support either a Date object or a raw DB date value
 	const appointmentDate = appointment.date instanceof Date ? appointment.date : new Date(appointment.date);
 
-	// Format the appointment date into something readable for the notification message
+	// Format the appointment date into readable notification text
 	const dateText = appointmentDate.toLocaleString("en-US", {
 		year: "numeric",
 		month: "numeric",
@@ -28,11 +28,7 @@ async function refundConsumablesForAppointments(conn, appointmentIDs) {
 	// Nothing to do if there are no appointments to process
 	if (!appointmentIDs.length) return;
 
-	/*
-		Put reserved consumable quantities back into inventory for every canceled appointment
-		then remove the appointment_consumable rows so those appointments are no longer
-		holding inventory reservations
-	*/
+	// Add back any consumables that were reserved by these appointments
 	await conn.query(
 		`UPDATE inventory i
 		 INNER JOIN (
@@ -46,15 +42,12 @@ async function refundConsumablesForAppointments(conn, appointmentIDs) {
 		[appointmentIDs]
 	);
 
-	await conn.query(
-		`DELETE FROM appointment_consumable
-		 WHERE appointmentID IN (?)`,
-		[appointmentIDs]
-	);
+	// Clear the appointment_consumable rows so canceled appointments stop holding inventory
+	await conn.query(`DELETE FROM appointment_consumable WHERE appointmentID IN (?)`, [appointmentIDs]);
 }
 
 async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
-	// Find all future active appointments owned by this customer
+	// Find all future active appointments owned by this user
 	const [rows] = await conn.query(
 		`SELECT
 			a.appointmentID,
@@ -69,17 +62,15 @@ async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
 		[ownerUserID]
 	);
 
-	// If the user has no future appointments, there is nothing to cancel
-	if (!rows.length) {
-		return { canceledAppointmentIDs: [] };
-	}
+	// If there are no future appointments, there is nothing to cancel
+	if (!rows.length) return { canceledAppointmentIDs: [] };
 
 	const appointmentIDs = rows.map((row) => Number(row.appointmentID));
 
-	// Return any reserved consumables before marking the appointments canceled
+	// Return reserved consumables before marking the appointments canceled
 	await refundConsumablesForAppointments(conn, appointmentIDs);
 
-	// Mark the appointments canceled and clear underReview since they are no longer active
+	// Mark the appointments canceled and remove them from the review queue
 	await conn.query(
 		`UPDATE appointment
 		 SET isCanceled = 1,
@@ -88,12 +79,8 @@ async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
 		[appointmentIDs]
 	);
 
-	// Remove any existing issue rows because a canceled appointment should not stay in the issue queue
-	await conn.query(
-		`DELETE FROM appointment_issue
-		 WHERE appointmentID IN (?)`,
-		[appointmentIDs]
-	);
+	// Remove any issue rows tied to appointments that are now canceled
+	await conn.query(`DELETE FROM appointment_issue WHERE appointmentID IN (?)`, [appointmentIDs]);
 
 	// Record who canceled these appointments and why
 	const cancellationRows = appointmentIDs.map((appointmentID) => [appointmentID, actorUserID, "ADMIN", "The customer account was deactivated"]);
@@ -104,7 +91,7 @@ async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
 		[cancellationRows]
 	);
 
-	// Find staff assigned to the canceled appointments so they can be notified
+	// Find assigned staff so they can be notified that these appointments were canceled
 	const [staffRecipients] = await conn.query(
 		`SELECT DISTINCT
 			aps.appointmentID,
@@ -117,10 +104,9 @@ async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
 	);
 
 	if (staffRecipients.length) {
-		// Make appointment lookup easier when building the notification rows
+		// Make appointment lookup easy while building notification rows
 		const appointmentByID = new Map(rows.map((row) => [Number(row.appointmentID), row]));
 
-		// Create one in-app notification row per staff recipient
 		const notificationRows = staffRecipients.map((recipient) => {
 			const appointment = appointmentByID.get(Number(recipient.appointmentID));
 			return [
@@ -142,45 +128,7 @@ async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
 		);
 	}
 
-	return {
-		canceledAppointmentIDs: appointmentIDs,
-	};
-}
-
-async function markStaffAssignmentsUnderReview(conn, staffID) {
-	const [rows] = await conn.query(
-		`SELECT
-			aps.appointmentID,
-			aps.assignedRoleKey
-		 FROM appointment_staff aps
-		 INNER JOIN appointment a
-			on a.appointmentID = aps.appointmentID
-		 WHERE aps.staffID = ?
-			AND a.date >= NOW()
-			AND a.isCanceled = 0`,
-		[staffID]
-	);
-
-	if (!rows.length) {
-		return { underReviewAppointmentIDs: [] };
-	}
-
-	const appointmentIDs = [...new Set(rows.map((row) => Number(row.appointmentID)))];
-	const issuesByAppointmentID = new Map();
-
-	for (const row of rows) {
-		const appointmentID = Number(row.appointmentID);
-		const issueKey = String(row.assignedRoleKey || "UNKNOWN_ROLE").trim().toUpperCase();
-		if (!issuesByAppointmentID.has(appointmentID)) issuesByAppointmentID.set(appointmentID, []);
-		issuesByAppointmentID.get(appointmentID).push({issueType: "STAFF_ROLE_MISSING", issueKey,});
-	}
-
-	for (const appointmentID of appointmentIDs) {
-		await markAppointmentUnderReview(conn, appointmentID);
-		await createAppointmentIssues(conn, appointmentID, issuesByAppointmentID.get(appointmentID) || []);
-	}
-
-	return { underReviewAppointmentIDs: appointmentIDs };
+	return { canceledAppointmentIDs: appointmentIDs };
 }
 
 export async function deactivateAccount({ targetUserID, actorUserID }) {
@@ -203,10 +151,10 @@ export async function deactivateAccount({ targetUserID, actorUserID }) {
 	const conn = await pool.getConnection();
 
 	try {
-		// Everything here should succeed or fail together
+		// Everything inside this transaction should succeed or fail together
 		await conn.beginTransaction();
 
-		// Load the target user and also check whether they have a linked staff record
+		// Load the target user and check whether they are linked to a staff record
 		const [userRows] = await conn.query(
 			`SELECT
 				c.userID,
@@ -231,21 +179,21 @@ export async function deactivateAccount({ targetUserID, actorUserID }) {
 		const targetUser = userRows[0];
 		const targetUserType = String(targetUser.userType || "CUSTOMER").trim().toUpperCase();
 
-		// Stop if the account is already deactivated
+		// Stop early if the account is already deactivated
 		if (Number(targetUser.isDeactivated) === 1) {
 			const err = new Error("User is already deactivated");
 			err.status = 409;
 			throw err;
 		}
 
-		// Prevent admin accounts from being deactivated from this path
+		// Prevent admin accounts from being deactivated from this route
 		if (targetUserType === "ADMIN") {
 			const err = new Error("Admin accounts cannot be deactivated from the UI");
 			err.status = 403;
 			throw err;
 		}
 
-		// Deactivate the customer account first
+		// Deactivate the customer account itself first
 		await conn.query(
 			`UPDATE customer
 			 SET isDeactivated = 1,
@@ -254,13 +202,14 @@ export async function deactivateAccount({ targetUserID, actorUserID }) {
 			[safeTargetUserID]
 		);
 
-		// Cancel any future appointments they own and handle all related cleanup
+		// Cancel any future appointments owned by this user and do all related cleanup
 		const cancellationResult = await cancelFutureOwnedAppointments(conn, safeTargetUserID, safeActorUserID);
 
-		let reviewResult = { underReviewAppointmentIDs: [] };
+		// Default result in case this user is not staff
+		let reviewResult = { autoResolvedAppointmentIDs: [], underReviewAppointmentIDs: [] };
 
-		// If this user is also staff, deactivate the staff record and flag assigned appointments for review
 		if (targetUser.staffID) {
+			// If this user is staff too, deactivate the staff record
 			await conn.query(
 				`UPDATE staff
 				 SET isActive = 0,
@@ -269,7 +218,9 @@ export async function deactivateAccount({ targetUserID, actorUserID }) {
 				[Number(targetUser.staffID)]
 			);
 
-			reviewResult = await markStaffAssignmentsUnderReview(conn, Number(targetUser.staffID));
+			// Let the appointment issue service decide which assignments can be auto-resolved
+			// and which appointments still need admin review
+			reviewResult = await processInactiveStaffAssignments(conn, Number(targetUser.staffID));
 		}
 
 		await conn.commit();
@@ -279,6 +230,7 @@ export async function deactivateAccount({ targetUserID, actorUserID }) {
 			email: String(targetUser.email || ""),
 			userType: targetUserType,
 			canceledAppointmentCount: cancellationResult.canceledAppointmentIDs.length,
+			autoResolvedAppointmentCount: reviewResult.autoResolvedAppointmentIDs.length,
 			underReviewAppointmentCount: reviewResult.underReviewAppointmentIDs.length,
 		};
 	} catch (err) {
