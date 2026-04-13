@@ -1,8 +1,12 @@
 import { api } from "./client";
+import type { UserType } from "../types/staff";
 
 type UserRouteRow = {
 	userID: number;
 	email: string;
+	legalFirstName: string | null;
+	legalLastName: string | null;
+	userType: UserType;
 	createdAt: string;
 	totalReservations: number;
 	pastReservations: number;
@@ -12,6 +16,9 @@ type UserRouteRow = {
 export type UserSummary = {
 	userID: number;
 	email: string;
+	legalFirstName: string | null;
+	legalLastName: string | null;
+	userType: UserType;
 	days_registered: number;
 	total_reservations: number;
 	past_reservations: number;
@@ -33,6 +40,9 @@ export async function getAllUsers() {
 	return rows.map((row) => ({
 		userID: Number(row.userID),
 		email: String(row.email || ""),
+		legalFirstName: row.legalFirstName == null ? null : String(row.legalFirstName),
+		legalLastName: row.legalLastName == null ? null : String(row.legalLastName),
+		userType: row.userType,
 		days_registered: daysSince(row.createdAt),
 		total_reservations: Number(row.totalReservations || 0),
 		past_reservations: Number(row.pastReservations || 0),
