@@ -176,6 +176,9 @@ create table appointment(
 	-- canceled appointments remain in the system for history/analytics
 	isCanceled boolean not null default false,
 
+	-- keeps when the reservation record was made so analytics can count bookings by creation month
+	createdAt datetime not null default current_timestamp,
+
 	-- under review appointments are temporarily invalid and need admin resolution
 	underReview boolean not null default false,
 

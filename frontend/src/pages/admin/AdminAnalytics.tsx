@@ -13,7 +13,7 @@ type CancellationCategoryItem = {
 type AdminAnalyticsData = {
     allTimeRegisteredUsers: number;
     allTimeReservations: number;
-    reservationsThisMonth: number;
+    reservationsMadeThisMonth: number;
     uniqueUsersThisMonth: number;
     topThreeRequestedItemsThisMonth: AnalyticsListItem[];
     topThreeStaffThisMonth: AnalyticsListItem[];
@@ -104,8 +104,8 @@ export default function AdminAnalytics() {
                     </div>
 
                     <div style={{ border: "1px solid #ccc", borderRadius: "12px", padding: "16px" }}>
-                        <h2>Reservations This Month</h2>
-                        <p>{analytics.reservationsThisMonth}</p>
+                        <h2>Reservations Made This Month</h2>
+                        <p>{analytics.reservationsMadeThisMonth}</p>
                     </div>
 
                     <div style={{ border: "1px solid #ccc", borderRadius: "12px", padding: "16px" }}>

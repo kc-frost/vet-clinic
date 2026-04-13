@@ -41,28 +41,27 @@ router.get("/", requireAdmin, async (_req, res) => {
         `);
 
         /*
-            3. Reservations This Month
-            Assumes appointment.date stores the appointment datetime.
+            3. Reservations Made This Month
+            This should mean appointments created this month, not appointments scheduled in the month.
         */
         const [reservationsThisMonthRows] = await pool.query(
             `
             SELECT COUNT(*) AS count
             FROM appointment
-            WHERE date >= ? AND date < ?
+            WHERE createdAt >= ? AND createdAt < ?
             `,
             [monthStart, nextMonthStart]
         );
 
         /*
             4. Unique Users This Month
-            Assumes appointment -> pet -> customer ownership through pet.userID.
+            Count the actual booking users from appointment.userID so this works even if pet profile logic changes.
         */
         const [uniqueUsersThisMonthRows] = await pool.query(
             `
-            SELECT COUNT(DISTINCT p.userID) AS count
+            SELECT COUNT(DISTINCT a.userID) AS count
             FROM appointment a
-            JOIN pet p ON a.petID = p.petID
-            WHERE a.date >= ? AND a.date < ?
+            WHERE a.createdAt >= ? AND a.createdAt < ?
             `,
             [monthStart, nextMonthStart]
         );
@@ -77,7 +76,7 @@ router.get("/", requireAdmin, async (_req, res) => {
                 a.reasonKey AS label,
                 COUNT(*) AS count
             FROM appointment a
-            WHERE a.date >= ? AND a.date < ?
+            WHERE a.createdAt >= ? AND a.createdAt < ?
             GROUP BY a.reasonKey
             ORDER BY count DESC, label ASC
             LIMIT 3
@@ -103,7 +102,7 @@ router.get("/", requireAdmin, async (_req, res) => {
             JOIN appointment a ON aps.appointmentID = a.appointmentID
             JOIN staff s ON aps.staffID = s.staffID
             LEFT JOIN customer c ON s.userID = c.userID
-            WHERE a.date >= ? AND a.date < ?
+            WHERE a.createdAt >= ? AND a.createdAt < ?
             GROUP BY s.staffID, c.legalFirstName, c.legalLastName
             ORDER BY count DESC, label ASC
             LIMIT 3
@@ -113,7 +112,7 @@ router.get("/", requireAdmin, async (_req, res) => {
 
         /*
             7. Top Three Users This Month
-            Assumes appointment -> pet -> customer ownership through pet.userID.
+            Use appointment.userID as the booking owner so the count matches who actually made the reservation.
         */
         const [topThreeUsersThisMonth] = await pool.query(
             `
@@ -125,9 +124,8 @@ router.get("/", requireAdmin, async (_req, res) => {
                 ) AS label,
                 COUNT(*) AS count
             FROM appointment a
-            JOIN pet p ON a.petID = p.petID
-            JOIN customer c ON p.userID = c.userID
-            WHERE a.date >= ? AND a.date < ?
+            JOIN customer c ON a.userID = c.userID
+            WHERE a.createdAt >= ? AND a.createdAt < ?
             GROUP BY c.userID, c.legalFirstName, c.legalLastName
             ORDER BY count DESC, label ASC
             LIMIT 3
@@ -179,7 +177,7 @@ router.get("/", requireAdmin, async (_req, res) => {
         res.json({
             allTimeRegisteredUsers: getCount(allTimeUsersRows),
             allTimeReservations: getCount(allTimeReservationsRows),
-            reservationsThisMonth: getCount(reservationsThisMonthRows),
+            reservationsMadeThisMonth: getCount(reservationsThisMonthRows),
             uniqueUsersThisMonth: getCount(uniqueUsersThisMonthRows),
             topThreeRequestedItemsThisMonth,
             topThreeStaffThisMonth,

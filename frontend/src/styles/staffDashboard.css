@@ -223,3 +223,21 @@
 		grid-template-columns: 1fr;
 	}
 }
+.staffCancelPanel {
+	margin-top: 12px;
+	padding: 12px;
+	border: 1px solid #d9e4ef;
+	border-radius: 12px;
+	background: #f8fbff;
+}
+
+.staffDashboardTextarea {
+	width: 100%;
+	margin-top: 6px;
+	padding: 10px;
+	border-radius: 10px;
+	border: 1px solid #9ba8b7;
+	background: #fff;
+	box-sizing: border-box;
+	resize: vertical;
+}

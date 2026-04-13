@@ -208,6 +208,9 @@ export default function StaffDashboard() {
 	const [markingNotificationID, setMarkingNotificationID] = useState<number | null>(null);
 	const [appointmentMessage, setAppointmentMessage] = useState("");
 	const [cancelingAppointmentID, setCancelingAppointmentID] = useState<number | null>(null);
+	const [cancelPanelAppointmentID, setCancelPanelAppointmentID] = useState<number | null>(null);
+	const [cancelReason, setCancelReason] = useState("");
+	const [cancelNeedsConfirm, setCancelNeedsConfirm] = useState(false);
 
 	// Filter state for today's appointments and future appointments.
 	const [todayRoleFilter, setTodayRoleFilter] = useState("");
@@ -386,29 +389,40 @@ export default function StaffDashboard() {
 		}
 	}
 
-	async function handleCancelAppointment(appointmentID: number) {
-		const reason = window.prompt("Please enter the cancellation reason:");
+	function openCancelPanel(appointmentID: number) {
+		// Opening a different appointment should reset the text and confirm state
+		setAppointmentMessage("");
+		setCancelPanelAppointmentID(appointmentID);
+		setCancelReason("");
+		setCancelNeedsConfirm(false);
+	}
 
-		if (reason === null) return;
+	function closeCancelPanel() {
+		// Closing the panel should clear out the in progress cancel state too
+		setCancelPanelAppointmentID(null);
+		setCancelReason("");
+		setCancelNeedsConfirm(false);
+	}
 
-		const trimmedReason = reason.trim();
+	async function handleCancelAppointment() {
+		if (!cancelPanelAppointmentID) return;
+
+		const trimmedReason = cancelReason.trim();
 		if (!trimmedReason) {
 			setAppointmentMessage("A cancellation reason is required");
 			return;
 		}
 
-		const confirmed = window.confirm("Are you sure you want to cancel this appointment?");
-		if (!confirmed) return;
-
 		try {
 			setAppointmentMessage("");
-			setCancelingAppointmentID(appointmentID);
+			setCancelingAppointmentID(cancelPanelAppointmentID);
 
-			await cancelMyStaffAppointment(appointmentID, { cancellationReason: trimmedReason });
+			await cancelMyStaffAppointment(cancelPanelAppointmentID, { cancellationReason: trimmedReason });
 
 			const updatedAppointments = await getMyStaffAppointments();
 			setAppointments(updatedAppointments);
 			setAppointmentMessage("Appointment canceled successfully");
+			closeCancelPanel();
 		} catch (err) {
 			setAppointmentMessage(getFriendlyCancelMessage(err));
 		} finally {
@@ -539,7 +553,7 @@ export default function StaffDashboard() {
 											<button
 												type="button"
 												className="staffDashboardSecondaryBtn"
-												onClick={() => handleCancelAppointment(appt.appointmentID)}
+												onClick={() => openCancelPanel(appt.appointmentID)}
 												disabled={cancelingAppointmentID === appt.appointmentID}
 											>
 												{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Cancel Appointment"}
@@ -580,6 +594,8 @@ export default function StaffDashboard() {
 							</div>
 						</div>
 
+						{appointmentMessage ? <div className="staffDashboardMessage">{appointmentMessage}</div> : null}
+
 						{futureAppointments.length === 0 ? (
 							<p>No future appointments.</p>
 						) : (
@@ -594,12 +610,50 @@ export default function StaffDashboard() {
 											<button
 												type="button"
 												className="staffDashboardSecondaryBtn"
-												onClick={() => handleCancelAppointment(appt.appointmentID)}
+												onClick={() => openCancelPanel(appt.appointmentID)}
 												disabled={cancelingAppointmentID === appt.appointmentID}
 											>
 												{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Cancel Appointment"}
 											</button>
 										</div>
+
+										{cancelPanelAppointmentID === appt.appointmentID ? (
+											<div className="staffCancelPanel">
+												<label className="staffDashboardLabel" htmlFor={`cancel-reason-${appt.appointmentID}`}>Cancellation Reason</label>
+												<textarea
+													id={`cancel-reason-${appt.appointmentID}`}
+													className="staffDashboardTextarea"
+													value={cancelReason}
+													onChange={(e) => {
+														setCancelReason(e.target.value);
+														if (cancelNeedsConfirm) setCancelNeedsConfirm(false);
+													}}
+													rows={4}
+													placeholder="Enter the reason for canceling this appointment"
+												/>
+
+												<div className="staffDashboardActions">
+													{cancelNeedsConfirm ? (
+														<>
+															<button
+																type="button"
+																className="staffDashboardPrimaryBtn"
+																onClick={() => handleCancelAppointment()}
+																disabled={cancelingAppointmentID === appt.appointmentID}
+															>
+																{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Confirm Cancel"}
+															</button>
+															<button type="button" className="staffDashboardSecondaryBtn" onClick={() => setCancelNeedsConfirm(false)}>Back</button>
+														</>
+													) : (
+														<>
+															<button type="button" className="staffDashboardPrimaryBtn" onClick={() => setCancelNeedsConfirm(true)}>Continue Cancel</button>
+															<button type="button" className="staffDashboardSecondaryBtn" onClick={closeCancelPanel}>Close</button>
+														</>
+													)}
+												</div>
+											</div>
+										) : null}
 									</li>
 								))}
 							</ul>
