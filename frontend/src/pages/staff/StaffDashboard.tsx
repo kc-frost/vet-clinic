@@ -6,6 +6,7 @@ import {
 	getMyStaffAppointments,
 	getMyStaffNotifications,
 	markMyStaffNotificationRead,
+	cancelMyStaffAppointment,
 	type MyStaffProfile,
 	type StaffAppointment,
 	type StaffNotification,
@@ -68,6 +69,7 @@ function generateTimeOptions(): TimeOption[] {
 			options.push({ value, label });
 		}
 	}
+
 	return options;
 }
 
@@ -109,7 +111,10 @@ function dateStringToMs(dateText: string, useEndOfDay: boolean) {
 	const year = Number(parts[0]);
 	const month = Number(parts[1]) - 1;
 	const day = Number(parts[2]);
-	if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+
+	if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+		return null;
+	}
 
 	if (useEndOfDay) return new Date(year, month, day, 23, 59, 59, 999).getTime();
 	return new Date(year, month, day, 0, 0, 0, 0).getTime();
@@ -131,10 +136,6 @@ function formatNotificationTime(createdAt: string) {
 }
 
 function getFriendlyAvailabilityMessage(error: unknown) {
-	/*
-		Show one readable message for schedule conflicts instead of
-		showing raw API error text to the staff user.
-	*/
 	const rawMessage = error instanceof Error ? error.message : "";
 	const normalizedMessage = rawMessage.toLowerCase();
 
@@ -150,6 +151,29 @@ function getFriendlyAvailabilityMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Failed to save availability";
 }
 
+function getFriendlyCancelMessage(error: unknown) {
+	const rawMessage = error instanceof Error ? error.message : "";
+	const normalizedMessage = rawMessage.toLowerCase();
+
+	if (normalizedMessage.includes("reason")) {
+		return "A cancellation reason is required.";
+	}
+
+	if (normalizedMessage.includes("own assigned appointments")) {
+		return "You can only cancel appointments assigned to you.";
+	}
+
+	if (normalizedMessage.includes("past appointments")) {
+		return "Past appointments cannot be canceled.";
+	}
+
+	if (normalizedMessage.includes("already canceled")) {
+		return "This appointment was already canceled.";
+	}
+
+	return error instanceof Error ? error.message : "Failed to cancel appointment";
+}
+
 export default function StaffDashboard() {
 	const [profile, setProfile] = useState<MyStaffProfile | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -160,6 +184,8 @@ export default function StaffDashboard() {
 	const [notifications, setNotifications] = useState<StaffNotification[]>([]);
 	const [notificationMessage, setNotificationMessage] = useState("");
 	const [markingNotificationID, setMarkingNotificationID] = useState<number | null>(null);
+	const [appointmentMessage, setAppointmentMessage] = useState("");
+	const [cancelingAppointmentID, setCancelingAppointmentID] = useState<number | null>(null);
 
 	const [todayRoleFilter, setTodayRoleFilter] = useState("");
 	const [futureRoleFilter, setFutureRoleFilter] = useState("");
@@ -169,7 +195,7 @@ export default function StaffDashboard() {
 	useEffect(() => {
 		let cancelled = false;
 
-		async function loadProfile() {
+		async function loadDashboard() {
 			try {
 				setLoading(true);
 				setPageError("");
@@ -177,14 +203,19 @@ export default function StaffDashboard() {
 				if (DEV_BYPASS_AUTH) {
 					if (!cancelled) {
 						setProfile(MOCK_STAFF_PROFILE);
+						setAppointments([]);
+						setNotifications([]);
+						setAvailability(INITIAL_AVAILABILITY);
 					}
 					return;
 				}
 
-				const profileData = await getMyStaffProfile();
-				const availabilityData = await getMyStaffAvailability();
-				const appointmentsData = await getMyStaffAppointments();
-				const notificationsData = await getMyStaffNotifications();
+				const [profileData, availabilityData, appointmentsData, notificationsData] = await Promise.all([
+					getMyStaffProfile(),
+					getMyStaffAvailability(),
+					getMyStaffAppointments(),
+					getMyStaffNotifications(),
+				]);
 
 				if (!cancelled) {
 					setProfile(profileData);
@@ -216,7 +247,7 @@ export default function StaffDashboard() {
 			}
 		}
 
-		loadProfile();
+		loadDashboard();
 
 		return () => {
 			cancelled = true;
@@ -224,7 +255,14 @@ export default function StaffDashboard() {
 	}, []);
 
 	const roleOptions = useMemo(() => {
-		const uniqueRoles = [...new Set(appointments.map((appointment) => String(appointment.assignedRoleKey || "")).filter(Boolean))];
+		const uniqueRoles = [
+			...new Set(
+				appointments
+					.map((appointment) => String(appointment.assignedRoleKey || "").trim())
+					.filter(Boolean)
+			),
+		];
+
 		return uniqueRoles.sort((a, b) => a.localeCompare(b));
 	}, [appointments]);
 
@@ -261,27 +299,33 @@ export default function StaffDashboard() {
 	}, [appointments, futureRoleFilter, futureStartDate, futureEndDate]);
 
 	function handleAvailabilityToggle(index: number) {
-		setAvailability((prev) => prev.map((item, i) => i === index ? { ...item, enabled: !item.enabled } : item));
+		setAvailability((prev) =>
+			prev.map((item, i) => (i === index ? { ...item, enabled: !item.enabled } : item))
+		);
 	}
 
 	function handleTimeChange(index: number, field: "startTime" | "endTime", value: string) {
-		setAvailability((prev) => prev.map((item, i) => {
-			if (i !== index) return item;
+		setAvailability((prev) =>
+			prev.map((item, i) => {
+				if (i !== index) return item;
 
-			const updatedItem = { ...item, [field]: value };
-			if (field === "startTime" && updatedItem.endTime <= value) {
-				const validEndOptions = getEndTimeOptions(value);
-				updatedItem.endTime = validEndOptions.length > 0 ? validEndOptions[0].value : value;
-			}
+				const updatedItem = { ...item, [field]: value };
 
-			return updatedItem;
-		}));
+				if (field === "startTime" && updatedItem.endTime <= value) {
+					const validEndOptions = getEndTimeOptions(value);
+					updatedItem.endTime = validEndOptions.length > 0 ? validEndOptions[0].value : value;
+				}
+
+				return updatedItem;
+			})
+		);
 	}
 
 	async function handleSaveAvailability() {
 		setAvailabilityMessage("");
 
 		const enabledDays = availability.filter((day) => day.enabled);
+
 		if (enabledDays.length === 0) {
 			setAvailabilityMessage("Please select at least one available day");
 			return;
@@ -294,7 +338,11 @@ export default function StaffDashboard() {
 			}
 		}
 
-		const payload = enabledDays.map((day) => ({ dayOfWeek: day.dayOfWeek, startTime: day.startTime, endTime: day.endTime }));
+		const payload = enabledDays.map((day) => ({
+			dayOfWeek: day.dayOfWeek,
+			startTime: day.startTime,
+			endTime: day.endTime,
+		}));
 
 		try {
 			const result = await saveMyStaffAvailability(payload);
@@ -317,6 +365,35 @@ export default function StaffDashboard() {
 			setNotificationMessage(err instanceof Error ? err.message : "Failed to dismiss notification");
 		} finally {
 			setMarkingNotificationID(null);
+		}
+	}
+
+	async function handleCancelAppointment(appointmentID: number) {
+		const reason = window.prompt("Please enter the cancellation reason:");
+
+		if (reason === null) return;
+
+		const trimmedReason = reason.trim();
+		if (!trimmedReason) {
+			setAppointmentMessage("A cancellation reason is required.");
+			return;
+		}
+
+		try {
+			setAppointmentMessage("");
+			setCancelingAppointmentID(appointmentID);
+
+			await cancelMyStaffAppointment(appointmentID, {
+				cancellationReason: trimmedReason,
+			});
+
+			const updatedAppointments = await getMyStaffAppointments();
+			setAppointments(updatedAppointments);
+			setAppointmentMessage("Appointment canceled successfully.");
+		} catch (err) {
+			setAppointmentMessage(getFriendlyCancelMessage(err));
+		} finally {
+			setCancelingAppointmentID(null);
 		}
 	}
 
@@ -371,7 +448,9 @@ export default function StaffDashboard() {
 
 							<div className="staffDashboardField">
 								<label className="staffDashboardLabel">Roles</label>
-								<div className="staffDashboardValue">{profile.roleKeys.length > 0 ? profile.roleKeys.join(", ") : "None"}</div>
+								<div className="staffDashboardValue">
+									{profile.roleKeys.length > 0 ? profile.roleKeys.join(", ") : "None"}
+								</div>
 							</div>
 						</div>
 					</section>
@@ -384,22 +463,38 @@ export default function StaffDashboard() {
 							{availability.map((item, index) => (
 								<div className="availabilityRow" key={item.day}>
 									<label className="availabilityDay">
-										<input type="checkbox" checked={item.enabled} onChange={() => handleAvailabilityToggle(index)} />
+										<input
+											type="checkbox"
+											checked={item.enabled}
+											onChange={() => handleAvailabilityToggle(index)}
+										/>
 										<span>{item.day}</span>
 									</label>
 
 									<div className="availabilityTimes">
-										<select value={item.startTime} disabled={!item.enabled} onChange={(e) => handleTimeChange(index, "startTime", e.target.value)}>
+										<select
+											value={item.startTime}
+											disabled={!item.enabled}
+											onChange={(e) => handleTimeChange(index, "startTime", e.target.value)}
+										>
 											{START_TIME_OPTIONS.map((option) => (
-												<option key={option.value} value={option.value}>{option.label}</option>
+												<option key={option.value} value={option.value}>
+													{option.label}
+												</option>
 											))}
 										</select>
 
 										<span>to</span>
 
-										<select value={item.endTime} disabled={!item.enabled} onChange={(e) => handleTimeChange(index, "endTime", e.target.value)}>
+										<select
+											value={item.endTime}
+											disabled={!item.enabled}
+											onChange={(e) => handleTimeChange(index, "endTime", e.target.value)}
+										>
 											{getEndTimeOptions(item.startTime).map((option) => (
-												<option key={option.value} value={option.value}>{option.label}</option>
+												<option key={option.value} value={option.value}>
+													{option.label}
+												</option>
 											))}
 										</select>
 									</div>
@@ -408,7 +503,9 @@ export default function StaffDashboard() {
 						</div>
 
 						<div className="staffDashboardActions">
-							<button className="staffDashboardPrimaryBtn" onClick={handleSaveAvailability}>Save Availability</button>
+							<button className="staffDashboardPrimaryBtn" onClick={handleSaveAvailability}>
+								Save Availability
+							</button>
 						</div>
 
 						{availabilityMessage && <div className="staffDashboardMessage">{availabilityMessage}</div>}
@@ -420,10 +517,16 @@ export default function StaffDashboard() {
 						<div className="staffFilterPanel">
 							<div className="staffFilterField">
 								<label className="staffDashboardLabel">Assigned Role</label>
-								<select className="staffDashboardInput" value={todayRoleFilter} onChange={(e) => setTodayRoleFilter(e.target.value)}>
+								<select
+									className="staffDashboardInput"
+									value={todayRoleFilter}
+									onChange={(e) => setTodayRoleFilter(e.target.value)}
+								>
 									<option value="">All Roles</option>
 									{roleOptions.map((roleKey) => (
-										<option key={roleKey} value={roleKey}>{roleKey}</option>
+										<option key={roleKey} value={roleKey}>
+											{roleKey}
+										</option>
 									))}
 								</select>
 							</div>
@@ -435,8 +538,12 @@ export default function StaffDashboard() {
 							<ul className="staffDashboardList">
 								{todayAppointments.map((appt) => (
 									<li className="staffDashboardListItem" key={appt.appointmentID}>
-										<div><b>{appt.petName}</b> — {formatReasonLabel(appt.service)}</div>
-										<div>{appt.appointmentDate} @ {appt.appointmentTime}</div>
+										<div>
+											<b>{appt.petName}</b> — {formatReasonLabel(appt.service)}
+										</div>
+										<div>
+											{appt.appointmentDate} @ {appt.appointmentTime}
+										</div>
 										<div>Assigned Role: {appt.assignedRoleKey}</div>
 									</li>
 								))}
@@ -450,28 +557,52 @@ export default function StaffDashboard() {
 						<div className="staffFilterPanel">
 							<div className="staffFilterField">
 								<label className="staffDashboardLabel">Assigned Role</label>
-								<select className="staffDashboardInput" value={futureRoleFilter} onChange={(e) => setFutureRoleFilter(e.target.value)}>
+								<select
+									className="staffDashboardInput"
+									value={futureRoleFilter}
+									onChange={(e) => setFutureRoleFilter(e.target.value)}
+								>
 									<option value="">All Roles</option>
 									{roleOptions.map((roleKey) => (
-										<option key={roleKey} value={roleKey}>{roleKey}</option>
+										<option key={roleKey} value={roleKey}>
+											{roleKey}
+										</option>
 									))}
 								</select>
 							</div>
 
 							<div className="staffFilterField">
 								<label className="staffDashboardLabel">Start Date</label>
-								<input className="staffDashboardInput" type="date" value={futureStartDate} onChange={(e) => setFutureStartDate(e.target.value)} />
+								<input
+									className="staffDashboardInput"
+									type="date"
+									value={futureStartDate}
+									onChange={(e) => setFutureStartDate(e.target.value)}
+								/>
 							</div>
 
 							<div className="staffFilterField">
 								<label className="staffDashboardLabel">End Date</label>
-								<input className="staffDashboardInput" type="date" value={futureEndDate} onChange={(e) => setFutureEndDate(e.target.value)} />
+								<input
+									className="staffDashboardInput"
+									type="date"
+									value={futureEndDate}
+									onChange={(e) => setFutureEndDate(e.target.value)}
+								/>
 							</div>
 
 							<div className="staffFilterButtonRow">
-								<button type="button" className="staffDashboardSecondaryBtn" onClick={clearFutureFilters}>Clear Future Filters</button>
+								<button
+									type="button"
+									className="staffDashboardSecondaryBtn"
+									onClick={clearFutureFilters}
+								>
+									Clear Future Filters
+								</button>
 							</div>
 						</div>
+
+						{appointmentMessage && <div className="staffDashboardMessage">{appointmentMessage}</div>}
 
 						{futureAppointments.length === 0 ? (
 							<p>No future appointments.</p>
@@ -479,9 +610,24 @@ export default function StaffDashboard() {
 							<ul className="staffDashboardList">
 								{futureAppointments.map((appt) => (
 									<li className="staffDashboardListItem" key={appt.appointmentID}>
-										<div><b>{appt.petName}</b> — {formatReasonLabel(appt.service)}</div>
-										<div>{appt.appointmentDate} @ {appt.appointmentTime}</div>
+										<div>
+											<b>{appt.petName}</b> — {formatReasonLabel(appt.service)}
+										</div>
+										<div>
+											{appt.appointmentDate} @ {appt.appointmentTime}
+										</div>
 										<div>Assigned Role: {appt.assignedRoleKey}</div>
+
+										<div className="staffDashboardActions">
+											<button
+												type="button"
+												className="staffDashboardSecondaryBtn"
+												onClick={() => handleCancelAppointment(appt.appointmentID)}
+												disabled={cancelingAppointmentID === appt.appointmentID}
+											>
+												{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Cancel Appointment"}
+											</button>
+										</div>
 									</li>
 								))}
 							</ul>
@@ -491,7 +637,9 @@ export default function StaffDashboard() {
 					<section className="staffDashboardCard">
 						<h2>Notifications</h2>
 
-						{notificationMessage ? <div className="staffDashboardMessage">{notificationMessage}</div> : null}
+						{notificationMessage ? (
+							<div className="staffDashboardMessage">{notificationMessage}</div>
+						) : null}
 
 						{notifications.length === 0 ? (
 							<p>No notifications right now.</p>

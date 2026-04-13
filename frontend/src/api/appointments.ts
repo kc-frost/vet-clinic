@@ -11,6 +11,19 @@ export function getMyAppointments() {
 	return api<Appointment[]>("/appointments/mine");
 }
 
+export function cancelAppointmentAsAdmin(
+	appointmentID: number,
+	payload: { cancellationReason: string }
+  ) {
+	return api<{ message: string; result: { appointmentID: number } }>(
+	  `/appointments/${appointmentID}/cancel`,
+	  {
+		method: "POST",
+		body: payload,
+	  }
+	);
+  }
+
 // deletes one appointment by id
 // backend only allows admins to do this
 export function deleteAppointment(appointmentID: number) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Appointment } from "../../types/appointment";
-import { getAppointments, deleteAppointment } from "../../api/appointments";
+import { getAppointments, cancelAppointmentAsAdmin } from "../../api/appointments";
 import trashIcon from "../../assets/trashcan1.png";
 import "../../styles/appointments.css";
 
@@ -43,7 +43,10 @@ function getLocalDateOnlyText(value: string) {
 
 // splits comma separated staff search text into clean entries
 function parseStaffSearchEntries(raw: string) {
-	return raw.split(",").map((part) => part.trim().toLowerCase()).filter(Boolean);
+	return raw
+		.split(",")
+		.map((part) => part.trim().toLowerCase())
+		.filter(Boolean);
 }
 
 export default function ViewAppointments() {
@@ -52,7 +55,7 @@ export default function ViewAppointments() {
 	const [pageError, setPageError] = useState("");
 	const [appointments, setAppointments] = useState<Appointment[]>([]);
 
-	// these are combined filters, not one-at-a-time filters
+	// combined filters
 	const [filterStartDate, setFilterStartDate] = useState("");
 	const [filterEndDate, setFilterEndDate] = useState("");
 	const [filterAppointmentId, setFilterAppointmentId] = useState("");
@@ -66,6 +69,7 @@ export default function ViewAppointments() {
 		async function load() {
 			setLoading(true);
 			setPageError("");
+
 			try {
 				const data = await getAppointments();
 				if (!cancelled) setAppointments(data);
@@ -77,25 +81,35 @@ export default function ViewAppointments() {
 		}
 
 		load();
+
 		return () => {
 			cancelled = true;
 		};
 	}, []);
 
-	// this keeps appointments that have not finished yet and sorts by start time
+	// only show appointments that have not ended yet
 	const visibleAppointments = useMemo(() => {
 		const now = Date.now();
+
 		return [...appointments]
 			.filter((a) => {
 				const endDateTime = a.endDateTime
 					? String(a.endDateTime)
-					: new Date(parseMySqlDateTime(a.date).getTime() + Number(a.durationMinutes || 0) * 60000).toISOString();
+					: new Date(
+							parseMySqlDateTime(a.date).getTime() +
+								Number(a.durationMinutes || 0) * 60000
+					  ).toISOString();
+
 				return new Date(String(endDateTime).replace(" ", "T")).getTime() > now;
 			})
-			.sort((a, b) => parseMySqlDateTime(a.date).getTime() - parseMySqlDateTime(b.date).getTime());
+			.sort(
+				(a, b) =>
+					parseMySqlDateTime(a.date).getTime() -
+					parseMySqlDateTime(b.date).getTime()
+			);
 	}, [appointments]);
 
-	// this applies all active filters together
+	// apply all filters together
 	const filteredAppointments = useMemo(() => {
 		const appointmentIdQuery = filterAppointmentId.trim();
 		const typeQuery = filterAppointmentType.trim().toLowerCase();
@@ -109,25 +123,24 @@ export default function ViewAppointments() {
 			const userEmail = String(a.userEmail || "").toLowerCase();
 			const assignedStaffSummary = String(a.assignedStaffSummary || "").toLowerCase();
 
-			// start date is inclusive
 			if (filterStartDate && apptDateOnly < filterStartDate) return false;
-
-			// end date is inclusive
 			if (filterEndDate && apptDateOnly > filterEndDate) return false;
-
 			if (appointmentIdQuery && !String(a.appointmentID).includes(appointmentIdQuery)) return false;
-
-			// type can match either the raw reason key or the display label
 			if (typeQuery && !rawReason.includes(typeQuery) && !formattedReason.includes(typeQuery)) return false;
-
 			if (emailQuery && !userEmail.includes(emailQuery)) return false;
-
-			// each comma separated staff entry must be present somewhere in the assigned staff text
 			if (staffQueries.length > 0 && !staffQueries.every((entry) => assignedStaffSummary.includes(entry))) return false;
 
 			return true;
 		});
-	}, [filterAppointmentId, filterAppointmentType, filterEndDate, filterStaff, filterStartDate, filterUserEmail, visibleAppointments]);
+	}, [
+		filterAppointmentId,
+		filterAppointmentType,
+		filterEndDate,
+		filterStaff,
+		filterStartDate,
+		filterUserEmail,
+		visibleAppointments,
+	]);
 
 	function clearFilters() {
 		setFilterStartDate("");
@@ -138,10 +151,15 @@ export default function ViewAppointments() {
 		setFilterStaff("");
 	}
 
-	async function deleteAppt(appointmentID: number) {
+	async function cancelAppt(appointmentID: number) {
+		const cancellationReason = window.prompt("Enter cancellation reason:");
+		if (!cancellationReason || !cancellationReason.trim()) return;
+
 		try {
 			setPageError("");
-			await deleteAppointment(appointmentID);
+			await cancelAppointmentAsAdmin(appointmentID, {
+				cancellationReason: cancellationReason.trim(),
+			});
 			const data = await getAppointments();
 			setAppointments(data);
 		} catch (err) {
@@ -152,7 +170,11 @@ export default function ViewAppointments() {
 	return (
 		<div className="appointmentsPage">
 			<div className="appointmentsHeader">
-				<button type="button" className="pageHomeBtn" onClick={() => navigate("/")}>
+				<button
+					type="button"
+					className="pageHomeBtn"
+					onClick={() => navigate("/")}
+				>
 					← Home
 				</button>
 				<h1>View All Appointments</h1>
@@ -165,12 +187,22 @@ export default function ViewAppointments() {
 				<div className="appointmentsFiltersGrid">
 					<div className="appointmentsFilterField">
 						<label htmlFor="filterStartDate">Start Date</label>
-						<input id="filterStartDate" type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} />
+						<input
+							id="filterStartDate"
+							type="date"
+							value={filterStartDate}
+							onChange={(e) => setFilterStartDate(e.target.value)}
+						/>
 					</div>
 
 					<div className="appointmentsFilterField">
 						<label htmlFor="filterEndDate">End Date</label>
-						<input id="filterEndDate" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} />
+						<input
+							id="filterEndDate"
+							type="date"
+							value={filterEndDate}
+							onChange={(e) => setFilterEndDate(e.target.value)}
+						/>
 					</div>
 
 					<div className="appointmentsFilterField">
@@ -219,10 +251,18 @@ export default function ViewAppointments() {
 				</div>
 
 				<div className="appointmentsFiltersActions">
-					<button type="button" className="appointmentsClearBtn" onClick={clearFilters}>
+					<button
+						type="button"
+						className="appointmentsClearBtn"
+						onClick={clearFilters}
+					>
 						Clear Filters
 					</button>
-					<div className="appointmentsFilterCount">Showing {filteredAppointments.length} appointment{filteredAppointments.length === 1 ? "" : "s"}</div>
+
+					<div className="appointmentsFilterCount">
+						Showing {filteredAppointments.length} appointment
+						{filteredAppointments.length === 1 ? "" : "s"}
+					</div>
 				</div>
 			</div>
 
@@ -246,7 +286,10 @@ export default function ViewAppointments() {
 						{filteredAppointments.map((a) => {
 							const endObj = a.endDateTime
 								? a.endDateTime
-								: new Date(parseMySqlDateTime(a.date).getTime() + Number(a.durationMinutes || 0) * 60000).toISOString();
+								: new Date(
+										parseMySqlDateTime(a.date).getTime() +
+											Number(a.durationMinutes || 0) * 60000
+								  ).toISOString();
 
 							return (
 								<tr key={a.appointmentID}>
@@ -263,13 +306,13 @@ export default function ViewAppointments() {
 									<td className="equipmentCell">{a.equipmentUsed || "—"}</td>
 									<td>
 										<button
-											onClick={() => deleteAppt(a.appointmentID)}
+											onClick={() => cancelAppt(a.appointmentID)}
 											className="btn danger appt-trash"
-											aria-label="Delete appointment"
-											title="Delete"
+											aria-label="Cancel appointment"
+											title="Cancel appointment"
 										>
 											<img src={trashIcon} alt="" className="trash-icon" />
-											<p>Delete</p>
+											<p>Cancel</p>
 										</button>
 									</td>
 								</tr>

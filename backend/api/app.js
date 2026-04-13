@@ -21,6 +21,7 @@ import appointmentIssuesRoutes from "./routes/appointmentIssues.js";
 import path from "path";
 import profileRoutes from "./routes/profile.js";
 import { startNotificationScheduler } from "./lib/notifications.js";
+import staffAppointmentsRoutes from "./routes/staffAppointments.js";
 
 dotenv.config();
 
@@ -75,6 +76,7 @@ app.use("/api/appointment-issues", appointmentIssuesRoutes);
 
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api/profile", profileRoutes);
+app.use("/api/staff", staffAppointmentsRoutes);
 
 // scheduler starts once when the api boots
 startNotificationScheduler();

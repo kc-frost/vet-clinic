@@ -1,5 +1,6 @@
 import { pool } from "../db.js";
 import { processInactiveStaffAssignments } from "./appointmentIssueService.js";
+import { cancelAppointment } from "./appointmentCancellationService.js";
 
 function toPositiveInt(value) {
 	// Make sure IDs coming in are real positive integers before we trust them
@@ -8,59 +9,34 @@ function toPositiveInt(value) {
 	return parsed;
 }
 
-function buildStaffCancellationMessage(appointment) {
-	// Support either a Date object or a raw DB date value
-	const appointmentDate = appointment.date instanceof Date ? appointment.date : new Date(appointment.date);
-
-	// Format the appointment date into readable notification text
-	const dateText = appointmentDate.toLocaleString("en-US", {
-		year: "numeric",
-		month: "numeric",
-		day: "numeric",
-		hour: "numeric",
-		minute: "2-digit",
-	});
-
-	return `The appointment for ${dateText} has been canceled because the customer account was deactivated`;
-}
-
-async function refundConsumablesForAppointments(conn, appointmentIDs) {
-	// Nothing to do if there are no appointments to process
-	if (!appointmentIDs.length) return;
-
-	// Add back any consumables that were reserved by these appointments
-	await conn.query(
-		`UPDATE inventory i
-		 INNER JOIN (
-			SELECT itemID, SUM(qtyUsed) AS qtyToReturn
-			FROM appointment_consumable
-			WHERE appointmentID IN (?)
-			GROUP BY itemID
-		 ) used
-			on used.itemID = i.itemID
-		 SET i.quantity = i.quantity + used.qtyToReturn`,
-		[appointmentIDs]
-	);
-
-	// Clear the appointment_consumable rows so canceled appointments stop holding inventory
-	await conn.query(`DELETE FROM appointment_consumable WHERE appointmentID IN (?)`, [appointmentIDs]);
-}
-
 async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
-	// Find all future active appointments owned by this user
 	const [rows] = await conn.query(
-		`SELECT
-			a.appointmentID,
-			a.date,
-			af.petName
-		 FROM appointment a
-		 LEFT JOIN appointment_form af
-			on af.appointmentID = a.appointmentID
-		 WHERE a.userID = ?
-			AND a.date >= NOW()
-			AND a.isCanceled = 0`,
-		[ownerUserID]
+	  `SELECT appointmentID
+	   FROM appointment
+	   WHERE userID = ?
+		 AND date >= NOW()
+		 AND isCanceled = 0`,
+	  [ownerUserID]
 	);
+  
+	if (!rows.length) return { canceledAppointmentIDs: [] };
+  
+	const canceledAppointmentIDs = [];
+  
+	for (const row of rows) {
+	  const result = await cancelAppointment({
+		conn,
+		appointmentID: Number(row.appointmentID),
+		canceledByUserID: actorUserID,
+		canceledByType: "ADMIN",
+		cancellationReason: "The customer account was deactivated",
+	  });
+  
+	  canceledAppointmentIDs.push(Number(result.appointmentID));
+	}
+  
+	return { canceledAppointmentIDs };
+  }
 
 	// If there are no future appointments, there is nothing to cancel
 	if (!rows.length) return { canceledAppointmentIDs: [] };
@@ -129,7 +105,6 @@ async function cancelFutureOwnedAppointments(conn, ownerUserID, actorUserID) {
 	}
 
 	return { canceledAppointmentIDs: appointmentIDs };
-}
 
 export async function deactivateAccount({ targetUserID, actorUserID }) {
 	// Validate both IDs before touching the database

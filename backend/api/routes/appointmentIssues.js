@@ -1,6 +1,7 @@
 import express from "express";
 import { requireAdmin } from "../lib/authMiddleware.js";
 import { getUnderReviewAppointmentByID, getUnderReviewAppointments } from "../lib/appointmentIssueService.js";
+import { cancelAppointment } from "../lib/appointmentCancellationService.js";
 
 const router = express.Router();
 
@@ -29,5 +30,38 @@ router.get("/:appointmentID", requireAdmin, async (req, res) => {
 		res.status(500).json({ message: "Failed to fetch under-review appointment" });
 	}
 });
+
+router.post("/:appointmentID/cancel", requireAdmin, async (req, res) => {
+	try {
+	  const appointmentID = Number(req.params.appointmentID);
+	  const canceledByUserID = Number(req.session.userID);
+	  const cancellationReason = String(req.body?.cancellationReason || "").trim();
+  
+	  if (!Number.isInteger(appointmentID) || appointmentID <= 0) {
+		return res.status(400).json({ message: "Invalid appointment id" });
+	  }
+  
+	  if (!cancellationReason) {
+		return res.status(400).json({ message: "Cancellation reason is required" });
+	  }
+  
+	  const result = await cancelAppointment({
+		appointmentID,
+		canceledByUserID,
+		canceledByType: "ADMIN",
+		cancellationReason,
+	  });
+  
+	  res.json({
+		message: "Appointment canceled",
+		result,
+	  });
+	} catch (err) {
+	  const status = Number(err?.status || 500);
+	  res.status(status).json({
+		message: err instanceof Error ? err.message : "Failed to cancel appointment",
+	  });
+	}
+  });
 
 export default router;
