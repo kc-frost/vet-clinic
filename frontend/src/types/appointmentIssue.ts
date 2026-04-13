@@ -15,6 +15,15 @@ export type UnderReviewAssignedStaff = {
 	positionTitle: string;
 };
 
+export type UnderReviewRescheduleSlot = {
+	slotId: string;
+	date: string;
+	startTime: string;
+	endTime: string;
+	startDateTime: string;
+	endDateTime: string;
+};
+
 export type UnderReviewAppointment = {
 	appointmentID: number;
 	userID: number;
@@ -31,4 +40,11 @@ export type UnderReviewAppointment = {
 	isCanceled: boolean;
 	issues: AppointmentIssueRow[];
 	assignedStaff: UnderReviewAssignedStaff[];
+};
+
+export type UnderReviewRescheduleOptionsResponse = {
+	appointmentID: number;
+	startDate: string;
+	days: number;
+	slots: UnderReviewRescheduleSlot[];
 };
