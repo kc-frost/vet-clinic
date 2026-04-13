@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { requireAuth, requireAdmin } from "../lib/authMiddleware.js";
+import { cancelAppointment } from "../lib/appointmentCancellationService.js";
 
 const router = express.Router();
 
@@ -1060,48 +1061,50 @@ router.get("/mine", requireAuth, async (req, res) => {
 
 /*
 	Logged-in user route to cancel one of their own current or future appointments.
-	The delete happens inside a transaction so related cleanup stays consistent.
+	The cancel uses the shared helper so metadata and cleanup stay consistent.
 */
 router.delete("/mine/:id", requireAuth, async (req, res) => {
 	try {
-		const userID = getRequestUserId(req);
-		const appointmentID = Number(req.params.id);
-		if (!Number.isInteger(appointmentID) || appointmentID <= 0) return res.status(400).json({ error: "invalid appointment id" });
-
-		const result = await withTransaction(async (conn) => {
-			const [rows] = await conn.execute(
-				`select appointmentID, userID, date
-				 from appointment
-				 where appointmentID = ?
-				 for update`,
-				[appointmentID]
-			);
-			if (!rows.length) return { ok: false, status: 404, error: "appointment not found" };
-			const appt = rows[0];
-
-			/*
-				Users can only cancel their own appointments.
-			*/
-			if (Number(appt.userID) !== userID) return { ok: false, status: 403, error: "not allowed to cancel this appointment" };
-
-			const startDt = sqlDateTimeToDate(appt.date);
-
-			/*
-				Past appointments cannot be canceled.
-			*/
-			if (startDt.getTime() < Date.now()) return { ok: false, status: 400, error: "past appointments cannot be canceled" };
-
-			await deleteAppointmentInsideTransaction(conn, appointmentID);
-			return { ok: true };
-		});
-
-		if (!result.ok) return res.status(result.status || 500).json({ error: result.error || "failed to cancel appointment" });
-		res.json({ message: "appointment canceled" });
+	  const appointmentID = Number(req.params.id);
+	  const userID = Number(req.session.userID);
+  
+	  if (!Number.isInteger(appointmentID) || appointmentID <= 0) {
+		return res.status(400).json({ error: "invalid appointment id" });
+	  }
+  
+	  const [rows] = await pool.execute(
+		`SELECT appointmentID, userID, date, isCanceled
+		 FROM appointment
+		 WHERE appointmentID = ?
+		 LIMIT 1`,
+		[appointmentID]
+	  );
+  
+	  if (!rows.length) {
+		return res.status(404).json({ error: "appointment not found" });
+	  }
+  
+	  const appt = rows[0];
+  
+	  if (Number(appt.userID) !== userID) {
+		return res.status(403).json({ error: "not allowed to cancel this appointment" });
+	  }
+  
+	  const result = await cancelAppointment({
+		appointmentID,
+		canceledByUserID: userID,
+		canceledByType: "CUSTOMER",
+		cancellationReason: null,
+	  });
+  
+	  res.json({ message: "appointment canceled", result });
 	} catch (err) {
-		console.error("DELETE /api/appointments/mine/:id error:", err);
-		res.status(500).json({ error: "failed to cancel appointment" });
+	  const status = Number(err?.status || 500);
+	  res.status(status).json({
+		error: err instanceof Error ? err.message : "failed to cancel appointment",
+	  });
 	}
-});
+  });
 
 /*
 	Logged-in user route to reschedule one of their own current or future appointments.
@@ -1171,24 +1174,34 @@ router.post("/mine/:id/reschedule", requireAuth, async (req, res) => {
 	Admin-only delete route.
 	Deletes any appointment and refunds tied consumables.
 */
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.post("/:id/cancel", requireAdmin, async (req, res) => {
 	try {
-		const appointmentID = Number(req.params.id);
-		if (!Number.isInteger(appointmentID) || appointmentID <= 0) return res.status(400).json({ error: "invalid appointment id" });
-
-		const result = await withTransaction(async (conn) => {
-			const [rows] = await conn.execute(`select appointmentID from appointment where appointmentID = ? for update`, [appointmentID]);
-			if (!rows.length) return { ok: false, status: 404, error: "appointment not found" };
-			await deleteAppointmentInsideTransaction(conn, appointmentID);
-			return { ok: true };
-		});
-
-		if (!result.ok) return res.status(result.status || 500).json({ error: result.error || "failed to delete appointment" });
-		res.status(204).send();
+	  const appointmentID = Number(req.params.id);
+	  const canceledByUserID = Number(req.session.userID);
+	  const cancellationReason = String(req.body?.cancellationReason || "").trim();
+  
+	  if (!Number.isInteger(appointmentID) || appointmentID <= 0) {
+		return res.status(400).json({ error: "invalid appointment id" });
+	  }
+  
+	  if (!cancellationReason) {
+		return res.status(400).json({ error: "cancellationReason is required" });
+	  }
+  
+	  const result = await cancelAppointment({
+		appointmentID,
+		canceledByUserID,
+		canceledByType: "ADMIN",
+		cancellationReason,
+	  });
+  
+	  res.json({ message: "appointment canceled", result });
 	} catch (err) {
-		console.error("DELETE /api/appointments/:id error:", err);
-		res.status(500).json({ error: "failed to delete appointment" });
+	  const status = Number(err?.status || 500);
+	  res.status(status).json({
+		error: err instanceof Error ? err.message : "failed to cancel appointment",
+	  });
 	}
-});
+  });
 
 export default router;

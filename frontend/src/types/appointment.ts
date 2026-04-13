@@ -17,3 +17,10 @@ export type Appointment = {
 	roomType?: string;
 	assignedStaffSummary?: string;
 };
+
+export type AppointmentCancellationMeta = {
+	canceledByUserID?: number | null;
+	canceledByType?: "ADMIN" | "STAFF" | "CUSTOMER" | null;
+	cancellationReason?: string | null;
+	canceledAt?: string | null;
+  };

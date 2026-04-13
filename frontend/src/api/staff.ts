@@ -40,6 +40,19 @@ export async function createStaff(payload: StaffCreate): Promise<{ staffID: numb
 	});
 }
 
+export async function cancelMyStaffAppointment(
+	appointmentID: number,
+	payload: { cancellationReason: string }
+  ): Promise<{ message: string; result: { appointmentID: number } }> {
+	return api<{ message: string; result: { appointmentID: number } }>(
+	  `/staff/me/appointments/${appointmentID}/cancel`,
+	  {
+		method: "POST",
+		body: payload,
+	  }
+	);
+  }
+
 /*
 	Gets the user accounts admin can look through before linking one
 	to a staff profile

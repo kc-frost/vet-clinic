@@ -6,6 +6,7 @@ import {
 	getMyStaffAppointments,
 	getMyStaffNotifications,
 	markMyStaffNotificationRead,
+	cancelMyStaffAppointment,
 	type MyStaffProfile,
 	type StaffAppointment,
 	type StaffNotification,
@@ -164,6 +165,33 @@ function getFriendlyAvailabilityMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Failed to save availability";
 }
 
+function getFriendlyCancelMessage(error: unknown) {
+	/*
+		Show one readable message for common cancel failures instead of
+		dumping raw backend text straight into the page
+	*/
+	const rawMessage = error instanceof Error ? error.message : "";
+	const normalizedMessage = rawMessage.toLowerCase();
+
+	if (normalizedMessage.includes("reason")) {
+		return "A cancellation reason is required";
+	}
+
+	if (normalizedMessage.includes("own assigned appointments")) {
+		return "You can only cancel appointments assigned to you";
+	}
+
+	if (normalizedMessage.includes("past appointments")) {
+		return "Past appointments cannot be canceled";
+	}
+
+	if (normalizedMessage.includes("already canceled")) {
+		return "This appointment was already canceled";
+	}
+
+	return error instanceof Error ? error.message : "Failed to cancel appointment";
+}
+
 export default function StaffDashboard() {
     // Main page state for staff profile and loading/error handling.
 	const [profile, setProfile] = useState<MyStaffProfile | null>(null);
@@ -178,6 +206,8 @@ export default function StaffDashboard() {
 	const [notifications, setNotifications] = useState<StaffNotification[]>([]);
 	const [notificationMessage, setNotificationMessage] = useState("");
 	const [markingNotificationID, setMarkingNotificationID] = useState<number | null>(null);
+	const [appointmentMessage, setAppointmentMessage] = useState("");
+	const [cancelingAppointmentID, setCancelingAppointmentID] = useState<number | null>(null);
 
 	// Filter state for today's appointments and future appointments.
 	const [todayRoleFilter, setTodayRoleFilter] = useState("");
@@ -356,6 +386,36 @@ export default function StaffDashboard() {
 		}
 	}
 
+	async function handleCancelAppointment(appointmentID: number) {
+		const reason = window.prompt("Please enter the cancellation reason:");
+
+		if (reason === null) return;
+
+		const trimmedReason = reason.trim();
+		if (!trimmedReason) {
+			setAppointmentMessage("A cancellation reason is required");
+			return;
+		}
+
+		const confirmed = window.confirm("Are you sure you want to cancel this appointment?");
+		if (!confirmed) return;
+
+		try {
+			setAppointmentMessage("");
+			setCancelingAppointmentID(appointmentID);
+
+			await cancelMyStaffAppointment(appointmentID, { cancellationReason: trimmedReason });
+
+			const updatedAppointments = await getMyStaffAppointments();
+			setAppointments(updatedAppointments);
+			setAppointmentMessage("Appointment canceled successfully");
+		} catch (err) {
+			setAppointmentMessage(getFriendlyCancelMessage(err));
+		} finally {
+			setCancelingAppointmentID(null);
+		}
+	}
+
 	function clearFutureFilters() {
 		setFutureRoleFilter("");
 		setFutureStartDate("");
@@ -474,6 +534,17 @@ export default function StaffDashboard() {
 										<div><b>{appt.petName}</b> — {formatReasonLabel(appt.service)}</div>
 										<div>{appt.appointmentDate} @ {appt.appointmentTime}</div>
 										<div>Assigned Role: {appt.assignedRoleKey}</div>
+
+										<div className="staffDashboardActions">
+											<button
+												type="button"
+												className="staffDashboardSecondaryBtn"
+												onClick={() => handleCancelAppointment(appt.appointmentID)}
+												disabled={cancelingAppointmentID === appt.appointmentID}
+											>
+												{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Cancel Appointment"}
+											</button>
+										</div>
 									</li>
 								))}
 							</ul>
@@ -518,6 +589,17 @@ export default function StaffDashboard() {
 										<div><b>{appt.petName}</b> — {formatReasonLabel(appt.service)}</div>
 										<div>{appt.appointmentDate} @ {appt.appointmentTime}</div>
 										<div>Assigned Role: {appt.assignedRoleKey}</div>
+
+										<div className="staffDashboardActions">
+											<button
+												type="button"
+												className="staffDashboardSecondaryBtn"
+												onClick={() => handleCancelAppointment(appt.appointmentID)}
+												disabled={cancelingAppointmentID === appt.appointmentID}
+											>
+												{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Cancel Appointment"}
+											</button>
+										</div>
 									</li>
 								))}
 							</ul>
