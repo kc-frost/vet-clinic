@@ -1,0 +1,130 @@
+.adminIssuesPage {
+	display: grid;
+	gap: 1rem;
+}
+
+.adminIssuesToolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.adminIssuesMessage {
+	padding: 0.75rem 1rem;
+	border-radius: 8px;
+	background: #f3f4f6;
+	color: #111827;
+}
+
+.adminIssuesGrid {
+	display: grid;
+	gap: 1rem;
+}
+
+.adminIssueCard {
+	border: 1px solid #d1d5db;
+	border-radius: 12px;
+	padding: 1rem;
+	background: #fff;
+	display: grid;
+	gap: 0.85rem;
+}
+
+.adminIssueHeader {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	align-items: start;
+}
+
+.adminIssueTitleBlock {
+	display: grid;
+	gap: 0.25rem;
+}
+
+.adminIssueMeta {
+	color: #4b5563;
+	font-size: 0.95rem;
+}
+
+.adminIssueSection {
+	display: grid;
+	gap: 0.5rem;
+}
+
+.adminIssueChipRow {
+	display: flex;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.adminIssueChip {
+	padding: 0.35rem 0.6rem;
+	border-radius: 999px;
+	background: #eef2ff;
+	color: #3730a3;
+	font-size: 0.9rem;
+}
+
+.adminIssueStaffList {
+	margin: 0;
+	padding-left: 1rem;
+	display: grid;
+	gap: 0.25rem;
+}
+
+.adminIssueActionRow {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.adminIssueTextarea {
+	width: 100%;
+	min-height: 100px;
+	padding: 0.75rem;
+	border: 1px solid #d1d5db;
+	border-radius: 8px;
+	font: inherit;
+	resize: vertical;
+}
+
+.adminIssueButtonRow {
+	display: flex;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+
+.adminIssuePrimaryBtn,
+.adminIssueDangerBtn,
+.adminIssueSecondaryBtn {
+	padding: 0.7rem 1rem;
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	font: inherit;
+}
+
+.adminIssuePrimaryBtn {
+	background: #2563eb;
+	color: #fff;
+}
+
+.adminIssueDangerBtn {
+	background: #dc2626;
+	color: #fff;
+}
+
+.adminIssueSecondaryBtn {
+	background: #e5e7eb;
+	color: #111827;
+}
+
+.adminIssueEmpty {
+	padding: 1rem;
+	border: 1px dashed #d1d5db;
+	border-radius: 12px;
+	background: #fff;
+}
