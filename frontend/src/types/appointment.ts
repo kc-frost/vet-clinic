@@ -5,22 +5,19 @@ export type Appointment = {
 	userID: number;
 	roomNumber: number | null;
 	petID: number | null;
-
 	reasonKey: string;
 	date: string;
 	durationMinutes: number;
-
-	// admin display fields
+	isCanceled?: number;
 	userEmail?: string;
+	petName?: string;
 	endDateTime?: string;
 	equipmentUsed?: string;
 	roomType?: string;
 	assignedStaffSummary?: string;
-};
-
-export type AppointmentCancellationMeta = {
 	canceledByUserID?: number | null;
 	canceledByType?: "ADMIN" | "STAFF" | "CUSTOMER" | null;
 	cancellationReason?: string | null;
 	canceledAt?: string | null;
-  };
+	canceledByName?: string | null;
+};

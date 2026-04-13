@@ -6,22 +6,14 @@ import { cancelAppointment } from "../lib/appointmentCancellationService.js";
 const router = express.Router();
 
 /*
-	Clinic hours are represented in minutes from midnight.
-	This keeps time math simple when checking slot boundaries.
+	Clinic hours are stored in minutes from midnight so the time math stays simple
 */
 const OPEN_MINUTES = 9 * 60;
 const CLOSE_MINUTES = 17 * 60;
 const SLOT_STEP_MINUTES = 15;
 
 /*
-	These rules define how each appointment reason should be scheduled.
-	Each reason includes:
-	- its canonical reasonKey
-	- duration
-	- required staff roles and quantities
-	- required room type
-	- required non-consumable equipment
-	- required consumable inventory items
+	These rules define what each appointment type needs in order to be scheduled
 */
 const REASON_RULES = {
 	WELLNESS_EXAM: {
@@ -177,10 +169,9 @@ const REASON_RULES = {
 	},
 };
 
-
 /*
 	These aliases let the backend accept alternate reason spellings
-	and map them back to the canonical keys in REASON_RULES.
+	and map them back to the canonical key
 */
 const REASON_ALIASES = {
 	wellness_exam: "WELLNESS_EXAM",
@@ -198,9 +189,8 @@ const REASON_ALIASES = {
 };
 
 /*
-	Normalizes an incoming reason key.
-	First tries the canonical uppercase version.
-	If not found, tries the alias table.
+	Normalizes an incoming reason key
+	It first checks the canonical uppercase key, then the alias table
 */
 function normalizeReasonKey(raw) {
 	if (!raw) return "";
@@ -214,8 +204,7 @@ function normalizeReasonKey(raw) {
 }
 
 /*
-	Gets the full scheduling rule object for a reason.
-	Returns null if the reason is invalid.
+	Gets the full scheduling rule for a reason
 */
 function getRule(reasonKeyRaw) {
 	const key = normalizeReasonKey(reasonKeyRaw);
@@ -223,29 +212,28 @@ function getRule(reasonKeyRaw) {
 }
 
 /*
-	Pads a number to two digits.
-	Example: 5 becomes "05".
+	Pads a number to two digits
 */
 function pad2(n) {
 	return String(n).padStart(2, "0");
 }
 
 /*
-	Validates YYYY-MM-DD format.
+	Checks YYYY-MM-DD format
 */
 function isValidDateOnly(dateStr) {
 	return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
 }
 
 /*
-	Validates HH:MM format.
+	Checks HH:MM format
 */
 function isValidTimeOnly(timeStr) {
 	return /^\d{2}:\d{2}$/.test(timeStr);
 }
 
 /*
-	Converts a time string like HH:MM into total minutes from midnight.
+	Turns HH:MM into total minutes from midnight
 */
 function timeStrToMinutes(timeStr) {
 	const [hStr, mStr] = String(timeStr || "").split(":");
@@ -256,7 +244,7 @@ function timeStrToMinutes(timeStr) {
 }
 
 /*
-	Converts total minutes from midnight back into HH:MM format.
+	Turns total minutes from midnight back into HH:MM
 */
 function minutesToTimeStr(totalMinutes) {
 	const h = Math.floor(totalMinutes / 60);
@@ -265,15 +253,14 @@ function minutesToTimeStr(totalMinutes) {
 }
 
 /*
-	Builds a SQL datetime string from date and time parts.
+	Builds a SQL datetime string from date and time parts
 */
 function formatSqlDateTime(dateStr, timeStr) {
 	return `${dateStr} ${timeStr}:00`;
 }
 
 /*
-	Converts a SQL datetime-like value into a JavaScript Date.
-	Handles Date objects and strings.
+	Converts a SQL datetime-like value into a JavaScript Date
 */
 function sqlDateTimeToDate(value) {
 	if (value instanceof Date) return value;
@@ -284,8 +271,8 @@ function sqlDateTimeToDate(value) {
 }
 
 /*
-	Parses a SQL datetime and returns minutes from midnight.
-	If Date parsing fails, it falls back to manual parsing.
+	Parses a SQL datetime and returns minutes from midnight
+	If Date parsing fails it falls back to reading the time string manually
 */
 function parseSqlDateTimeToMinutes(sqlDateTime) {
 	const dt = sqlDateTimeToDate(sqlDateTime);
@@ -299,15 +286,15 @@ function parseSqlDateTimeToMinutes(sqlDateTime) {
 }
 
 /*
-	Checks whether two time intervals overlap.
+	Checks whether two time intervals overlap
 */
 function minutesOverlap(aStart, aEnd, bStart, bEnd) {
 	return aStart < bEnd && bStart < aEnd;
 }
 
 /*
-	Parses a time value from the database into minutes.
-	Accepts HH:MM or HH:MM:SS.
+	Parses a database time value into minutes
+	Accepts HH:MM or HH:MM:SS
 */
 function parseTimeValueToMinutes(value) {
 	const raw = String(value || "").trim();
@@ -317,8 +304,8 @@ function parseTimeValueToMinutes(value) {
 }
 
 /*
-	Gets ISO-style day of week from a date string.
-	JavaScript uses Sunday = 0, but this converts Sunday to 7.
+	Gets ISO-style day of week from a date string
+	JavaScript uses Sunday = 0, so this converts Sunday to 7
 */
 function getDayOfWeekFromDateStr(dateStr) {
 	const [y, m, d] = String(dateStr).split("-").map((v) => Number(v));
@@ -328,8 +315,7 @@ function getDayOfWeekFromDateStr(dateStr) {
 }
 
 /*
-	Expands the requiredStaff array into individual assignment slots.
-	Example: qty 2 for a role becomes two separate slot objects.
+	Expands requiredStaff into individual assignment slots
 */
 function expandRequiredStaffSlots(rule) {
 	const slots = [];
@@ -341,8 +327,7 @@ function expandRequiredStaffSlots(rule) {
 }
 
 /*
-	Returns a shuffled copy of an array.
-	Used so staff assignment is not always picked in the same order.
+	Returns a shuffled copy so staff are not always picked in the same order
 */
 function shuffleArray(values) {
 	const copy = [...values];
@@ -354,7 +339,7 @@ function shuffleArray(values) {
 }
 
 /*
-	Builds a Map where the key is itemKey and the value is the row.
+	Builds a Map where itemKey points to the matching inventory row
 */
 function buildItemKeyToRowMap(rows) {
 	const map = new Map();
@@ -363,7 +348,7 @@ function buildItemKeyToRowMap(rows) {
 }
 
 /*
-	Builds a Map from roleKey to an array of staffIDs that have that role.
+	Builds a Map from roleKey to the staffIDs that have that role
 */
 function buildStaffRoleMap(roleRows) {
 	const map = new Map();
@@ -378,10 +363,7 @@ function buildStaffRoleMap(roleRows) {
 }
 
 /*
-	Builds a nested map of staff weekly availability.
-	Outer key: staffID
-	Inner key: dayOfWeek
-	Value: start and end minutes
+	Builds a nested map of weekly staff availability
 */
 function buildStaffAvailabilityMap(rows) {
 	const map = new Map();
@@ -399,7 +381,7 @@ function buildStaffAvailabilityMap(rows) {
 }
 
 /*
-	Builds a Map from appointmentID to all assigned staffIDs on that appointment.
+	Builds a Map from appointmentID to its assigned staffIDs
 */
 function buildAppointmentStaffMap(rows) {
 	const map = new Map();
@@ -414,8 +396,7 @@ function buildAppointmentStaffMap(rows) {
 }
 
 /*
-	Checks whether a staff member is available on the requested day
-	and fully covers the requested time window.
+	Checks whether a staff member is available for the full requested time window
 */
 function staffHasWeeklyAvailability(staffAvailabilityById, staffID, dayOfWeek, startMin, endMin) {
 	const byDay = staffAvailabilityById.get(staffID);
@@ -426,7 +407,7 @@ function staffHasWeeklyAvailability(staffAvailabilityById, staffID, dayOfWeek, s
 }
 
 /*
-	Checks whether a given staff member is already assigned to an overlapping appointment.
+	Checks whether a staff member is already assigned to an overlapping appointment
 */
 function appointmentHasStaffOverlap(appt, assignedStaffIds, staffID, startMin, endMin) {
 	if (!assignedStaffIds.includes(staffID)) return false;
@@ -436,13 +417,8 @@ function appointmentHasStaffOverlap(appt, assignedStaffIds, staffID, startMin, e
 }
 
 /*
-	Attempts to assign staff to all required role slots for an appointment.
-	It:
-	- expands required role slots
-	- filters candidates by weekly availability
-	- filters candidates by overlapping appointments
-	- shuffles candidates for variety
-	- uses backtracking to assign unique staff members
+	Tries to assign staff to all required role slots for an appointment
+	It filters candidates first, then uses backtracking so the same person is not used twice
 */
 function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, dayOfWeek, dayAppts, appointmentStaffByAppt, startMin, endMin) {
 	const requiredSlots = expandRequiredStaffSlots(rule);
@@ -470,8 +446,7 @@ function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, 
 	});
 
 	/*
-		Sorts slots so the hardest slots to fill are assigned first.
-		This improves the backtracking search.
+		Sort harder slots first so backtracking has a better chance of succeeding
 	*/
 	preparedSlots.sort((a, b) => {
 		if (a.candidates.length !== b.candidates.length) return a.candidates.length - b.candidates.length;
@@ -483,8 +458,8 @@ function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, 
 	const usedStaffIds = new Set();
 
 	/*
-		Recursive backtracking assignment.
-		Each staff member can only be used once per appointment.
+		Recursive backtracking assignment
+		One staff member can only fill one slot on the appointment
 	*/
 	function assign(slotIndex) {
 		if (slotIndex >= preparedSlots.length) return [];
@@ -503,15 +478,14 @@ function findRandomStaffAssignment(rule, roleToStaffIds, staffAvailabilityById, 
 }
 
 /*
-	Converts an appointment duration into the number of 15 minute buckets it uses.
+	Converts a duration into the number of 15 minute buckets it covers
 */
 function bucketCountFromDuration(durationMinutes) {
 	return Math.ceil(durationMinutes / SLOT_STEP_MINUTES);
 }
 
 /*
-	Wrapper for running database work inside a transaction.
-	Commits on success and rolls back on failure.
+	Runs database work inside a transaction
 */
 async function withTransaction(workFn) {
 	const conn = await pool.getConnection();
@@ -529,8 +503,7 @@ async function withTransaction(workFn) {
 }
 
 /*
-	Gets the logged in user's userID from the session.
-	Returns null if it is missing or invalid.
+	Gets the logged-in user's userID from the session
 */
 function getRequestUserId(req) {
 	const sessionUser = req.session?.user || null;
@@ -541,9 +514,8 @@ function getRequestUserId(req) {
 }
 
 /*
-	Finds one available room of the required type that does not overlap
-	with any existing appointment in the requested time interval.
-	The row is locked with FOR UPDATE inside the transaction.
+	Finds one available room of the required type that does not overlap the requested interval
+	The row is locked inside the transaction
 */
 async function selectAvailableRoom(conn, roomType, startSql, endSql) {
 	const [rows] = await conn.execute(
@@ -567,13 +539,7 @@ async function selectAvailableRoom(conn, roomType, startSql, endSql) {
 }
 
 /*
-	Checks whether all required non-consumable equipment has enough capacity
-	for the requested interval.
-
-	For non-consumables:
-	- the inventory row must exist
-	- quantity acts like simultaneous capacity
-	- overlapping appointments using the same equipment are counted bucket by bucket
+	Checks whether the required non-consumable equipment has enough capacity for the requested interval
 */
 async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSql) {
 	if (!rule.nonConsumables.length) return { ok: true, error: "" };
@@ -609,8 +575,7 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 	const bucketCount = bucketCountFromDuration(intervalMinutes);
 
 	/*
-		Returns the start and end Date objects for one 15 minute bucket
-		inside the requested interval.
+		Returns the start and end Date objects for one 15 minute bucket inside the requested interval
 	*/
 	function bucketWindow(i) {
 		const bStart = new Date(startDt.getTime() + i * SLOT_STEP_MINUTES * 60000);
@@ -640,9 +605,8 @@ async function checkNonConsumableCapacityForInterval(conn, rule, startSql, endSq
 }
 
 /*
-	Reserves all consumable inventory required by the rule.
-	It first validates stock, then subtracts the quantities.
-	It returns the reserved rows so they can be inserted into appointment_consumable.
+	Reserves the consumable inventory required by the rule
+	It validates stock first, then subtracts the quantities
 */
 async function reserveConsumables(conn, rule) {
 	if (!rule.consumables.length) return { ok: true, error: "", reserved: [] };
@@ -679,8 +643,8 @@ async function reserveConsumables(conn, rule) {
 }
 
 /*
-	Inserts the appointment_form snapshot row for a newly created appointment.
-	This preserves the submitted form values at booking time.
+	Inserts the appointment_form snapshot row for a new appointment
+	This keeps the submitted form values exactly as they were at booking time
 */
 async function insertAppointmentFormFromSnapshot(conn, appointmentID, form) {
 	await conn.execute(
@@ -740,9 +704,8 @@ async function insertAppointmentFormFromSnapshot(conn, appointmentID, form) {
 }
 
 /*
-	Deletes an appointment and restores any consumed inventory.
-	This is used by both cancel and reschedule logic.
-	Order matters because dependent rows must be removed first.
+	Deletes an appointment and restores tied consumables
+	Order matters because dependent rows have to be removed first
 */
 async function deleteAppointmentInsideTransaction(conn, appointmentID) {
 	const [consRows] = await conn.execute(
@@ -754,7 +717,7 @@ async function deleteAppointmentInsideTransaction(conn, appointmentID) {
 	);
 
 	/*
-		Refund previously consumed consumables back into inventory.
+		Refund reserved consumables back into inventory
 	*/
 	for (const row of consRows) {
 		await conn.execute("update inventory set quantity = quantity + ? where itemID = ? and isConsumable = 1", [Number(row.qtyUsed), Number(row.itemID)]);
@@ -769,8 +732,8 @@ async function deleteAppointmentInsideTransaction(conn, appointmentID) {
 }
 
 /*
-	Creates a brand new appointment during a reschedule operation.
-	It re-runs scheduling logic rather than simply changing the old row.
+	Creates a brand new appointment during reschedule
+	It reruns the normal scheduling checks instead of just changing the old row
 */
 async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, oldFormRow, newDate, newStartTime) {
 	const rule = getRule(oldApptRow.reasonKey);
@@ -780,7 +743,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	const startMinutes = timeStrToMinutes(newStartTime);
 
 	/*
-		Start time must land exactly on the 15 minute scheduling grid.
+		Start time has to land on the 15 minute grid
 	*/
 	if (!Number.isFinite(startMinutes) || startMinutes % SLOT_STEP_MINUTES !== 0) {
 		return { ok: false, status: 400, error: "startTime must be on a 15 minute boundary" };
@@ -789,7 +752,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	const endMinutes = startMinutes + rule.durationMinutes;
 
 	/*
-		Reject appointments outside clinic hours.
+		Reject anything outside clinic hours
 	*/
 	if (startMinutes < OPEN_MINUTES || endMinutes > CLOSE_MINUTES) {
 		return { ok: false, status: 400, error: "appointment time outside clinic hours" };
@@ -804,7 +767,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	const dayOfWeek = getDayOfWeekFromDateStr(newDate);
 
 	/*
-		The same pet cannot have overlapping appointments.
+		The same pet cannot have overlapping appointments
 	*/
 	if (petID !== null) {
 		const [petOverlapRows] = await conn.execute(
@@ -820,7 +783,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	}
 
 	/*
-		Load all staff that can fulfill the required roles.
+		Load all staff that can fill the required roles
 	*/
 	const requiredRoleKeys = [...new Set((rule.requiredStaff || []).map((need) => need.roleKey))];
 	const rolePlaceholders = requiredRoleKeys.map(() => "?").join(",");
@@ -831,7 +794,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	const roleToStaffIds = buildStaffRoleMap(roleRows);
 
 	/*
-		Load weekly availability for all candidate staff.
+		Load weekly availability for every candidate staff member
 	*/
 	const allCandidateStaffIds = [...new Set(roleRows.map((row) => Number(row.staffID)).filter((id) => Number.isFinite(id)))];
 	const availPlaceholders = allCandidateStaffIds.map(() => "?").join(",");
@@ -844,7 +807,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	const staffAvailabilityById = buildStaffAvailabilityMap(availabilityRows);
 
 	/*
-		Load all appointments on that day so staff overlap can be checked.
+		Load all appointments on that day so overlap checks can be done
 	*/
 	const [dayAppts] = await conn.execute(
 		`select appointmentID, date, durationMinutes
@@ -857,7 +820,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	const dayApptIds = dayAppts.map((appt) => Number(appt.appointmentID)).filter((id) => Number.isFinite(id));
 
 	/*
-		Load which staff are already assigned to those day appointments.
+		Load which staff are already assigned to those appointments
 	*/
 	const apptStaffRows = dayApptIds.length
 		? (await conn.execute(
@@ -868,7 +831,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	const appointmentStaffByAppt = buildAppointmentStaffMap(apptStaffRows);
 
 	/*
-		Try to find a valid staff assignment for this new appointment.
+		Try to find a valid staff assignment
 	*/
 	const assignedStaff = findRandomStaffAssignment(
 		rule,
@@ -883,25 +846,25 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	if (!assignedStaff) return { ok: false, status: 409, error: "no staff available for that time" };
 
 	/*
-		Find an available room that matches the appointment's room type.
+		Find an available room with the required room type
 	*/
 	const roomNumber = await selectAvailableRoom(conn, rule.roomType, startSql, endSql);
 	if (!roomNumber) return { ok: false, status: 409, error: "no room available for that time" };
 
 	/*
-		Check non-consumable equipment capacity.
+		Check non-consumable capacity before committing to the appointment
 	*/
 	const equipCheck = await checkNonConsumableCapacityForInterval(conn, rule, startSql, endSql);
 	if (!equipCheck.ok) return { ok: false, status: 409, error: equipCheck.error };
 
 	/*
-		Reserve consumable inventory now that the appointment is valid.
+		Reserve consumables now that everything else passed
 	*/
 	const consumableReserve = await reserveConsumables(conn, rule);
 	if (!consumableReserve.ok) return { ok: false, status: 409, error: consumableReserve.error };
 
 	/*
-		Create the appointment row itself.
+		Create the appointment row
 	*/
 	const [apptInsert] = await conn.execute(
 		`insert into appointment (
@@ -918,7 +881,7 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	const newAppointmentID = Number(apptInsert.insertId);
 
 	/*
-		Insert all staff assignments for the new appointment.
+		Insert all staff assignments for the new appointment
 	*/
 	for (const assignment of assignedStaff) {
 		await conn.execute(
@@ -929,12 +892,12 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 	}
 
 	/*
-		Copy the old appointment's form snapshot into the new appointment.
+		Copy the old appointment form snapshot onto the new appointment
 	*/
 	await insertAppointmentFormFromSnapshot(conn, newAppointmentID, oldFormRow);
 
 	/*
-		Record which consumables were reserved for this appointment.
+		Record which consumables were reserved for this appointment
 	*/
 	for (const r of consumableReserve.reserved || []) {
 		await conn.execute("insert into appointment_consumable (appointmentID, itemID, qtyUsed) values (?,?,?)", [newAppointmentID, r.itemID, r.qtyUsed]);
@@ -953,24 +916,35 @@ async function createRescheduledAppointmentInsideTransaction(conn, oldApptRow, o
 }
 
 /*
-	Admin-only route that returns all appointments.
-	It includes room information, assigned staff summary,
-	and consumables/equipment summary for display.
+	Admin-only route that returns all appointments
+	It includes room info, assigned staff summary, and equipment or consumable summary for display
 */
 router.get("/", requireAdmin, async (req, res) => {
 	try {
-		const [rows] = await pool.query(`
-			SELECT
+		// This toggle powers active appointments vs canceled history
+		const includeCanceled = String(req.query.includeCanceled || "").trim() === "1";
+
+		const orderByClause = includeCanceled ? "COALESCE(acxl.canceledAt, a.date) DESC, a.date DESC" : "a.date ASC";
+
+		const [rows] = await pool.query(
+			`SELECT
 				a.appointmentID,
 				a.userID,
 				c.email AS userEmail,
 				a.roomNumber,
 				r.roomType,
 				a.petID,
+				COALESCE(p.petName, af.petName, '') AS petName,
 				a.reasonKey,
 				a.date,
 				a.durationMinutes,
 				DATE_ADD(a.date, INTERVAL a.durationMinutes MINUTE) AS endDateTime,
+				COALESCE(a.isCanceled, 0) AS isCanceled,
+				acxl.canceledByUserID,
+				acxl.canceledByType,
+				acxl.cancellationReason,
+				acxl.canceledAt,
+				TRIM(CONCAT(COALESCE(canceler.legalFirstName, ''), ' ', COALESCE(canceler.legalLastName, ''))) AS canceledByName,
 				COALESCE(
 					GROUP_CONCAT(
 						DISTINCT CONCAT(
@@ -997,14 +971,39 @@ router.get("/", requireAdmin, async (req, res) => {
 			FROM appointment a
 			LEFT JOIN customer c ON c.userID = a.userID
 			LEFT JOIN rooms r ON r.roomNumber = a.roomNumber
+			LEFT JOIN pet p ON p.petID = a.petID
+			LEFT JOIN appointment_form af ON af.appointmentID = a.appointmentID
+			LEFT JOIN appointment_cancellation acxl ON acxl.appointmentID = a.appointmentID
+			LEFT JOIN customer canceler ON canceler.userID = acxl.canceledByUserID
 			LEFT JOIN appointment_staff aps ON aps.appointmentID = a.appointmentID
 			LEFT JOIN staff s ON s.staffID = aps.staffID
 			LEFT JOIN customer sc ON sc.userID = s.userID
 			LEFT JOIN appointment_consumable ac ON ac.appointmentID = a.appointmentID
 			LEFT JOIN inventory i ON i.itemID = ac.itemID
-			GROUP BY a.appointmentID, a.userID, c.email, a.roomNumber, r.roomType, a.petID, a.reasonKey, a.date, a.durationMinutes
-			ORDER BY a.date ASC
-		`);
+			WHERE COALESCE(a.isCanceled, 0) = ?
+			GROUP BY
+				a.appointmentID,
+				a.userID,
+				c.email,
+				a.roomNumber,
+				r.roomType,
+				a.petID,
+				p.petName,
+				af.petName,
+				a.reasonKey,
+				a.date,
+				a.durationMinutes,
+				a.isCanceled,
+				acxl.canceledByUserID,
+				acxl.canceledByType,
+				acxl.cancellationReason,
+				acxl.canceledAt,
+				canceler.legalFirstName,
+				canceler.legalLastName
+			ORDER BY ${orderByClause}
+			`,
+			[includeCanceled ? 1 : 0]
+		);
 
 		res.json(rows);
 	} catch (err) {
@@ -1014,7 +1013,7 @@ router.get("/", requireAdmin, async (req, res) => {
 });
 
 /*
-	Logged-in user route that returns only their own appointments.
+	Logged-in user route that returns only that user's appointments
 */
 router.get("/mine", requireAuth, async (req, res) => {
 	try {
@@ -1060,57 +1059,49 @@ router.get("/mine", requireAuth, async (req, res) => {
 });
 
 /*
-	Logged-in user route to cancel one of their own current or future appointments.
-	The cancel uses the shared helper so metadata and cleanup stay consistent.
+	Logged-in user route to cancel one of their own appointments
+	The shared helper handles metadata and cleanup
 */
 router.delete("/mine/:id", requireAuth, async (req, res) => {
 	try {
-	  const appointmentID = Number(req.params.id);
-	  const userID = Number(req.session.userID);
-  
-	  if (!Number.isInteger(appointmentID) || appointmentID <= 0) {
-		return res.status(400).json({ error: "invalid appointment id" });
-	  }
-  
-	  const [rows] = await pool.execute(
-		`SELECT appointmentID, userID, date, isCanceled
-		 FROM appointment
-		 WHERE appointmentID = ?
-		 LIMIT 1`,
-		[appointmentID]
-	  );
-  
-	  if (!rows.length) {
-		return res.status(404).json({ error: "appointment not found" });
-	  }
-  
-	  const appt = rows[0];
-  
-	  if (Number(appt.userID) !== userID) {
-		return res.status(403).json({ error: "not allowed to cancel this appointment" });
-	  }
-  
-	  const result = await cancelAppointment({
-		appointmentID,
-		canceledByUserID: userID,
-		canceledByType: "CUSTOMER",
-		cancellationReason: null,
-	  });
-  
-	  res.json({ message: "appointment canceled", result });
+		const appointmentID = Number(req.params.id);
+		const userID = Number(req.session.userID);
+
+		if (!Number.isInteger(appointmentID) || appointmentID <= 0) return res.status(400).json({ error: "invalid appointment id" });
+
+		const [rows] = await pool.execute(
+			`SELECT appointmentID, userID, date, isCanceled
+			 FROM appointment
+			 WHERE appointmentID = ?
+			 LIMIT 1`,
+			[appointmentID]
+		);
+
+		if (!rows.length) return res.status(404).json({ error: "appointment not found" });
+
+		const appt = rows[0];
+
+		if (Number(appt.userID) !== userID) return res.status(403).json({ error: "not allowed to cancel this appointment" });
+
+		const result = await cancelAppointment({
+			appointmentID,
+			canceledByUserID: userID,
+			canceledByType: "CUSTOMER",
+			cancellationReason: null,
+		});
+
+		res.json({ message: "appointment canceled", result });
 	} catch (err) {
-	  const status = Number(err?.status || 500);
-	  res.status(status).json({
-		error: err instanceof Error ? err.message : "failed to cancel appointment",
-	  });
+		const status = Number(err?.status || 500);
+		res.status(status).json({ error: err instanceof Error ? err.message : "failed to cancel appointment" });
 	}
-  });
+});
 
 /*
-	Logged-in user route to reschedule one of their own current or future appointments.
+	Logged-in user route to reschedule one of their own appointments
 
 	The old appointment is deleted first, then a new one is created
-	using the same scheduling logic as normal booking, all inside one transaction.
+	using the same scheduling logic as normal booking, all inside one transaction
 */
 router.post("/mine/:id/reschedule", requireAuth, async (req, res) => {
 	try {
@@ -1118,34 +1109,37 @@ router.post("/mine/:id/reschedule", requireAuth, async (req, res) => {
 		const oldAppointmentID = Number(req.params.id);
 		const appointmentDate = String(req.body?.appointmentDate || "");
 		const startTime = String(req.body?.startTime || "");
+
 		if (!Number.isInteger(oldAppointmentID) || oldAppointmentID <= 0) return res.status(400).json({ error: "invalid appointment id" });
 
 		const result = await withTransaction(async (conn) => {
 			const [apptRows] = await conn.execute(`select * from appointment where appointmentID = ? for update`, [oldAppointmentID]);
 			if (!apptRows.length) return { ok: false, status: 404, error: "appointment not found" };
+
 			const oldAppt = apptRows[0];
 
 			/*
-				Users can only reschedule their own appointments.
+				Users can only reschedule their own appointments
 			*/
 			if (Number(oldAppt.userID) !== userID) return { ok: false, status: 403, error: "not allowed to reschedule this appointment" };
 
 			const oldStartDt = sqlDateTimeToDate(oldAppt.date);
 
 			/*
-				Past appointments cannot be rescheduled.
+				Past appointments cannot be rescheduled
 			*/
 			if (oldStartDt.getTime() < Date.now()) return { ok: false, status: 400, error: "past appointments cannot be rescheduled" };
 
 			/*
-				Load the old snapshot row so it can be copied to the new appointment.
+				Load the old snapshot row so it can be copied to the new appointment
 			*/
 			const [formRows] = await conn.execute(`select * from appointment_form where appointmentID = ? for update`, [oldAppointmentID]);
 			if (!formRows.length) return { ok: false, status: 404, error: "appointment snapshot not found" };
+
 			const oldForm = formRows[0];
 
 			/*
-				Delete old appointment and attempt to create the new one.
+				Delete the old appointment, then try to build the new one
 			*/
 			await deleteAppointmentInsideTransaction(conn, oldAppointmentID);
 			return createRescheduledAppointmentInsideTransaction(conn, oldAppt, oldForm, appointmentDate, startTime);
@@ -1171,37 +1165,29 @@ router.post("/mine/:id/reschedule", requireAuth, async (req, res) => {
 });
 
 /*
-	Admin-only delete route.
-	Deletes any appointment and refunds tied consumables.
+	Admin-only cancel route
 */
 router.post("/:id/cancel", requireAdmin, async (req, res) => {
 	try {
-	  const appointmentID = Number(req.params.id);
-	  const canceledByUserID = Number(req.session.userID);
-	  const cancellationReason = String(req.body?.cancellationReason || "").trim();
-  
-	  if (!Number.isInteger(appointmentID) || appointmentID <= 0) {
-		return res.status(400).json({ error: "invalid appointment id" });
-	  }
-  
-	  if (!cancellationReason) {
-		return res.status(400).json({ error: "cancellationReason is required" });
-	  }
-  
-	  const result = await cancelAppointment({
-		appointmentID,
-		canceledByUserID,
-		canceledByType: "ADMIN",
-		cancellationReason,
-	  });
-  
-	  res.json({ message: "appointment canceled", result });
+		const appointmentID = Number(req.params.id);
+		const canceledByUserID = Number(req.session.userID);
+		const cancellationReason = String(req.body?.cancellationReason || "").trim();
+
+		if (!Number.isInteger(appointmentID) || appointmentID <= 0) return res.status(400).json({ error: "invalid appointment id" });
+		if (!cancellationReason) return res.status(400).json({ error: "cancellationReason is required" });
+
+		const result = await cancelAppointment({
+			appointmentID,
+			canceledByUserID,
+			canceledByType: "ADMIN",
+			cancellationReason,
+		});
+
+		res.json({ message: "appointment canceled", result });
 	} catch (err) {
-	  const status = Number(err?.status || 500);
-	  res.status(status).json({
-		error: err instanceof Error ? err.message : "failed to cancel appointment",
-	  });
+		const status = Number(err?.status || 500);
+		res.status(status).json({ error: err instanceof Error ? err.message : "failed to cancel appointment" });
 	}
-  });
+});
 
 export default router;

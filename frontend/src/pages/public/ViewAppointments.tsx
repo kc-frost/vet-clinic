@@ -1,29 +1,28 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Appointment } from "../../types/appointment";
-import { getAppointments, deleteAppointment } from "../../api/appointments";
-import trashIcon from "../../assets/trashcan1.png";
+import { cancelAppointmentAsAdmin, getAppointments } from "../../api/appointments";
 import "../../styles/appointments.css";
 
-// turn unknown thrown values into a readable message
 function errMsg(err: unknown): string {
+	// Keep unknown thrown values from turning into ugly UI messages
 	return err instanceof Error ? err.message : "Unknown error";
 }
 
-// convert mysql datetime text into a js Date object
-function parseMySqlDateTime(s: string) {
-	return new Date(s.replace(" ", "T"));
+function parseMySqlDateTime(value: string) {
+	// Convert MySQL-style datetime text into something the browser Date can read
+	return new Date(String(value || "").replace(" ", "T"));
 }
 
-// make reason keys like wellness_exam display nicely as Wellness Exam
 function formatReason(reasonKey: string) {
-	return reasonKey.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+	// Turn reason keys like WELLNESS_EXAM into readable text for the page
+	return String(reasonKey || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-// format a datetime for display without seconds
 function formatDateTimeNoSeconds(value: string) {
-	const d = parseMySqlDateTime(value);
-	return d.toLocaleString([], {
+	// Display dates without seconds since the page does not need that level of detail
+	const dateValue = parseMySqlDateTime(value);
+	return dateValue.toLocaleString([], {
 		year: "numeric",
 		month: "numeric",
 		day: "numeric",
@@ -32,18 +31,41 @@ function formatDateTimeNoSeconds(value: string) {
 	});
 }
 
-// keeps date-only filtering on the local calendar date
 function getLocalDateOnlyText(value: string) {
-	const d = parseMySqlDateTime(value);
-	const year = d.getFullYear();
-	const month = String(d.getMonth() + 1).padStart(2, "0");
-	const day = String(d.getDate()).padStart(2, "0");
+	// Build a local YYYY-MM-DD value so date filtering lines up with the date inputs
+	const dateValue = parseMySqlDateTime(value);
+	const year = dateValue.getFullYear();
+	const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+	const day = String(dateValue.getDate()).padStart(2, "0");
 	return `${year}-${month}-${day}`;
 }
 
-// splits comma separated staff search text into clean entries
 function parseStaffSearchEntries(raw: string) {
-	return raw.split(",").map((part) => part.trim().toLowerCase()).filter(Boolean);
+	// Support comma-separated staff search terms and ignore empty pieces
+	return String(raw || "").split(",").map((part) => part.trim().toLowerCase()).filter(Boolean);
+}
+
+function formatCanceledByType(value: Appointment["canceledByType"]) {
+	// Make backend cancel type values look cleaner in the table
+	if (!value) return "—";
+	return String(value).toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function buildCanceledBySummary(appointment: Appointment) {
+	// Show the most useful canceled-by text depending on what data exists
+	const name = String(appointment.canceledByName || "").trim();
+	const userID = appointment.canceledByUserID;
+
+	if (name && userID) return `${name} (#${userID})`;
+	if (name) return name;
+	if (userID) return `User #${userID}`;
+	return "—";
+}
+
+function buildCountLabel(count: number, showCanceled: boolean) {
+	// Keep the count text matched to the current mode
+	if (showCanceled) return `Showing ${count} canceled appointment${count === 1 ? "" : "s"}`;
+	return `Showing ${count} active appointment${count === 1 ? "" : "s"}`;
 }
 
 export default function ViewAppointments() {
@@ -51,8 +73,12 @@ export default function ViewAppointments() {
 	const [loading, setLoading] = useState(false);
 	const [pageError, setPageError] = useState("");
 	const [appointments, setAppointments] = useState<Appointment[]>([]);
-
-	// these are combined filters, not one-at-a-time filters
+	const [showCanceled, setShowCanceled] = useState(false);
+	const [cancelAppointmentID, setCancelAppointmentID] = useState<number | null>(null);
+	const [cancelReason, setCancelReason] = useState("");
+	const [cancelMessage, setCancelMessage] = useState("");
+	const [cancelConfirmArmed, setCancelConfirmArmed] = useState(false);
+	const [submittingCancel, setSubmittingCancel] = useState(false);
 	const [filterStartDate, setFilterStartDate] = useState("");
 	const [filterEndDate, setFilterEndDate] = useState("");
 	const [filterAppointmentId, setFilterAppointmentId] = useState("");
@@ -63,11 +89,13 @@ export default function ViewAppointments() {
 	useEffect(() => {
 		let cancelled = false;
 
-		async function load() {
+		async function loadAppointments() {
 			setLoading(true);
 			setPageError("");
+
 			try {
-				const data = await getAppointments();
+				// Load either active or canceled appointments depending on the current toggle
+				const data = await getAppointments({ includeCanceled: showCanceled });
 				if (!cancelled) setAppointments(data);
 			} catch (err) {
 				if (!cancelled) setPageError(errMsg(err));
@@ -76,60 +104,64 @@ export default function ViewAppointments() {
 			}
 		}
 
-		load();
+		loadAppointments();
+
+		// Stop state updates if the component unmounts before the request finishes
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [showCanceled]);
 
-	// this keeps appointments that have not finished yet and sorts by start time
 	const visibleAppointments = useMemo(() => {
+		// In canceled mode, just show what came back from the API
+		if (showCanceled) return [...appointments];
+
 		const now = Date.now();
+
+		// In active mode, keep only appointments that have not ended yet
+		// and sort them by start time
 		return [...appointments]
-			.filter((a) => {
-				const endDateTime = a.endDateTime
-					? String(a.endDateTime)
-					: new Date(parseMySqlDateTime(a.date).getTime() + Number(a.durationMinutes || 0) * 60000).toISOString();
+			.filter((appointment) => {
+				const endDateTime = appointment.endDateTime
+					? String(appointment.endDateTime)
+					: new Date(parseMySqlDateTime(appointment.date).getTime() + Number(appointment.durationMinutes || 0) * 60000).toISOString();
+
 				return new Date(String(endDateTime).replace(" ", "T")).getTime() > now;
 			})
-			.sort((a, b) => parseMySqlDateTime(a.date).getTime() - parseMySqlDateTime(b.date).getTime());
-	}, [appointments]);
+			.sort((left, right) => parseMySqlDateTime(left.date).getTime() - parseMySqlDateTime(right.date).getTime());
+	}, [appointments, showCanceled]);
 
-	// this applies all active filters together
 	const filteredAppointments = useMemo(() => {
 		const appointmentIdQuery = filterAppointmentId.trim();
 		const typeQuery = filterAppointmentType.trim().toLowerCase();
 		const emailQuery = filterUserEmail.trim().toLowerCase();
 		const staffQueries = parseStaffSearchEntries(filterStaff);
 
-		return visibleAppointments.filter((a) => {
-			const apptDateOnly = getLocalDateOnlyText(a.date);
-			const formattedReason = formatReason(a.reasonKey).toLowerCase();
-			const rawReason = String(a.reasonKey || "").toLowerCase();
-			const userEmail = String(a.userEmail || "").toLowerCase();
-			const assignedStaffSummary = String(a.assignedStaffSummary || "").toLowerCase();
+		return visibleAppointments.filter((appointment) => {
+			const appointmentDateOnly = getLocalDateOnlyText(appointment.date);
+			const formattedReason = formatReason(appointment.reasonKey).toLowerCase();
+			const rawReason = String(appointment.reasonKey || "").toLowerCase();
+			const userEmail = String(appointment.userEmail || "").toLowerCase();
+			const assignedStaffSummary = String(appointment.assignedStaffSummary || "").toLowerCase();
 
-			// start date is inclusive
-			if (filterStartDate && apptDateOnly < filterStartDate) return false;
-
-			// end date is inclusive
-			if (filterEndDate && apptDateOnly > filterEndDate) return false;
-
-			if (appointmentIdQuery && !String(a.appointmentID).includes(appointmentIdQuery)) return false;
-
-			// type can match either the raw reason key or the display label
+			// Every active filter has to pass for the appointment to stay visible
+			if (filterStartDate && appointmentDateOnly < filterStartDate) return false;
+			if (filterEndDate && appointmentDateOnly > filterEndDate) return false;
+			if (appointmentIdQuery && !String(appointment.appointmentID).includes(appointmentIdQuery)) return false;
 			if (typeQuery && !rawReason.includes(typeQuery) && !formattedReason.includes(typeQuery)) return false;
-
 			if (emailQuery && !userEmail.includes(emailQuery)) return false;
 
-			// each comma separated staff entry must be present somewhere in the assigned staff text
+			// For staff search, every comma-separated token must appear in the staff summary
 			if (staffQueries.length > 0 && !staffQueries.every((entry) => assignedStaffSummary.includes(entry))) return false;
 
 			return true;
 		});
 	}, [filterAppointmentId, filterAppointmentType, filterEndDate, filterStaff, filterStartDate, filterUserEmail, visibleAppointments]);
 
+	const selectedAppointment = useMemo(() => filteredAppointments.find((appointment) => appointment.appointmentID === cancelAppointmentID) || null, [cancelAppointmentID, filteredAppointments]);
+
 	function clearFilters() {
+		// Reset the whole filter bar back to its default state
 		setFilterStartDate("");
 		setFilterEndDate("");
 		setFilterAppointmentId("");
@@ -138,14 +170,56 @@ export default function ViewAppointments() {
 		setFilterStaff("");
 	}
 
-	async function deleteAppt(appointmentID: number) {
+	function openCancelPanel(appointmentID: number) {
+		// Open the admin cancel panel for one appointment and reset old form state
+		setCancelAppointmentID(appointmentID);
+		setCancelReason("");
+		setCancelMessage("");
+		setCancelConfirmArmed(false);
+	}
+
+	function closeCancelPanel() {
+		// Fully close the cancel panel and clear its state
+		setCancelAppointmentID(null);
+		setCancelReason("");
+		setCancelMessage("");
+		setCancelConfirmArmed(false);
+	}
+
+	async function submitAdminCancel() {
+		if (!selectedAppointment) return;
+
+		const trimmedReason = cancelReason.trim();
+
+		// Force the admin to enter a reason before canceling
+		if (!trimmedReason) {
+			setCancelMessage("A cancellation reason is required");
+			return;
+		}
+
+		// Require a second click so canceling is harder to do by accident
+		if (!cancelConfirmArmed) {
+			setCancelConfirmArmed(true);
+			setCancelMessage("Click confirm cancel appointment again if you want to finish canceling this appointment");
+			return;
+		}
+
 		try {
+			setSubmittingCancel(true);
 			setPageError("");
-			await deleteAppointment(appointmentID);
-			const data = await getAppointments();
-			setAppointments(data);
+			setCancelMessage("");
+
+			await cancelAppointmentAsAdmin(selectedAppointment.appointmentID, { cancellationReason: trimmedReason });
+
+			// Reload the list after canceling so the table stays in sync with the backend
+			const refreshedAppointments = await getAppointments({ includeCanceled: showCanceled });
+			setAppointments(refreshedAppointments);
+
+			closeCancelPanel();
 		} catch (err) {
-			setPageError(errMsg(err));
+			setCancelMessage(errMsg(err));
+		} finally {
+			setSubmittingCancel(false);
 		}
 	}
 
@@ -162,50 +236,36 @@ export default function ViewAppointments() {
 			{loading && <p className="appointmentsLoading">Loading...</p>}
 
 			<div className="appointmentsFiltersShell">
+				<div className="appointmentsViewToggleRow">
+					<button type="button" className={showCanceled ? "appointmentsToggleBtn" : "appointmentsToggleBtn appointmentsToggleBtnActive"} onClick={() => setShowCanceled(false)}>
+						Active Appointments
+					</button>
+					<button type="button" className={showCanceled ? "appointmentsToggleBtn appointmentsToggleBtnActive" : "appointmentsToggleBtn"} onClick={() => setShowCanceled(true)}>
+						Canceled Appointments
+					</button>
+				</div>
+
 				<div className="appointmentsFiltersGrid">
 					<div className="appointmentsFilterField">
 						<label htmlFor="filterStartDate">Start Date</label>
-						<input id="filterStartDate" type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} />
+						<input id="filterStartDate" type="date" value={filterStartDate} onChange={(event) => setFilterStartDate(event.target.value)} />
 					</div>
-
 					<div className="appointmentsFilterField">
 						<label htmlFor="filterEndDate">End Date</label>
-						<input id="filterEndDate" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} />
+						<input id="filterEndDate" type="date" value={filterEndDate} onChange={(event) => setFilterEndDate(event.target.value)} />
 					</div>
-
 					<div className="appointmentsFilterField">
 						<label htmlFor="filterAppointmentId">Appt. ID</label>
-						<input
-							id="filterAppointmentId"
-							type="text"
-							placeholder="Type an appointment ID"
-							value={filterAppointmentId}
-							onChange={(e) => setFilterAppointmentId(e.target.value)}
-						/>
+						<input id="filterAppointmentId" type="text" placeholder="Type an appointment ID" value={filterAppointmentId} onChange={(event) => setFilterAppointmentId(event.target.value)} />
 					</div>
-
 					<div className="appointmentsFilterField">
 						<label htmlFor="filterAppointmentType">Appt. Type</label>
-						<input
-							id="filterAppointmentType"
-							type="text"
-							placeholder="Type an appointment type"
-							value={filterAppointmentType}
-							onChange={(e) => setFilterAppointmentType(e.target.value)}
-						/>
+						<input id="filterAppointmentType" type="text" placeholder="Type an appointment type" value={filterAppointmentType} onChange={(event) => setFilterAppointmentType(event.target.value)} />
 					</div>
-
 					<div className="appointmentsFilterField">
 						<label htmlFor="filterUserEmail">User Email</label>
-						<input
-							id="filterUserEmail"
-							type="text"
-							placeholder="Type part of an email"
-							value={filterUserEmail}
-							onChange={(e) => setFilterUserEmail(e.target.value)}
-						/>
+						<input id="filterUserEmail" type="text" placeholder="Type part of an email" value={filterUserEmail} onChange={(event) => setFilterUserEmail(event.target.value)} />
 					</div>
-
 					<div className="appointmentsFilterField appointmentsFilterFieldWide">
 						<label htmlFor="filterStaff">Staff</label>
 						<input
@@ -213,18 +273,53 @@ export default function ViewAppointments() {
 							type="text"
 							placeholder="Type staff ID, first name, last name, or full name. Use commas for multiple"
 							value={filterStaff}
-							onChange={(e) => setFilterStaff(e.target.value)}
+							onChange={(event) => setFilterStaff(event.target.value)}
 						/>
 					</div>
 				</div>
 
 				<div className="appointmentsFiltersActions">
-					<button type="button" className="appointmentsClearBtn" onClick={clearFilters}>
-						Clear Filters
-					</button>
-					<div className="appointmentsFilterCount">Showing {filteredAppointments.length} appointment{filteredAppointments.length === 1 ? "" : "s"}</div>
+					<button type="button" className="appointmentsClearBtn" onClick={clearFilters}>Clear Filters</button>
+					<div className="appointmentsFilterCount">{buildCountLabel(filteredAppointments.length, showCanceled)}</div>
 				</div>
 			</div>
+
+			{!showCanceled && selectedAppointment && (
+				<div className="appointmentsCancelPanel">
+					<h2>Cancel Appointment</h2>
+
+					<div className="appointmentsCancelPanelDetails">
+						<div><strong>Appt. ID:</strong> {selectedAppointment.appointmentID}</div>
+						<div><strong>Type:</strong> {formatReason(selectedAppointment.reasonKey)}</div>
+						<div><strong>User Email:</strong> {selectedAppointment.userEmail || "—"}</div>
+						<div><strong>Pet:</strong> {selectedAppointment.petName || "—"}</div>
+						<div><strong>Start:</strong> {formatDateTimeNoSeconds(selectedAppointment.date)}</div>
+					</div>
+
+					<label className="appointmentsCancelPanelLabel" htmlFor="cancelReason">Cancellation Reason</label>
+					<textarea
+						id="cancelReason"
+						className="appointmentsCancelTextarea"
+						value={cancelReason}
+						onChange={(event) => {
+							// Any edit to the reason resets the armed confirm state
+							setCancelReason(event.target.value);
+							setCancelConfirmArmed(false);
+							setCancelMessage("");
+						}}
+						placeholder="Enter the reason for canceling this appointment"
+					/>
+
+					{cancelMessage && <div className="appointmentsCancelMessage">{cancelMessage}</div>}
+
+					<div className="appointmentsCancelPanelActions">
+						<button type="button" className="appointmentsClearBtn" onClick={closeCancelPanel} disabled={submittingCancel}>Close</button>
+						<button type="button" className="appointmentsCancelBtn" onClick={submitAdminCancel} disabled={submittingCancel}>
+							{submittingCancel ? "Canceling..." : cancelConfirmArmed ? "Confirm Cancel Appointment" : "Continue Cancel"}
+						</button>
+					</div>
+				</div>
+			)}
 
 			<div className="appointmentsShell">
 				<table className="appointments-table">
@@ -238,47 +333,60 @@ export default function ViewAppointments() {
 							<th>Assigned Staff</th>
 							<th>Room</th>
 							<th>Equipment Used</th>
-							<th>Action</th>
+							{showCanceled ? (
+								<>
+									<th>Canceled By</th>
+									<th>Cancel Type</th>
+									<th>Cancel Reason</th>
+									<th>Canceled At</th>
+								</>
+							) : (
+								<th>Action</th>
+							)}
 						</tr>
 					</thead>
 
 					<tbody>
-						{filteredAppointments.map((a) => {
-							const endObj = a.endDateTime
-								? a.endDateTime
-								: new Date(parseMySqlDateTime(a.date).getTime() + Number(a.durationMinutes || 0) * 60000).toISOString();
+						{filteredAppointments.map((appointment) => {
+							const endDateTime = appointment.endDateTime
+								? String(appointment.endDateTime)
+								: new Date(parseMySqlDateTime(appointment.date).getTime() + Number(appointment.durationMinutes || 0) * 60000).toISOString();
 
 							return (
-								<tr key={a.appointmentID}>
-									<td>{formatDateTimeNoSeconds(a.date)}</td>
-									<td>{formatDateTimeNoSeconds(String(endObj).replace("T", " "))}</td>
-									<td>{a.appointmentID}</td>
-									<td>{formatReason(a.reasonKey)}</td>
-									<td>{a.userEmail || "—"}</td>
-									<td className="staffCell">{a.assignedStaffSummary || "—"}</td>
+								<tr key={appointment.appointmentID}>
+									<td>{formatDateTimeNoSeconds(appointment.date)}</td>
+									<td>{formatDateTimeNoSeconds(String(endDateTime).replace("T", " "))}</td>
+									<td>{appointment.appointmentID}</td>
+									<td>{formatReason(appointment.reasonKey)}</td>
+									<td>{appointment.userEmail || "—"}</td>
+									<td className="staffCell">{appointment.assignedStaffSummary || "—"}</td>
 									<td className="roomCell">
-										<div>{a.roomNumber ?? "—"}</div>
-										<div className="cellSubText">{a.roomType || "—"}</div>
+										<div>{appointment.roomNumber ?? "—"}</div>
+										<div className="cellSubText">{appointment.roomType || "—"}</div>
 									</td>
-									<td className="equipmentCell">{a.equipmentUsed || "—"}</td>
-									<td>
-										<button
-											onClick={() => deleteAppt(a.appointmentID)}
-											className="btn danger appt-trash"
-											aria-label="Delete appointment"
-											title="Delete"
-										>
-											<img src={trashIcon} alt="" className="trash-icon" />
-											<p>Delete</p>
-										</button>
-									</td>
+									<td className="equipmentCell">{appointment.equipmentUsed || "—"}</td>
+
+									{showCanceled ? (
+										<>
+											<td>{buildCanceledBySummary(appointment)}</td>
+											<td>{formatCanceledByType(appointment.canceledByType)}</td>
+											<td>{appointment.cancellationReason || "—"}</td>
+											<td>{appointment.canceledAt ? formatDateTimeNoSeconds(appointment.canceledAt) : "—"}</td>
+										</>
+									) : (
+										<td>
+											<button type="button" className="appointmentsCancelBtn appointmentsTableCancelBtn" onClick={() => openCancelPanel(appointment.appointmentID)}>
+												Cancel Appointment
+											</button>
+										</td>
+									)}
 								</tr>
 							);
 						})}
 
 						{!loading && filteredAppointments.length === 0 && (
 							<tr>
-								<td colSpan={9}>No appointments found.</td>
+								<td colSpan={showCanceled ? 12 : 9}>No appointments found.</td>
 							</tr>
 						)}
 					</tbody>
