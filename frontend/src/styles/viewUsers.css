@@ -135,3 +135,95 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+
+.usersMessage {
+	margin: 0 0 14px 0;
+	color: #146c43;
+	font-weight: 600;
+}
+
+.usersRemoveBtn,
+.usersSecondaryBtn,
+.usersDangerBtn {
+	height: 40px;
+	padding: 0 14px;
+	border-radius: 10px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.usersRemoveBtn {
+	border: 1px solid #d0dae6;
+	background-color: #f8fbff;
+	color: #163b63;
+}
+
+.usersRemoveBtn:disabled,
+.usersSecondaryBtn:disabled,
+.usersDangerBtn:disabled {
+	opacity: 0.65;
+	cursor: not-allowed;
+}
+
+.usersRemovePanel {
+	margin-top: 18px;
+	padding: 16px;
+	border: 2px solid #d9e4ef;
+	border-radius: 14px;
+	background-color: #fbfdff;
+}
+
+.usersRemovePanel h2 {
+	margin: 0 0 10px 0;
+	color: #163b63;
+}
+
+.usersRemoveText {
+	margin: 0 0 12px 0;
+	color: #4c5d71;
+	line-height: 1.5;
+}
+
+.usersRemoveDetails {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+	margin-bottom: 14px;
+	color: #163b63;
+}
+
+.usersReasonTextarea {
+	min-height: 92px;
+	border-radius: 10px;
+	border: 1px solid #d9e4ef;
+	padding: 10px 12px;
+	background-color: #f8fbff;
+	color: #163b63;
+	resize: vertical;
+}
+
+.usersRemoveActions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	margin-top: 14px;
+}
+
+.usersSecondaryBtn {
+	border: 1px solid #b7c9dc;
+	background-color: #eef5fc;
+	color: #163b63;
+}
+
+.usersDangerBtn {
+	border: 1px solid #c53f3f;
+	background-color: #d94a4a;
+	color: #fff;
+}
+
+@media (max-width: 900px) {
+	.usersRemoveDetails {
+		grid-template-columns: 1fr;
+	}
+}
