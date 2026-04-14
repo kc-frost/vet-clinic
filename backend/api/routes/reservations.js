@@ -1852,6 +1852,7 @@ router.post("/", requireAuth, async (req, res) => {
 					 where petID = ?
 					 and date < ?
 					 and date_add(date, interval durationMinutes minute) > ?
+					 and coalesce(isCanceled, 0) = 0
 					 for update`,
 					[petID, endSql, startSql]
 				);

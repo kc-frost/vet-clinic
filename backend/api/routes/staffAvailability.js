@@ -161,7 +161,9 @@ router.put("/me/availability", requireStaff, async (req, res) => {
 			 INNER JOIN appointment a
 				ON a.appointmentID = aps.appointmentID
 			 WHERE aps.staffID = ?
-				AND a.date >= NOW()`,
+				AND a.date >= NOW()
+				AND COALESCE(a.isCanceled, 0) = 0
+				AND COALESCE(a.underReview, 0) = 0`,
 			[staffID]
 		);
 

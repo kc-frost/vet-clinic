@@ -323,28 +323,30 @@ export default function ViewAppointments() {
 
 			<div className="appointmentsShell">
 				<table className="appointments-table">
-					<thead>
-						<tr>
-							<th>Start</th>
-							<th>End</th>
-							<th>Appt. ID</th>
-							<th>Type</th>
-							<th>User Email</th>
-							<th>Assigned Staff</th>
-							<th>Room</th>
-							<th>Equipment Used</th>
-							{showCanceled ? (
-								<>
-									<th>Canceled By</th>
-									<th>Cancel Type</th>
-									<th>Cancel Reason</th>
-									<th>Canceled At</th>
-								</>
-							) : (
-								<th>Action</th>
-							)}
-						</tr>
-					</thead>
+							<thead>
+								<tr>
+									<th>Start</th>
+									<th>End</th>
+									<th>Appt. ID</th>
+									<th>Type</th>
+									<th>User Email</th>
+									<th>Assigned Staff</th>
+									<th>Room</th>
+									{showCanceled ? (
+										<>
+											<th>Canceled By</th>
+											<th>Cancel Type</th>
+											<th>Cancel Reason</th>
+											<th>Canceled At</th>
+										</>
+									) : (
+										<>
+											<th>Equipment Used</th>
+											<th>Action</th>
+										</>
+									)}
+								</tr>
+							</thead>
 
 					<tbody>
 						{filteredAppointments.map((appointment) => {
@@ -364,8 +366,6 @@ export default function ViewAppointments() {
 										<div>{appointment.roomNumber ?? "—"}</div>
 										<div className="cellSubText">{appointment.roomType || "—"}</div>
 									</td>
-									<td className="equipmentCell">{appointment.equipmentUsed || "—"}</td>
-
 									{showCanceled ? (
 										<>
 											<td>{buildCanceledBySummary(appointment)}</td>
@@ -374,11 +374,14 @@ export default function ViewAppointments() {
 											<td>{appointment.canceledAt ? formatDateTimeNoSeconds(appointment.canceledAt) : "—"}</td>
 										</>
 									) : (
-										<td>
-											<button type="button" className="appointmentsCancelBtn appointmentsTableCancelBtn" onClick={() => openCancelPanel(appointment.appointmentID)}>
-												Cancel Appointment
-											</button>
-										</td>
+										<>
+											<td className="equipmentCell">{appointment.equipmentUsed || "—"}</td>
+											<td>
+												<button type="button" className="appointmentsCancelBtn appointmentsTableCancelBtn" onClick={() => openCancelPanel(appointment.appointmentID)}>
+													Cancel Appointment
+												</button>
+											</td>
+										</>
 									)}
 								</tr>
 							);
@@ -386,7 +389,7 @@ export default function ViewAppointments() {
 
 						{!loading && filteredAppointments.length === 0 && (
 							<tr>
-								<td colSpan={showCanceled ? 12 : 9}>No appointments found.</td>
+								<td colSpan={showCanceled ? 11 : 9}>No appointments found.</td>
 							</tr>
 						)}
 					</tbody>

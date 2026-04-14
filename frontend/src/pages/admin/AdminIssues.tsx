@@ -174,9 +174,10 @@ export default function AdminIssues() {
 			setRescheduleLoading(true);
 			setRescheduleError("");
 
+			// Load a wider slot window here so the calendar can browse normally
 			const response = await getUnderReviewRescheduleOptions(appointment.appointmentID, {
 				startDate,
-				days: 14,
+				days: 90,
 			});
 
 			setRescheduleSlots(response.slots);
@@ -200,17 +201,12 @@ export default function AdminIssues() {
 		await loadRescheduleOptions(appointment, startDate);
 	}
 
-	async function handleBrowseDateChange(nextDate: string) {
-		if (!rescheduleAppointmentID) return;
-
-		const appointment = appointments.find((item) => item.appointmentID === rescheduleAppointmentID);
-		if (!appointment) return;
-
-		// Reset the chosen slot when the user browses to another date
-		setRescheduleDate("");
+	function handleBrowseDateChange(nextDate: string) {
+		// Browsing another date should only clear the old picked slot
+		setRescheduleDate(nextDate);
 		setRescheduleStartTime("");
 		setRescheduleSelectedSlotId("");
-		await loadRescheduleOptions(appointment, nextDate);
+		setRescheduleError("");
 	}
 
 	function handleSelectRescheduleSlot(value: { date: string; startTime: string; slotId?: string }) {
