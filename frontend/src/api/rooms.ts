@@ -8,7 +8,14 @@ export async function getRooms(options?: { includeInactive?: boolean }): Promise
 	const search = options?.includeInactive ? "?includeInactive=1" : "";
 	const res = await fetch(`${BASE_URL}${search}`);
 	if (!res.ok) throw new Error(`Failed to fetch rooms (${res.status})`);
-	return res.json();
+	const rows = await res.json();
+	return rows.map((room: any) => ({
+		roomNumber: Number(room.roomNumber),
+		roomType: room.roomType,
+		capacity: Number(room.capacity),
+		isActive: Number(room.isActive ?? 1) === 1,
+		deactivatedAt: room.deactivatedAt ?? null,
+	}));
 }
 
 // Creates one new room row

@@ -5,7 +5,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { requireAdmin } from "../lib/authMiddleware.js";
-import { processInactiveInventoryItem, processNonConsumableQuantityChange } from "../lib/appointmentIssueService.js";
+import { notifyUsersAboutUnderReviewAppointments, processInactiveInventoryItem, processNonConsumableQuantityChange } from "../lib/appointmentIssueService.js";
 
 const router = express.Router();
 
@@ -109,6 +109,7 @@ router.patch("/:itemID", requireAdmin, async (req, res) => {
 		}
 
 		await conn.commit();
+		await notifyUsersAboutUnderReviewAppointments(result.underReviewAppointmentIDs);
 		res.json({
 			message: "Updated.",
 			itemID: Number(item.itemID),
@@ -172,6 +173,7 @@ router.patch("/:itemID/deactivate", requireAdmin, async (req, res) => {
 		if (Number(item.isConsumable) === 0) result = await processInactiveInventoryItem(conn, itemID);
 
 		await conn.commit();
+		await notifyUsersAboutUnderReviewAppointments(result.underReviewAppointmentIDs);
 		res.json({
 			message: "Inventory item deactivated.",
 			itemID: Number(item.itemID),

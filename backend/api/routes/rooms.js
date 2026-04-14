@@ -1,7 +1,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { requireAdmin } from "../lib/authMiddleware.js";
-import { processInactiveRoom } from "../lib/appointmentIssueService.js";
+import { notifyUsersAboutUnderReviewAppointments, processInactiveRoom } from "../lib/appointmentIssueService.js";
 
 const router = express.Router();
 const VALID_ROOM_TYPES = new Set(["EXAM", "IMAGING", "SURGERY", "GROOMING"]);
@@ -100,6 +100,7 @@ router.patch("/:roomNumber/deactivate", requireAdmin, async (req, res) => {
 		const result = await processInactiveRoom(conn, roomNumber);
 
 		await conn.commit();
+		await notifyUsersAboutUnderReviewAppointments(result.underReviewAppointmentIDs);
 
 		res.json({
 			message: "Room deactivated.",
@@ -116,6 +117,46 @@ router.patch("/:roomNumber/deactivate", requireAdmin, async (req, res) => {
 		res.status(500).send("Server error deactivating room.");
 	} finally {
 		conn.release();
+	}
+});
+
+// PATCH /api/rooms/:roomNumber/reactivate
+// brings a removed room back into the active list
+router.patch("/:roomNumber/reactivate", requireAdmin, async (req, res) => {
+	const roomNumber = Number(req.params.roomNumber);
+	if (!Number.isInteger(roomNumber) || roomNumber < 1) return res.status(400).send("Invalid roomNumber.");
+
+	try {
+		const [rows] = await pool.query(
+			`SELECT roomNumber, roomType, capacity, COALESCE(isActive, 1) AS isActive
+			 FROM rooms
+			 WHERE roomNumber = ?
+			 LIMIT 1`,
+			[roomNumber]
+		);
+
+		if (!rows.length) return res.status(404).send("Room not found.");
+
+		const room = rows[0];
+		if (Number(room.isActive) === 1) return res.status(409).send("Room is already active.");
+
+		await pool.query(
+			`UPDATE rooms
+			 SET isActive = 1,
+				 deactivatedAt = NULL
+			 WHERE roomNumber = ?`,
+			[roomNumber]
+		);
+
+		res.json({
+			message: "Room reactivated.",
+			roomNumber: Number(room.roomNumber),
+			roomType: String(room.roomType || ""),
+			capacity: Number(room.capacity || 0),
+		});
+	} catch (err) {
+		console.error("PATCH /api/rooms/:roomNumber/reactivate error:", err);
+		res.status(500).send("Server error reactivating room.");
 	}
 });
 

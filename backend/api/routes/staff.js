@@ -151,6 +151,8 @@ router.get("/me/appointments", requireStaff, async (req, res) => {
 				ON af.appointmentID = a.appointmentID
 			 WHERE aps.staffID = ?
 				AND a.date >= CURDATE()
+				AND COALESCE(a.isCanceled, 0) = 0
+				AND COALESCE(a.underReview, 0) = 0
 			 ORDER BY a.date ASC`,
 			[staffID]
 		);

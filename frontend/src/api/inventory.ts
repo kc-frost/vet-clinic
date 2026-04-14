@@ -8,7 +8,18 @@ export async function getInventory(options?: { includeInactive?: boolean }): Pro
 	const search = options?.includeInactive ? "?includeInactive=1" : "";
 	const res = await fetch(`${BASE_URL}${search}`);
 	if (!res.ok) throw new Error(`Failed to fetch inventory (${res.status})`);
-	return res.json();
+	const rows = await res.json();
+	return rows.map((item: any) => ({
+		itemID: Number(item.itemID),
+		itemKey: String(item.itemKey || ""),
+		displayName: String(item.displayName || ""),
+		itemType: item.itemType ?? null,
+		isConsumable: Number(item.isConsumable ?? 0) === 1,
+		quantity: Number(item.quantity || 0),
+		itemDescription: item.itemDescription ?? null,
+		isActive: Number(item.isActive ?? 1) === 1,
+		deactivatedAt: item.deactivatedAt ?? null,
+	}));
 }
 
 // Creates a new inventory row

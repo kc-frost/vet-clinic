@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { sendEmail } from "./mailer.js";
 import { getRule } from "./reservationRules.js";
 
 function normalizeIssueType(issueType) {
@@ -512,6 +513,66 @@ export async function processNonConsumableQuantityChange(conn, inventoryItemID, 
 
 	const issueKey = normalizeIssueKey(itemRow.itemKey);
 	return applyNonConsumableCapacityRules(conn, issueKey, nextQuantity);
+}
+
+
+function formatIssueNotificationDateTime(value) {
+	// Keep the under review email date text readable for the user
+	const dateValue = value instanceof Date ? value : new Date(value);
+	return dateValue.toLocaleString("en-US", {
+		year: "numeric",
+		month: "numeric",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
+function formatIssueNotificationReason(reasonKey) {
+	// Turn the stored reason key into something readable in the email
+	return String(reasonKey || "").replaceAll("_", " ").trim() || "appointment";
+}
+
+export async function notifyUsersAboutUnderReviewAppointments(appointmentIDs) {
+	// Only send one email per appointment id and skip empty input entirely
+	const uniqueAppointmentIDs = [...new Set((appointmentIDs || []).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];
+	if (!uniqueAppointmentIDs.length) return;
+
+	const [rows] = await pool.query(
+		`SELECT
+			a.appointmentID,
+			c.email,
+			COALESCE(p.petName, af.petName, 'your pet') AS petName,
+			a.reasonKey,
+			a.date
+		 FROM appointment a
+		 INNER JOIN customer c
+			on c.userID = a.userID
+		 LEFT JOIN pet p
+			on p.petID = a.petID
+		 LEFT JOIN appointment_form af
+			on af.appointmentID = a.appointmentID
+		 WHERE a.appointmentID IN (?)`,
+		[uniqueAppointmentIDs]
+	);
+
+	for (const row of rows) {
+		const recipientEmail = String(row.email || "").trim();
+		if (!recipientEmail) continue;
+
+		const appointmentDateText = formatIssueNotificationDateTime(row.date);
+		const petName = String(row.petName || "").trim() || "your pet";
+		const reasonLabel = formatIssueNotificationReason(row.reasonKey);
+		const subject = "Appointment needs review";
+		const message = `Sorry, your appointment at ${appointmentDateText} for ${petName} for ${reasonLabel} has encountered a problem in our system and will be promptly resolved by an administrator. 
+		If it is fixed you will be notified, and if it is canceled you will be notified as well`;
+
+		try {
+			await sendEmail({ to: recipientEmail, subject, text: message });
+		} catch (err) {
+			console.error("under review appointment email error", err);
+		}
+	}
 }
 
 export async function getUnderReviewAppointments() {

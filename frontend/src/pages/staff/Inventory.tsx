@@ -310,14 +310,16 @@ export default function Inventory() {
 		Only one room filter mode is active at a time
 	*/
 	const filteredRooms = useMemo(() => {
+		const visibleRooms = showRemovedRooms ? roomsSorted.filter((room) => room.isActive === false) : roomsSorted.filter((room) => room.isActive !== false);
+
 		if (roomFilterMode === "roomNumber") {
 			const query = roomFilterRoomNumber.trim();
-			if (!query) return roomsSorted;
-			return roomsSorted.filter((room) => String(room.roomNumber).includes(query));
+			if (!query) return visibleRooms;
+			return visibleRooms.filter((room) => String(room.roomNumber).includes(query));
 		}
 
-		return roomsSorted.filter((room) => room.roomType === roomFilterRoomType);
-	}, [roomFilterMode, roomFilterRoomNumber, roomFilterRoomType, roomsSorted]);
+		return visibleRooms.filter((room) => room.roomType === roomFilterRoomType);
+	}, [roomFilterMode, roomFilterRoomNumber, roomFilterRoomType, roomsSorted, showRemovedRooms]);
 
 	/*
 		This filters the inventory list
@@ -326,24 +328,26 @@ export default function Inventory() {
 		Quantity filter is <= the threshold the admin types in
 	*/
 	const filteredItems = useMemo(() => {
+		const visibleItems = showRemovedItems ? itemsSorted.filter((item) => item.isActive === false) : itemsSorted.filter((item) => item.isActive !== false);
+
 		if (inventoryFilterMode === "consumableState") {
-			return itemsSorted.filter((item) => inventoryConsumableFilter === "consumable" ? item.isConsumable : !item.isConsumable);
+			return visibleItems.filter((item) => inventoryConsumableFilter === "consumable" ? item.isConsumable : !item.isConsumable);
 		}
 
 		if (inventoryFilterMode === "displayName") {
 			const query = inventoryFilterDisplayName.trim().toLowerCase();
-			if (!query) return itemsSorted;
-			return itemsSorted.filter((item) => item.displayName.toLowerCase().includes(query));
+			if (!query) return visibleItems;
+			return visibleItems.filter((item) => item.displayName.toLowerCase().includes(query));
 		}
 
 		const rawThreshold = inventoryFilterMaxQty.trim();
-		if (!rawThreshold) return itemsSorted;
+		if (!rawThreshold) return visibleItems;
 
 		const threshold = Number(rawThreshold);
-		if (!Number.isFinite(threshold)) return itemsSorted;
+		if (!Number.isFinite(threshold)) return visibleItems;
 
-		return itemsSorted.filter((item) => item.quantity <= threshold);
-	}, [inventoryConsumableFilter, inventoryFilterDisplayName, inventoryFilterMaxQty, inventoryFilterMode, itemsSorted]);
+		return visibleItems.filter((item) => item.quantity <= threshold);
+	}, [inventoryConsumableFilter, inventoryFilterDisplayName, inventoryFilterMaxQty, inventoryFilterMode, itemsSorted, showRemovedItems]);
 
 	/*
 		Reloads all page data
@@ -1032,7 +1036,7 @@ export default function Inventory() {
 								<div className="row-main">
 									<div className="row-title">Room #{r.roomNumber}</div>
 									<div className="row-meta">Type: {r.roomType} · Capacity: {r.capacity}</div>
-									<div className="row-meta">Status: {r.isActive === false ? "Removed" : "Active"}</div>
+									<div className="row-meta">Status: {r.isActive === false ? "Inactive" : "Active"}</div>
 
 									<div className="row-actions">
 										{r.isActive === false ? (
@@ -1205,7 +1209,7 @@ export default function Inventory() {
 									<div className="row-meta">
 										Key: {it.itemKey} · Type: {it.itemType} · {it.isConsumable ? "Consumable" : "Non-consumable"}
 									</div>
-									<div className="row-meta">Status: {it.isActive === false ? "Removed" : "Active"}</div>
+									<div className="row-meta">Status: {it.isActive === false ? "Inactive" : "Active"}</div>
 									<div className="row-desc">{it.itemDescription}</div>
 
 									<div className="row-meta" style={{ marginTop: 8 }}>

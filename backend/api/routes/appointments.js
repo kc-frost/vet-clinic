@@ -981,6 +981,7 @@ router.get("/", requireAdmin, async (req, res) => {
 			LEFT JOIN appointment_consumable ac ON ac.appointmentID = a.appointmentID
 			LEFT JOIN inventory i ON i.itemID = ac.itemID
 			WHERE COALESCE(a.isCanceled, 0) = ?
+				AND (? = 1 OR COALESCE(a.underReview, 0) = 0)
 			GROUP BY
 				a.appointmentID,
 				a.userID,
@@ -1002,7 +1003,7 @@ router.get("/", requireAdmin, async (req, res) => {
 				canceler.legalLastName
 			ORDER BY ${orderByClause}
 			`,
-			[includeCanceled ? 1 : 0]
+			[includeCanceled ? 1 : 0, includeCanceled ? 1 : 0]
 		);
 
 		res.json(rows);
@@ -1045,6 +1046,8 @@ router.get("/mine", requireAuth, async (req, res) => {
 			LEFT JOIN staff s ON s.staffID = aps.staffID
 			LEFT JOIN customer sc ON sc.userID = s.userID
 			WHERE a.userID = ?
+				AND COALESCE(a.isCanceled, 0) = 0
+				AND COALESCE(a.underReview, 0) = 0
 			GROUP BY a.appointmentID, a.userID, a.roomNumber, a.petID, a.reasonKey, a.date, a.durationMinutes
 			ORDER BY a.date ASC
 			`,

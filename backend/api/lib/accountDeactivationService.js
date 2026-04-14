@@ -1,5 +1,5 @@
 import { pool } from "../db.js";
-import { processInactiveStaffAssignments } from "./appointmentIssueService.js";
+import { notifyUsersAboutUnderReviewAppointments, processInactiveStaffAssignments } from "./appointmentIssueService.js";
 import { cancelAppointment } from "./appointmentCancellationService.js";
 
 function toPositiveInt(value) {
@@ -134,6 +134,7 @@ export async function deactivateAccount({ targetUserID, actorUserID }) {
 		}
 
 		await conn.commit();
+		await notifyUsersAboutUnderReviewAppointments(reviewResult.underReviewAppointmentIDs);
 
 		return {
 			userID: safeTargetUserID,
