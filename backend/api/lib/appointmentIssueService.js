@@ -533,6 +533,58 @@ function formatIssueNotificationReason(reasonKey) {
 	return String(reasonKey || "").replaceAll("_", " ").trim() || "appointment";
 }
 
+function buildResolvedAppointmentSubject() {
+	// Keep the subject plain so the user immediately knows the appointment was fixed
+	return "Appointment resolved and rescheduled";
+}
+
+function buildResolvedAppointmentMessage(row, startAt, endAt) {
+	// Tell the user the appointment was fixed and give the new time window
+	const petName = String(row.petName || "").trim() || "your pet";
+	const reasonLabel = formatIssueNotificationReason(row.reasonKey);
+	const startText = formatIssueNotificationDateTime(startAt);
+	const endText = formatIssueNotificationDateTime(endAt);
+	return `Your appointment for ${petName} for ${reasonLabel} was resolved by an administrator and has been rescheduled to ${startText} through ${endText}.`;
+}
+
+export async function notifyUserAboutRescheduledAppointment({ appointmentID, startAt, endAt }) {
+	// Only notify when the appointment and recipient data are both real
+	const safeAppointmentID = Number(appointmentID);
+	if (!Number.isInteger(safeAppointmentID) || safeAppointmentID < 1) return;
+
+	const [rows] = await pool.query(
+		`SELECT
+			a.appointmentID,
+			c.email,
+			af.petName,
+			a.reasonKey
+		 FROM appointment a
+		 INNER JOIN customer c
+			on c.userID = a.userID
+		 LEFT JOIN appointment_form af
+			on af.appointmentID = a.appointmentID
+		 WHERE a.appointmentID = ?
+		 LIMIT 1`,
+		[safeAppointmentID]
+	);
+
+	if (!rows.length) return;
+
+	const row = rows[0];
+	const recipientEmail = String(row.email || "").trim();
+	if (!recipientEmail) return;
+
+	try {
+		await sendEmail({
+			to: recipientEmail,
+			subject: buildResolvedAppointmentSubject(),
+			text: buildResolvedAppointmentMessage(row, startAt, endAt),
+		});
+	} catch (err) {
+		console.error("resolved appointment email error", err);
+	}
+}
+
 export async function notifyUsersAboutUnderReviewAppointments(appointmentIDs) {
 	// Only send one email per appointment id and skip empty input entirely
 	const uniqueAppointmentIDs = [...new Set((appointmentIDs || []).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];

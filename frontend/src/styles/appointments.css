@@ -1,7 +1,7 @@
 .appointmentsPage {
-  max-width: 1700px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 22px 24px 32px 24px;
+  padding: 22px 0 32px 0;
 }
 
 .appointmentsHeader {
@@ -14,22 +14,23 @@
 .appointmentsHeader h1 {
   margin: 0;
   font-size: 32px;
-  color: #163b63;
+  color: #7a3f0d;
 }
 
 .pageHomeBtn {
   width: fit-content;
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid #7fa3cb;
-  background: #e8f1fb;
-  color: #163b63;
+  border: 1px solid #d1a57c;
+  background: #fff4e8;
+  color: #7a3f0d;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 8px 18px rgba(95, 54, 18, 0.08);
 }
 
 .pageHomeBtn:hover {
-  background: #dbeaf9;
+  background: #ffecd8;
 }
 
 .appointmentsError,
@@ -42,11 +43,11 @@
 }
 
 .appointmentsFiltersShell {
-  background-color: #ffffff;
-  border: 2px solid #d9e4ef;
+  background-color: #fffdf9;
+  border: 2px solid #e1c4a7;
   border-radius: 14px;
   padding: 16px;
-  box-shadow: 0 10px 24px rgba(27, 55, 88, 0.12);
+  box-shadow: 0 14px 34px rgba(95, 54, 18, 0.10);
   margin-bottom: 18px;
 }
 
@@ -69,7 +70,7 @@
 .appointmentsFilterField label {
   font-size: 14px;
   font-weight: 700;
-  color: #163b63;
+  color: #7a3f0d;
 }
 
 .appointmentsFilterField input {
@@ -77,13 +78,13 @@
   min-width: 0;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid #b9cde2;
-  background: #f8fbff;
-  color: #163b63;
+  border: 1px solid rgba(121, 73, 30, 0.18);
+  background: #fff4e8;
+  color: #7a3f0d;
 }
 
 .appointmentsFilterField input:focus {
-  outline: 2px solid #7fa3cb;
+  outline: 2px solid #d1a57c;
   outline-offset: 1px;
 }
 
@@ -99,45 +100,45 @@
 .appointmentsClearBtn {
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid #7fa3cb;
-  background: #e8f1fb;
-  color: #163b63;
+  border: 1px solid #d1a57c;
+  background: #fff4e8;
+  color: #7a3f0d;
   font-weight: 700;
   cursor: pointer;
 }
 
 .appointmentsClearBtn:hover {
-  background: #dbeaf9;
+  background: #ffecd8;
 }
 
 .appointmentsFilterCount {
   font-size: 14px;
   font-weight: 700;
-  color: #4c5d71;
+  color: #8a5a33;
 }
 
 .appointmentsShell {
-  background-color: #ffffff;
-  border: 2px solid #d9e4ef;
+  background-color: #fffdf9;
+  border: 2px solid #e1c4a7;
   border-radius: 14px;
   padding: 16px;
-  box-shadow: 0 10px 24px rgba(27, 55, 88, 0.12);
+  box-shadow: 0 14px 34px rgba(95, 54, 18, 0.10);
   overflow-x: auto;
 }
 
 .appointments-table {
   border-collapse: collapse;
   width: 100%;
-  min-width: 1280px;
+  min-width: 1100px;
 }
 
 .appointments-table tr:hover {
-  background-color: #eef6ff;
+  background-color: #fff1e2;
 }
 
 .appointments-table th {
-  color: #4c5d71;
-  background-color: #f3f6fa;
+  color: #8a5a33;
+  background-color: #fff7ef;
   padding: 12px 10px;
   text-align: left;
   vertical-align: middle;
@@ -146,7 +147,7 @@
 }
 
 .appointments-table td {
-  border-bottom: 1px solid #e4ebf3;
+  border-bottom: 1px solid rgba(121, 73, 30, 0.14);
   text-align: left;
   vertical-align: top;
   padding: 14px 12px;
@@ -167,7 +168,7 @@
 .cellSubText {
   margin-top: 4px;
   font-size: 13px;
-  color: #60758d;
+  color: #8a5a33;
   white-space: normal;
   word-break: break-word;
 }
@@ -257,31 +258,31 @@
 .appointmentsToggleBtn {
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid #b9cde2;
-  background: #f8fbff;
-  color: #163b63;
+  border: 1px solid rgba(121, 73, 30, 0.18);
+  background: #fff4e8;
+  color: #7a3f0d;
   font-weight: 700;
   cursor: pointer;
 }
 
 .appointmentsToggleBtnActive {
-  background: #163b63;
-  border-color: #163b63;
-  color: #ffffff;
+  background: #7a3f0d;
+  border-color: #7a3f0d;
+  color: #fffdf9;
 }
 
 .appointmentsCancelPanel {
-  background-color: #ffffff;
-  border: 2px solid #d9e4ef;
+  background-color: #fffdf9;
+  border: 2px solid #e1c4a7;
   border-radius: 14px;
   padding: 16px;
-  box-shadow: 0 10px 24px rgba(27, 55, 88, 0.12);
+  box-shadow: 0 14px 34px rgba(95, 54, 18, 0.10);
   margin-bottom: 18px;
 }
 
 .appointmentsCancelPanel h2 {
   margin: 0 0 12px 0;
-  color: #163b63;
+  color: #7a3f0d;
 }
 
 .appointmentsCancelPanelDetails {
@@ -296,28 +297,28 @@
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 700;
-  color: #163b63;
+  color: #7a3f0d;
 }
 
 .appointmentsCancelTextarea {
   width: 100%;
   min-height: 110px;
   border-radius: 10px;
-  border: 1px solid #b9cde2;
-  background: #f8fbff;
-  color: #163b63;
+  border: 1px solid rgba(121, 73, 30, 0.18);
+  background: #fff4e8;
+  color: #7a3f0d;
   padding: 12px;
   resize: vertical;
 }
 
 .appointmentsCancelTextarea:focus {
-  outline: 2px solid #7fa3cb;
+  outline: 2px solid #d1a57c;
   outline-offset: 1px;
 }
 
 .appointmentsCancelMessage {
   margin-top: 12px;
-  color: #163b63;
+  color: #7a3f0d;
   font-weight: 700;
 }
 
@@ -333,7 +334,7 @@
   border-radius: 10px;
   border: 1px solid #c93120;
   background: #f23d2a;
-  color: #ffffff;
+  color: #fffdf9;
   font-weight: 700;
   cursor: pointer;
 }

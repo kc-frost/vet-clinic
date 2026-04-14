@@ -2,7 +2,7 @@ import express from "express";
 import { pool } from "../db.js";
 import { requireAdmin } from "../lib/authMiddleware.js";
 import { cancelAppointment } from "../lib/appointmentCancellationService.js";
-import { clearAppointmentIssues, getUnderReviewAppointmentByID, getUnderReviewAppointments } from "../lib/appointmentIssueService.js";
+import { clearAppointmentIssues, getUnderReviewAppointmentByID, getUnderReviewAppointments, notifyUserAboutRescheduledAppointment } from "../lib/appointmentIssueService.js";
 import { getRule } from "../lib/reservationRules.js";
 
 const router = express.Router();
@@ -1015,7 +1015,11 @@ router.post("/:appointmentID/reschedule", requireAdmin, async (req, res) => {
 
 		if (!result.ok) return res.status(result.status || 500).json({ message: result.message || "Failed to reschedule under-review appointment" });
 
-		const updatedAppointment = await getUnderReviewAppointmentByID(appointmentID);
+		await notifyUserAboutRescheduledAppointment({
+			appointmentID: result.appointmentID,
+			startAt: result.startAt,
+			endAt: result.endAt,
+		});
 
 		res.json({
 			message: "Under-review appointment rescheduled",
@@ -1025,7 +1029,6 @@ router.post("/:appointmentID/reschedule", requireAdmin, async (req, res) => {
 				endAt: result.endAt,
 				roomNumber: result.roomNumber,
 			},
-			appointment: updatedAppointment,
 		});
 	} catch (err) {
 		console.error("POST /api/appointment-issues/:appointmentID/reschedule error:", err);

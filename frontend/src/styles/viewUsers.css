@@ -1,5 +1,5 @@
 .usersPage {
-	max-width: 1400px;
+	max-width: 1180px;
 	margin: 0 auto;
 	padding: 22px 24px 32px 24px;
 }
@@ -14,7 +14,7 @@
 .usersHeader h1 {
 	margin: 0;
 	font-size: 32px;
-	color: #163b63;
+	color: #7a3f0d;
 }
 
 .usersError,
@@ -27,11 +27,11 @@
 }
 
 .usersShell {
-	background-color: #ffffff;
-	border: 2px solid #d9e4ef;
+	background-color: #fffdf9;
+	border: 2px solid #e1c4a7;
 	border-radius: 14px;
 	padding: 16px;
-	box-shadow: 0 10px 24px rgba(27, 55, 88, 0.12);
+	box-shadow: 0 14px 34px rgba(95, 54, 18, 0.10);
 	overflow-x: auto;
 }
 
@@ -56,17 +56,17 @@
 
 .usersFilterLabel {
 	font-weight: 700;
-	color: #4c5d71;
+	color: #8a5a33;
 	font-size: 14px;
 }
 
 .usersFilterInput {
 	height: 42px;
 	border-radius: 10px;
-	border: 1px solid #d9e4ef;
+	border: 1px solid #e1c4a7;
 	padding: 0 12px;
-	background-color: #f8fbff;
-	color: #163b63;
+	background-color: #fff4e8;
+	color: #7a3f0d;
 	min-width: 0;
 }
 
@@ -79,16 +79,16 @@
 	height: 42px;
 	padding: 0 16px;
 	border-radius: 10px;
-	border: 1px solid #b7c9dc;
-	background-color: #eef5fc;
-	color: #163b63;
+	border: 1px solid #d1a57c;
+	background-color: #fff4e8;
+	color: #7a3f0d;
 	font-weight: 700;
 	cursor: pointer;
 }
 
 .usersSummaryText {
 	margin-bottom: 12px;
-	color: #4c5d71;
+	color: #8a5a33;
 	font-weight: 600;
 	padding-left: 6px;
 }
@@ -100,8 +100,8 @@
 }
 
 .usersTable th {
-	color: #4c5d71;
-	background-color: #f3f6fa;
+	color: #8a5a33;
+	background-color: #fff7ef;
 	padding: 12px 10px;
 	text-align: left;
 	vertical-align: middle;
@@ -110,14 +110,14 @@
 }
 
 .usersTable td {
-	border-bottom: 1px solid #e4ebf3;
+	border-bottom: 1px solid rgba(121, 73, 30, 0.14);
 	text-align: left;
 	vertical-align: top;
 	padding: 14px 12px;
 }
 
 .usersTable tr:hover {
-	background-color: #eef6ff;
+	background-color: #fff1e2;
 }
 
 @media (max-width: 1200px) {
@@ -139,8 +139,8 @@
 
 .usersMessage {
 	margin: 0 0 14px 0;
-	color: #146c43;
-	font-weight: 600;
+	color: #7a3f0d;
+	font-weight: 700;
 }
 
 .usersRemoveBtn,
@@ -154,9 +154,9 @@
 }
 
 .usersRemoveBtn {
-	border: 1px solid #d0dae6;
-	background-color: #f8fbff;
-	color: #163b63;
+	border: 1px solid rgba(121, 73, 30, 0.18);
+	background-color: #fff4e8;
+	color: #7a3f0d;
 }
 
 .usersRemoveBtn:disabled,
@@ -169,19 +169,19 @@
 .usersRemovePanel {
 	margin-top: 18px;
 	padding: 16px;
-	border: 2px solid #d9e4ef;
+	border: 2px solid #e1c4a7;
 	border-radius: 14px;
-	background-color: #fbfdff;
+	background-color: #fff7ef;
 }
 
 .usersRemovePanel h2 {
 	margin: 0 0 10px 0;
-	color: #163b63;
+	color: #7a3f0d;
 }
 
 .usersRemoveText {
 	margin: 0 0 12px 0;
-	color: #4c5d71;
+	color: #8a5a33;
 	line-height: 1.5;
 }
 
@@ -190,16 +190,16 @@
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 10px;
 	margin-bottom: 14px;
-	color: #163b63;
+	color: #7a3f0d;
 }
 
 .usersReasonTextarea {
 	min-height: 92px;
 	border-radius: 10px;
-	border: 1px solid #d9e4ef;
+	border: 1px solid #e1c4a7;
 	padding: 10px 12px;
-	background-color: #f8fbff;
-	color: #163b63;
+	background-color: #fff4e8;
+	color: #7a3f0d;
 	resize: vertical;
 }
 
@@ -211,9 +211,9 @@
 }
 
 .usersSecondaryBtn {
-	border: 1px solid #b7c9dc;
-	background-color: #eef5fc;
-	color: #163b63;
+	border: 1px solid #d1a57c;
+	background-color: #fff4e8;
+	color: #7a3f0d;
 }
 
 .usersDangerBtn {

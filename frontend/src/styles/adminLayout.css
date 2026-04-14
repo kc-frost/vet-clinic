@@ -41,7 +41,7 @@
 	border-radius: 10px;
 	border: 1px solid transparent;
 	font-weight: 600;
-	transition: backround 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+	transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .adminNavLink:hover {
@@ -70,9 +70,87 @@
 	transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-
+.adminContent > div:hover,
 .adminContent section:hover {
-	box-shadow: 0 4px 12px rgba(0
-	, 0, 0, .8
-	);
+	box-shadow: 0 14px 34px rgba(95, 54, 18, 0.1);
+}
+.adminAnalyticsPage {
+	max-width: 1180px;
+	margin: 0 auto;
+	padding: 10px 0 28px 0;
+}
+
+.adminAnalyticsHeader {
+	margin-bottom: 18px;
+}
+
+.adminAnalyticsTitle {
+	margin: 0;
+	font-size: 32px;
+	font-weight: 900;
+	color: #7a3f0d;
+}
+
+.adminAnalyticsSubtitle {
+	margin: 8px 0 0 0;
+	color: #8a5a33;
+	font-size: 14px;
+}
+
+.adminAnalyticsMessage,
+.adminAnalyticsEmptyText {
+	margin: 0 0 14px 0;
+	color: #8a5a33;
+}
+
+.adminAnalyticsMessageError {
+	margin: 0 0 14px 0;
+	color: #b42318;
+}
+
+.adminAnalyticsStatsGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 16px;
+}
+
+.adminAnalyticsCard,
+.adminAnalyticsListCard {
+	background-color: #fffdf9;
+	border: 1px solid #e1c4a7;
+	border-radius: 18px;
+	padding: 18px;
+	box-shadow: 0 14px 34px rgba(95, 54, 18, 0.1);
+}
+
+.adminAnalyticsMetricLabel {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 800;
+	color: #7a3f0d;
+}
+
+.adminAnalyticsMetricValue {
+	margin: 10px 0 0 0;
+	font-size: 32px;
+	font-weight: 900;
+	color: #2f241a;
+}
+
+.adminAnalyticsListCard {
+	margin-top: 16px;
+}
+
+.adminAnalyticsListTitle {
+	margin: 0 0 12px 0;
+	font-size: 22px;
+	font-weight: 900;
+	color: #7a3f0d;
+}
+
+.adminAnalyticsList {
+	margin: 0;
+	padding-left: 20px;
+	color: #2f241a;
+	line-height: 1.7;
 }
