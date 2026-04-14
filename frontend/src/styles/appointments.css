@@ -1,5 +1,5 @@
 .appointmentsPage {
-  max-width: 1180px;
+  max-width: 1380px;
   margin: 0 auto;
   padding: 22px 0 32px 0;
 }
@@ -129,7 +129,7 @@
 .appointments-table {
   border-collapse: collapse;
   width: 100%;
-  min-width: 1100px;
+  min-width: 1240px;
 }
 
 .appointments-table tr:hover {
@@ -159,7 +159,7 @@
 }
 
 .staffCell {
-  min-width: 250px;
+  min-width: 230px;
   white-space: normal;
   word-break: break-word;
   line-height: 1.35;
@@ -174,8 +174,8 @@
 }
 
 .equipmentCell {
-  min-width: 300px;
-  max-width: 380px;
+  min-width: 260px;
+  max-width: 320px;
   white-space: normal;
   word-break: break-word;
   line-height: 1.35;

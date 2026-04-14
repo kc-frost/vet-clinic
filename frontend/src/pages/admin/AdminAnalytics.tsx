@@ -143,24 +143,26 @@ export default function AdminAnalytics() {
 				</div>
 			</div>
 
-			<div className="adminAnalyticsListCard">
-				<h2 className="adminAnalyticsListTitle">Top Three Appointments Made This Month</h2>
-				{buildListItems(topAppointmentTypeItems, (item) => `${item.label} (${item.count})`)}
-			</div>
+			<div className="adminAnalyticsListsGrid">
+				<div className="adminAnalyticsListCard">
+					<h2 className="adminAnalyticsListTitle">Top Three Appointments Made This Month</h2>
+					{buildListItems(topAppointmentTypeItems, (item) => `${item.label} (${item.count})`)}
+				</div>
 
-			<div className="adminAnalyticsListCard">
-				<h2 className="adminAnalyticsListTitle">Top Three Staff This Month</h2>
-				{buildListItems(topStaffItems, (item) => `${item.label} (${item.count})`)}
-			</div>
+				<div className="adminAnalyticsListCard">
+					<h2 className="adminAnalyticsListTitle">Top Three Staff This Month</h2>
+					{buildListItems(topStaffItems, (item) => `${item.label} (${item.count})`)}
+				</div>
 
-			<div className="adminAnalyticsListCard">
-				<h2 className="adminAnalyticsListTitle">Top Three Users This Month</h2>
-				{buildListItems(topUserItems, (item) => `${item.label} (${item.count})`)}
-			</div>
+				<div className="adminAnalyticsListCard">
+					<h2 className="adminAnalyticsListTitle">Top Three Users This Month</h2>
+					{buildListItems(topUserItems, (item) => `${item.label} (${item.count})`)}
+				</div>
 
-			<div className="adminAnalyticsListCard">
-				<h2 className="adminAnalyticsListTitle">Cancellations This Month By Category</h2>
-				{buildListItems(cancelCategoryItems, (item) => `${formatCancelCategory(item.category)} (${item.count})`)}
+				<div className="adminAnalyticsListCard">
+					<h2 className="adminAnalyticsListTitle">Cancellations This Month By Category</h2>
+					{buildListItems(cancelCategoryItems, (item) => `${formatCancelCategory(item.category)} (${item.count})`)}
+				</div>
 			</div>
 		</div>
 	);
