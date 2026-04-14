@@ -1142,10 +1142,19 @@ router.post("/mine/:id/reschedule", requireAuth, async (req, res) => {
 			const oldForm = formRows[0];
 
 			/*
-				Delete the old appointment, then try to build the new one
+				Delete the old appointment only inside this transaction so a failed rebuild
+				can roll the whole thing back and keep the original appointment alive
 			*/
 			await deleteAppointmentInsideTransaction(conn, oldAppointmentID);
-			return createRescheduledAppointmentInsideTransaction(conn, oldAppt, oldForm, appointmentDate, startTime);
+
+			const createResult = await createRescheduledAppointmentInsideTransaction(conn, oldAppt, oldForm, appointmentDate, startTime);
+			if (!createResult.ok) {
+				const createError = new Error(createResult.error || "failed to reschedule appointment");
+				createError.status = createResult.status || 500;
+				throw createError;
+			}
+
+			return createResult;
 		});
 
 		if (!result.ok) return res.status(result.status || 500).json({ error: result.error || "failed to reschedule appointment" });
