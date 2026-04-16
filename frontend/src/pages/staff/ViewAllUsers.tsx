@@ -280,7 +280,7 @@ export default function ViewAllUsers() {
 					<div className="usersRemovePanel">
 						<h2>Remove User</h2>
 						<p className="usersRemoveText">
-							This will deactivate <b>{buildUserLabel(selectedUser)}</b>. Their account will stay in the database, login will be blocked, and any future appointments tied to that account will be handled by the backend deactivation logic.
+							This will deactivate <b>{buildUserLabel(selectedUser)}</b>
 						</p>
 
 						<div className="usersRemoveDetails">
@@ -296,7 +296,7 @@ export default function ViewAllUsers() {
 								className="usersReasonTextarea"
 								value={removeReasonText}
 								onChange={(e) => setRemoveReasonText(e.target.value)}
-								placeholder="Optional note for yourself. This does not change the backend behavior."
+								placeholder="type reason for removing user"
 							/>
 						</div>
 
