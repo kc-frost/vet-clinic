@@ -30,6 +30,41 @@ const ROOM_TYPE_OPTIONS: { value: RoomType; label: string }[] = [
 	{ value: "GROOMING", label: "GROOMING" },
 ];
 
+type InventoryCatalogOption = {
+	value: string;
+	label: string;
+	isConsumable: boolean;
+};
+
+const INVENTORY_CATALOG_OPTIONS: InventoryCatalogOption[] = [
+	{ value: "EXAM_SUPPLY_KIT", label: "Exam Supply Kit", isConsumable: true },
+	{ value: "RABIES_VACCINE_DOSE", label: "Rabies Vaccine Dose", isConsumable: true },
+	{ value: "BORDETELLA_VACCINE_DOSE", label: "Bordetella Vaccine Dose", isConsumable: true },
+	{ value: "SYRINGE_3ML", label: "3 mL Syringe", isConsumable: true },
+	{ value: "ALCOHOL_WIPE", label: "Alcohol Wipe", isConsumable: true },
+	{ value: "GAUZE_PAD", label: "Gauze Pad", isConsumable: true },
+	{ value: "DENTAL_CLEANING_KIT", label: "Dental Cleaning Kit", isConsumable: true },
+	{ value: "DENTAL_POLISH_PASTE_DOSE", label: "Dental Polish Paste Dose", isConsumable: true },
+	{ value: "CARPROFEN_DOSE", label: "Carprofen Dose", isConsumable: true },
+	{ value: "DENTAL_EXTRACTION_PACK", label: "Dental Extraction Pack", isConsumable: true },
+	{ value: "SUTURE_KIT", label: "Suture Kit", isConsumable: true },
+	{ value: "AMOXICILLIN_DOSE", label: "Amoxicillin Dose", isConsumable: true },
+	{ value: "POSITIONING_WEDGE", label: "Positioning Wedge", isConsumable: true },
+	{ value: "CAST_CHANGE_SUPPLY_KIT", label: "Cast Change Supply Kit", isConsumable: true },
+	{ value: "TROPICLEAN_SHAMPOO_DOSE", label: "TropiClean Shampoo Dose", isConsumable: true },
+	{ value: "EAR_CLEANING_SOLUTION_DOSE", label: "Ear Cleaning Solution Dose", isConsumable: true },
+	{ value: "NAIL_GRINDER_DISPOSABLE_HEAD", label: "Nail Grinder Disposable Head", isConsumable: true },
+	{ value: "PET_WIPE_PACK", label: "Pet Wipe Pack", isConsumable: true },
+	{ value: "FLEA_TREATMENT_SHAMPOO_DOSE", label: "Flea Treatment Shampoo Dose", isConsumable: true },
+	{ value: "STERILE_BANDAGE_PACK", label: "Sterile Bandage Pack", isConsumable: true },
+	{ value: "SALINE_FLUSH", label: "Saline Flush", isConsumable: true },
+	{ value: "ANESTHESIA_MACHINE", label: "Anesthesia Machine", isConsumable: false },
+	{ value: "DENTAL_SCALER_UNIT", label: "Dental Scaler Unit", isConsumable: false },
+	{ value: "ORAL_SURGICAL_INSTRUMENT_SET", label: "Oral Surgical Instrument Set", isConsumable: false },
+	{ value: "XRAY_MACHINE", label: "X-Ray Machine", isConsumable: false },
+	{ value: "ULTRASOUND_MACHINE", label: "Ultrasound Machine", isConsumable: false },
+];
+
 type StaffFilterMode = "name" | "staffID" | "roles";
 type RoomFilterMode = "roomNumber" | "roomType";
 type InventoryFilterMode = "consumableState" | "displayName" | "quantityThreshold";
@@ -38,11 +73,6 @@ type InventoryConsumableFilter = "consumable" | "non-consumable";
 // Turns unknown thrown values into one readable error string
 function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : "Unknown error";
-}
-
-// Keeps item keys in one db-friendly format
-function normalizeItemKey(raw: string): string {
-	return raw.trim().replace(/\s+/g, "_").toUpperCase();
 }
 
 // Used for display when profile fields were never filled in
@@ -137,6 +167,11 @@ export default function Inventory() {
 	const [iItemType, setIItemType] = useState("");
 	const [iQty, setIQty] = useState<number>(0);
 	const [iDesc, setIDesc] = useState("");
+
+	const inventoryCatalogOptions = useMemo(
+		() => INVENTORY_CATALOG_OPTIONS.filter((option) => option.isConsumable === iIsConsumable),
+		[iIsConsumable]
+	);
 
 	/*
 		qtyEdits stores the live text inside each quantity input
@@ -549,20 +584,21 @@ export default function Inventory() {
 	/*
 		Inventory create flow
 
-		itemKey is normalized before sending so it stays in one consistent format
+		itemKey comes from the fixed catalog dropdown so it stays aligned
+		with the backend scheduling keys the system actually uses
 		The rest is required-field and number validation before the POST
 	*/
 	async function handleAddItem() {
 		setPageError("");
 		setPageMessage("");
 
-		const itemKey = normalizeItemKey(iItemKey);
+		const itemKey = iItemKey;
 		const displayName = iDisplayName.trim();
 		const itemType = iItemType.trim();
 		const desc = iDesc.trim();
 
 		if (!itemKey) {
-			setPageError("Inventory: itemKey is required (recommend UPPER_SNAKE_CASE). ");
+			setPageError("Inventory: select an item key.");
 			return;
 		}
 		if (!displayName) {
@@ -600,6 +636,19 @@ export default function Inventory() {
 		} catch (err) {
 			setPageError(errMsg(err));
 			setLoading(false);
+		}
+	}
+
+	function handleInventoryKeyChange(nextKey: string) {
+		setIItemKey(nextKey);
+	}
+
+	function handleInventoryConsumableToggle(checked: boolean) {
+		setIIsConsumable(checked);
+
+		const currentOption = INVENTORY_CATALOG_OPTIONS.find((option) => option.value === iItemKey);
+		if (currentOption && currentOption.isConsumable !== checked) {
+			setIItemKey("");
 		}
 	}
 
@@ -758,7 +807,6 @@ export default function Inventory() {
 			{pageMessage ? <div className="inventory-success">{pageMessage}</div> : null}
 
 				<div className="inventory-muted">
-					<b>Note:</b> remove keeps rows in the database and uses the inactive state instead of hard deleting them.
 				</div>
 			</div>
 
@@ -1075,14 +1123,21 @@ export default function Inventory() {
 					<div className="panelBlock">
 						<div className="subsectionTitle">Add Inventory Item</div>
 						<label className="checkboxRow">
-							<input type="checkbox" checked={iIsConsumable} onChange={(e) => setIIsConsumable(e.target.checked)} disabled={loading} />
-							Consumable (stock-based)
-						</label>
+						<input type="checkbox" checked={iIsConsumable} onChange={(e) => handleInventoryConsumableToggle(e.target.checked)} disabled={loading} />
+						Consumable (stock-based)
+					</label>
 
-						<label className="label">Item Key</label>
-						<input className="input" placeholder="Required (e.g., VACCINE_DOSE, XRAY_MACHINE)" value={iItemKey} onChange={(e) => setIItemKey(e.target.value)} disabled={loading} />
+					<label className="label">Item Key</label>
+					<select className="input" value={iItemKey} onChange={(e) => handleInventoryKeyChange(e.target.value)} disabled={loading}>
+						<option value="">Select an item key</option>
+						{inventoryCatalogOptions.map((option) => (
+							<option key={option.value} value={option.value}>
+								{option.value} - {option.label}
+							</option>
+						))}
+					</select>
 
-						<label className="label">Display Name</label>
+					<label className="label">Display Name</label>
 						<input className="input" placeholder="Required" value={iDisplayName} onChange={(e) => setIDisplayName(e.target.value)} disabled={loading} />
 
 						<label className="label">Item Type</label>

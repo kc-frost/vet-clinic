@@ -969,10 +969,20 @@ router.get("/availability", requireAuth, async (req, res) => {
 			);
 
 			/*
+				Also strip the ignored appointment in application code before any
+				busy maps get built. This keeps reschedule availability from ever
+				counting the appointment against itself even if the SQL exclusion
+				behaves awkwardly.
+			*/
+			const filteredApptRows = ignoreAppointmentID
+				? apptRows.filter((row) => Number(row.appointmentID) !== ignoreAppointmentID)
+				: apptRows;
+
+			/*
 				Load the staff assignments already attached to those
 				existing appointments.
 			*/
-			const appointmentIds = apptRows.map((row) => Number(row.appointmentID)).filter((id) => Number.isFinite(id));
+			const appointmentIds = filteredApptRows.map((row) => Number(row.appointmentID)).filter((id) => Number.isFinite(id));
 			let appointmentStaffRows = [];
 
 			if (appointmentIds.length) {
@@ -994,7 +1004,7 @@ router.get("/availability", requireAuth, async (req, res) => {
 			*/
 			const apptsByDate = new Map();
 
-			for (const row of apptRows) {
+			for (const row of filteredApptRows) {
 				const dateOnly = getDateOnly(row.date);
 				if (!apptsByDate.has(dateOnly)) apptsByDate.set(dateOnly, []);
 				apptsByDate.get(dateOnly).push(row);

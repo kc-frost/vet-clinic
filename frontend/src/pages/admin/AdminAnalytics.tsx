@@ -108,7 +108,6 @@ export default function AdminAnalytics() {
 		<div className="adminAnalyticsPage">
 			<div className="adminAnalyticsHeader">
 				<h1 className="adminAnalyticsTitle">View Analytics</h1>
-				<p className="adminAnalyticsSubtitle">Admin appointment analytics for the current system state</p>
 			</div>
 
 			<div className="adminAnalyticsStatsGrid">
