@@ -832,9 +832,22 @@ router.get("/availability", requireAuth, async (req, res) => {
 		*/
 		const bookingPetIDRaw = req.query.petID;
 		const bookingPetID = bookingPetIDRaw === null || bookingPetIDRaw === undefined || bookingPetIDRaw === "" ? null : Number(bookingPetIDRaw);
+		const ignoreAppointmentIDRaw = req.query.ignoreAppointmentID;
+		const ignoreAppointmentID =
+			ignoreAppointmentIDRaw === null || ignoreAppointmentIDRaw === undefined || ignoreAppointmentIDRaw === "" ? null : Number(ignoreAppointmentIDRaw);
 
 		if (bookingPetIDRaw !== null && bookingPetIDRaw !== undefined && bookingPetIDRaw !== "" && (!Number.isFinite(bookingPetID) || bookingPetID <= 0)) {
 			res.status(400).json({ error: "invalid petID" });
+			return;
+		}
+
+		if (
+			ignoreAppointmentIDRaw !== null &&
+			ignoreAppointmentIDRaw !== undefined &&
+			ignoreAppointmentIDRaw !== "" &&
+			(!Number.isFinite(ignoreAppointmentID) || ignoreAppointmentID <= 0)
+		) {
+			res.status(400).json({ error: "invalid ignoreAppointmentID" });
 			return;
 		}
 
@@ -950,8 +963,9 @@ router.get("/availability", requireAuth, async (req, res) => {
 				`select appointmentID, userID, petID, roomNumber, reasonKey, date, durationMinutes
 				 from appointment
 				 where date >= ? and date < ?
-				 and coalesce(isCanceled, 0) = 0`,
-				[rangeStart, rangeEndExclusive]
+				 and coalesce(isCanceled, 0) = 0
+				 and (? is null or appointmentID <> ?)`,
+				[rangeStart, rangeEndExclusive, ignoreAppointmentID, ignoreAppointmentID]
 			);
 
 			/*

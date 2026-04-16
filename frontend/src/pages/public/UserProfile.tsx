@@ -1017,6 +1017,7 @@ export default function UserProfile() {
 				reasonKey: reservation.reasonKey as ReasonKey,
 				userID: authUser.userID,
 				petID: reservation.petID ?? null,
+				ignoreAppointmentID: reservation.id,
 				days: 90,
 			});
 

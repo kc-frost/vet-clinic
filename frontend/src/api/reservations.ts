@@ -14,6 +14,7 @@ export async function getAvailability(params: {
 	reasonKey: ReasonKey;
 	userID: number;
 	petID?: number | null;
+	ignoreAppointmentID?: number | null;
 	startDate?: string;
 	days?: number;
 }) {
@@ -21,6 +22,7 @@ export async function getAvailability(params: {
 	q.set("reasonKey", params.reasonKey);
 	q.set("userID", String(params.userID));
 	if (params.petID) q.set("petID", String(params.petID));
+	if (params.ignoreAppointmentID) q.set("ignoreAppointmentID", String(params.ignoreAppointmentID));
 	if (params.startDate) q.set("startDate", params.startDate);
 	if (params.days) q.set("days", String(params.days));
 
