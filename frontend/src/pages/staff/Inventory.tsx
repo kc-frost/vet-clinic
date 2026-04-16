@@ -1132,7 +1132,7 @@ export default function Inventory() {
 						<option value="">Select an item key</option>
 						{inventoryCatalogOptions.map((option) => (
 							<option key={option.value} value={option.value}>
-								{option.value} - {option.label}
+								{option.label}
 							</option>
 						))}
 					</select>
