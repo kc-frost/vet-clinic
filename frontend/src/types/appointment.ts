@@ -20,4 +20,7 @@ export type Appointment = {
 	cancellationReason?: string | null;
 	canceledAt?: string | null;
 	canceledByName?: string | null;
+	rating?: number | null;
+	reviewText?: string | null;
+	reviewCreatedAt?: string | null;
 };
