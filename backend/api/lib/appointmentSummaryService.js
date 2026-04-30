@@ -794,11 +794,7 @@ export async function getCustomerSummary(sessionUserID, rawAppointmentID) {
 	const conn = await pool.getConnection();
 
 	try {
-		let row = await loadCustomerAppointmentContext(conn, sessionUserID, appointmentID);
-
-		await conn.beginTransaction();
-		await ensureSummaryRow(conn, row);
-		await maybeAutoFinalizeSummary(conn, row);
+		const row = await loadCustomerAppointmentContext(conn, sessionUserID, appointmentID);
 
 		if (!row.isFinalized) {
 			const error = new Error("This summary is not ready yet");
@@ -806,11 +802,7 @@ export async function getCustomerSummary(sessionUserID, rawAppointmentID) {
 			throw error;
 		}
 
-		await conn.commit();
 		return buildSummaryResponse(row);
-	} catch (error) {
-		try { await conn.rollback(); } catch {}
-		throw error;
 	} finally {
 		conn.release();
 	}
