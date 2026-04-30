@@ -174,6 +174,63 @@ router.get("/", requireAdmin, async (_req, res) => {
             [monthStart, nextMonthStart]
         );
 
+        const [allTimeAverageRatingRows] = await pool.query(`
+	        SELECT ROUND(AVG(rating), 2) AS value
+	        FROM appointment_review
+        `);
+
+        const [monthlyAverageRatingRows] = await pool.query(
+            `
+            SELECT ROUND(AVG(rating), 2) AS value
+            FROM appointment_review
+            WHERE createdAt >= ? AND createdAt < ?
+            `,
+            [monthStart, nextMonthStart]
+        );
+
+        const [highestScoringReservationOfMonthRows] = await pool.query(
+            `
+            SELECT
+                ar.appointmentID,
+                ar.rating,
+                ar.reviewText,
+                a.reasonKey,
+                a.date,
+                COALESCE(af.petName, p.petName, CONCAT('Pet #', a.petID)) AS petName,
+                COALESCE(CONCAT(c.legalFirstName, ' ', c.legalLastName), c.email) AS customerName
+            FROM appointment_review ar
+            JOIN appointment a ON ar.appointmentID = a.appointmentID
+            JOIN customer c ON ar.userID = c.userID
+            LEFT JOIN pet p ON a.petID = p.petID
+            LEFT JOIN appointment_form af ON a.appointmentID = af.appointmentID
+            WHERE ar.createdAt >= ? AND ar.createdAt < ?
+            ORDER BY ar.rating DESC, ar.createdAt ASC
+            LIMIT 1
+            `,
+            [monthStart, nextMonthStart]
+        );
+
+        const [lowestScoringReservationOfMonthRows] = await pool.query(
+            `
+            SELECT
+                ar.appointmentID,
+                ar.rating,
+                ar.reviewText,
+                a.reasonKey,
+                a.date,
+                COALESCE(af.petName, p.petName, CONCAT('Pet #', a.petID)) AS petName,
+                COALESCE(CONCAT(c.legalFirstName, ' ', c.legalLastName), c.email) AS customerName
+            FROM appointment_review ar
+            JOIN appointment a ON ar.appointmentID = a.appointmentID
+            JOIN customer c ON ar.userID = c.userID
+            LEFT JOIN pet p ON a.petID = p.petID
+            LEFT JOIN appointment_form af ON a.appointmentID = af.appointmentID
+            WHERE ar.createdAt >= ? AND ar.createdAt < ?
+            ORDER BY ar.rating ASC, ar.createdAt ASC
+            LIMIT 1
+            `,
+            [monthStart, nextMonthStart]
+        );
         res.json({
             allTimeRegisteredUsers: getCount(allTimeUsersRows),
             allTimeReservations: getCount(allTimeReservationsRows),
@@ -185,6 +242,10 @@ router.get("/", requireAdmin, async (_req, res) => {
             totalCancellations: getCount(totalCancellationsRows),
             cancellationsThisMonth: getCount(cancellationsThisMonthRows),
             cancellationsThisMonthByCategory,
+            allTimeAverageRating: allTimeAverageRatingRows[0]?.value ?? null,
+            monthlyAverageRating: monthlyAverageRatingRows[0]?.value ?? null,
+            highestScoringReservationOfMonth: highestScoringReservationOfMonthRows[0] ?? null,
+            lowestScoringReservationOfMonth: lowestScoringReservationOfMonthRows[0] ?? null,
         });
     } catch (error) {
         console.error("[adminAnalytics] failed to load analytics", error);

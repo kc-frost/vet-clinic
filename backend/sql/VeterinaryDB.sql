@@ -69,9 +69,11 @@ create table pet(
 	height int, -- in inches
 	behavior varchar(255), -- stores behavior notes for pet
 
-	-- medical history fields
+	-- current / historical health profile fields
 	currentMedications text,
+	medicationHistory text,
 	knownAllergies text,
+	currentConditions text,
 	pastInjuriesConditions text,
 	vaccinationsUpToDate varchar(10), -- Yes, No, Unsure
 	heartwormPreventionCurrent varchar(20), -- Yes, No, Unsure, NotApplicable
@@ -182,9 +184,23 @@ create table appointment(
 	-- under review appointments are temporarily invalid and need admin resolution
 	underReview boolean not null default false,
 
+
 	foreign key (userID) references customer(userID),
 	foreign key (petID) references pet(petID),
-	foreign key (roomNumber) references rooms(roomNumber)
+	foreign key (roomNumber) references rooms(roomNumber),
+);
+create table appointment_review(
+	reviewID int auto_increment primary key,
+	appointmentID int not null unique,
+	userID int not null,
+	rating tinyint unsigned not null,
+	reviewText varchar(500),
+	createdAt datetime not null default current_timestamp,
+	updatedAt datetime not null default current_timestamp on update current_timestamp,
+
+	foreign key (appointmentID) references appointment(appointmentID),
+	foreign key (userID) references customer(userID),
+	check (rating between 1 and 5)
 );
 
 -- actual many-to-many staff assignments for appointments
@@ -225,10 +241,17 @@ create table appointment_form(
 
 	-- medical / safety snapshot
 	currentMedications text not null,
+	medicationHistory text not null,
 	knownAllergies text not null,
+	currentConditions text not null,
 	pastInjuriesConditions text not null,
 	vaccinationsUpToDate varchar(10) not null,
 	heartwormPreventionCurrent varchar(20) not null,
+
+	-- grooming dye customization snapshot
+	groomingDyeStyleKey varchar(100),
+	groomingReferencePhotoPath varchar(500),
+	groomingStyleNotes text,
 
 	-- insurance, optional
 	insuranceProvider varchar(255),
@@ -239,6 +262,35 @@ create table appointment_form(
 
 	foreign key (appointmentID) references appointment(appointmentID)
 );
+
+-- stores the draft/finalized post appointment summary form field state for an appointment
+-- also stores drafted/staged pet profile values while staff work on the summary that isn't finalized yet
+create table appointment_summary(
+	appointmentID int primary key,
+
+	-- summary fields
+	symptoms text,
+	diagnosis text,
+	medicationPrescribed text,
+	treatmentPerformed text,
+	notes text,
+
+	-- staged pet profile values used while drafting the summary
+	draftAllergies text,
+	draftCurrentMedications text,
+	draftMedicationHistory text,
+	draftCurrentConditions text,
+	draftPastConditions text,
+
+	-- finalized state attributes
+	isFinalized boolean not null default false,
+	finalizedByStaffID int null,
+	finalizedAt datetime null,
+
+	foreign key (appointmentID) references appointment(appointmentID),
+	foreign key (finalizedByStaffID) references staff(staffID)
+);
+
 
 -- links consumables used by each appointment
 -- cancel deletes these rows and refunds inventory.quantity

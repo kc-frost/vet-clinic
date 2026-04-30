@@ -13,6 +13,7 @@ import resourcesRoutes from "./routes/resources.js";
 import authRoutes from "./routes/auth.js";
 import medicineRoutes from "./routes/medicine.js";
 import equipmentRoutes from "./routes/equipment.js";
+import reviewsRoutes from "./routes/reviews.js";
 
 import appointmentsRoutes from "./routes/appointments.js";
 import reservationsRoutes from "./routes/reservations.js";
@@ -77,6 +78,7 @@ app.use("/api/reservations", reservationsRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/appointment-issues", appointmentIssuesRoutes);
 
+app.use("/api/reviews", reviewsRoutes);
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api/profile", profileRoutes);
 

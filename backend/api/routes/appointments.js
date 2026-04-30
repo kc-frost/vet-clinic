@@ -1019,6 +1019,7 @@ router.get("/", requireAdmin, async (req, res) => {
 router.get("/mine", requireAuth, async (req, res) => {
 	try {
 		const userID = getRequestUserId(req);
+
 		const [rows] = await pool.query(
 			`
 			SELECT
@@ -1029,12 +1030,22 @@ router.get("/mine", requireAuth, async (req, res) => {
 				a.reasonKey,
 				a.date,
 				a.durationMinutes,
+				DATE_ADD(a.date, INTERVAL a.durationMinutes MINUTE) AS endDateTime,
+
+				ar.reviewID,
+				ar.rating,
+				ar.reviewText,
+				ar.createdAt AS reviewCreatedAt,
+
 				COALESCE(
 					GROUP_CONCAT(
 						DISTINCT CONCAT(
 							aps.assignedRoleKey,
 							': ',
-							COALESCE(NULLIF(TRIM(CONCAT(COALESCE(sc.legalFirstName, ''), ' ', COALESCE(sc.legalLastName, ''))), ''), CONCAT('Staff ', aps.staffID))
+							COALESCE(
+								NULLIF(TRIM(CONCAT(COALESCE(sc.legalFirstName, ''), ' ', COALESCE(sc.legalLastName, ''))), ''),
+								CONCAT('Staff ', aps.staffID)
+							)
 						)
 						ORDER BY aps.assignedRoleKey, aps.staffID
 						SEPARATOR ', '
@@ -1042,13 +1053,25 @@ router.get("/mine", requireAuth, async (req, res) => {
 					''
 				) AS assignedStaffSummary
 			FROM appointment a
+			LEFT JOIN appointment_review ar ON ar.appointmentID = a.appointmentID
 			LEFT JOIN appointment_staff aps ON aps.appointmentID = a.appointmentID
 			LEFT JOIN staff s ON s.staffID = aps.staffID
 			LEFT JOIN customer sc ON sc.userID = s.userID
 			WHERE a.userID = ?
 				AND COALESCE(a.isCanceled, 0) = 0
 				AND COALESCE(a.underReview, 0) = 0
-			GROUP BY a.appointmentID, a.userID, a.roomNumber, a.petID, a.reasonKey, a.date, a.durationMinutes
+			GROUP BY
+				a.appointmentID,
+				a.userID,
+				a.roomNumber,
+				a.petID,
+				a.reasonKey,
+				a.date,
+				a.durationMinutes,
+				ar.reviewID,
+				ar.rating,
+				ar.reviewText,
+				ar.createdAt
 			ORDER BY a.date ASC
 			`,
 			[userID]
