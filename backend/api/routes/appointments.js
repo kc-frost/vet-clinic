@@ -1029,6 +1029,8 @@ router.get("/mine", requireAuth, async (req, res) => {
 				a.reasonKey,
 				a.date,
 				a.durationMinutes,
+				COALESCE(p.petName, af.petName, '') AS petName,
+				COALESCE(summary.isFinalized, 0) AS summaryIsFinalized,
 				COALESCE(
 					GROUP_CONCAT(
 						DISTINCT CONCAT(
@@ -1045,10 +1047,13 @@ router.get("/mine", requireAuth, async (req, res) => {
 			LEFT JOIN appointment_staff aps ON aps.appointmentID = a.appointmentID
 			LEFT JOIN staff s ON s.staffID = aps.staffID
 			LEFT JOIN customer sc ON sc.userID = s.userID
+			LEFT JOIN pet p ON p.petID = a.petID
+			LEFT JOIN appointment_form af ON af.appointmentID = a.appointmentID
+			LEFT JOIN appointment_summary summary ON summary.appointmentID = a.appointmentID
 			WHERE a.userID = ?
 				AND COALESCE(a.isCanceled, 0) = 0
 				AND COALESCE(a.underReview, 0) = 0
-			GROUP BY a.appointmentID, a.userID, a.roomNumber, a.petID, a.reasonKey, a.date, a.durationMinutes
+			GROUP BY a.appointmentID, a.userID, a.roomNumber, a.petID, a.reasonKey, a.date, a.durationMinutes, p.petName, af.petName, summary.isFinalized
 			ORDER BY a.date ASC
 			`,
 			[userID]

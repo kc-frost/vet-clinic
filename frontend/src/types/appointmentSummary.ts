@@ -118,3 +118,5 @@ export type FollowUpPrefillResponse = {
 	};
 	suggestedReasonKey: string;
 };
+
+export type CustomerAppointmentSummaryResponse = StaffAppointmentSummaryResponse;

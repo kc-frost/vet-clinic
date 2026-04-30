@@ -15,6 +15,7 @@ export type Appointment = {
 	equipmentUsed?: string;
 	roomType?: string;
 	assignedStaffSummary?: string;
+	summaryIsFinalized?: number | boolean;
 	canceledByUserID?: number | null;
 	canceledByType?: "ADMIN" | "STAFF" | "CUSTOMER" | null;
 	cancellationReason?: string | null;

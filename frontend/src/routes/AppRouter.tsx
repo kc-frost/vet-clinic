@@ -14,6 +14,7 @@ import AppointmentSummary from "../pages/staff/AppointmentSummary";
 import Reservation from "../pages/public/Reservation";
 import ViewAppointments from "../pages/public/ViewAppointments";
 import UserProfile from "../pages/public/UserProfile";
+import AppointmentSummaryView from "../pages/public/AppointmentSummaryView";
 
 import RequireAuth from "../components/auth/RequireAuth";
 import RequireAdmin from "../components/auth/RequireAdmin";
@@ -36,6 +37,7 @@ export default function AppRouter() {
 					<Route element={<RequireAuth />}>
 						<Route path="/reservation" element={<Reservation />} />
 						<Route path="/userprofile" element={<UserProfile />} />
+						<Route path="/user/appointments/:appointmentID/summary" element={<AppointmentSummaryView />} />
 					</Route>
 
 					{/* Staff-only routes inside the public layout area. */}

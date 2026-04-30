@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import "../../styles/userProfile.css";
 
 import { getCurrentUser, type AuthUser } from "../../api/auth";
@@ -11,17 +12,17 @@ import type { PetProfile, ReasonKey } from "../../types/reservation";
 import type { Appointment } from "../../types/appointment";
 
 /*
-	Development bypass switch.
+	Development bypass switch
 
 	true means the page uses local fake data so the UI can be worked on
-	without needing backend auth or live API routes.
+	without needing backend auth or live API routes
 
-	false means normal real mode using the backend.
+	false means normal real mode using the backend
 */
 const DEV_BYPASS_AUTH = false;
 
 /*
-	Allowed 2-letter state codes for the user info form.
+	Allowed 2 letter state codes for the user info form
 */
 const US_STATE_CODES = [
 	"AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
@@ -32,7 +33,9 @@ const US_STATE_CODES = [
 ];
 
 /*
-	Profile shape returned by the backend profile route.
+	Profile shape returned by the backend profile route
+
+	This is the full profile object the page receives from the API
 */
 type UserProfileData = {
 	userID: number;
@@ -50,7 +53,9 @@ type UserProfileData = {
 };
 
 /*
-	Only the editable user info fields shown in the info card.
+	Only the editable user info fields shown in the info card
+
+	This keeps the editable draft separate from the full profile object
 */
 type UserInfoDraft = {
 	legalFirstName: string;
@@ -63,37 +68,48 @@ type UserInfoDraft = {
 };
 
 /*
-	Validation errors for the editable user info fields.
+	Validation errors for the editable user info fields
+
+	The keys match UserInfoDraft, but each error is optional
 */
 type UserInfoErrors = Partial<Record<keyof UserInfoDraft, string>>;
 
 /*
-	Simplified reservation shape used by this page.
+	Simplified reservation shape used by this page
 
-	This keeps only the fields needed for rendering, canceling,
-	and rescheduling.
+	The backend appointment object has more database style fields
+
+	This shape keeps the fields the profile page actually needs for
+	rendering, canceling, rescheduling, and linking to summaries
 */
 type Reservation = {
 	id: number;
 	petID?: number | null;
-	startTime: string;
-	endTime?: string | null;
-	itemName?: string | null;
+	petName: string;
 	reasonKey: string;
+	roomNumber: number | null;
+	startTime: string;
+	endTime: string | null;
 	appointmentDateRaw: string;
 	startTimeRaw: string;
+	summaryIsFinalized: boolean;
 	canModify: boolean;
 };
 
 /*
-	Pet profile shape used by this page.
+	Pet profile shape used by this page
+
+	It extends the shared PetProfile type with userID because this page
+	may receive user linked pet records from the backend
 */
 type Pet = PetProfile & {
 	userID?: number;
 };
 
 /*
-	Validation errors for each editable pet card.
+	Validation errors for each editable pet card
+
+	Each pet can have its own set of field errors
 */
 type PetErrors = Partial<Record<
 	| "petName"
@@ -111,7 +127,9 @@ type PetErrors = Partial<Record<
 >>;
 
 /*
-	Local development sample authenticated user.
+	Local development sample authenticated user
+
+	Used only when DEV_BYPASS_AUTH is true
 */
 const DEV_USER: AuthUser = {
 	userID: 1,
@@ -122,7 +140,9 @@ const DEV_USER: AuthUser = {
 };
 
 /*
-	Local development sample profile.
+	Local development sample profile
+
+	Used only when DEV_BYPASS_AUTH is true
 */
 const DEV_PROFILE: UserProfileData = {
 	userID: 1,
@@ -139,6 +159,9 @@ const DEV_PROFILE: UserProfileData = {
 	userType: "CUSTOMER",
 };
 
+/*
+	Base dates used to build local sample appointments
+*/
 const now = new Date();
 
 const yesterday = new Date(now);
@@ -154,7 +177,7 @@ tomorrow.setHours(9, 30, 0, 0);
 
 function toMysqlDateTime(d: Date) {
 	/*
-		Convert a JavaScript Date into MySQL-style datetime text.
+		Convert a JavaScript Date into MySQL style datetime text
 	*/
 	const pad = (n: number) => String(n).padStart(2, "0");
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -162,40 +185,45 @@ function toMysqlDateTime(d: Date) {
 
 function toDateOnly(d: Date) {
 	/*
-		Convert a Date into YYYY-MM-DD text.
+		Convert a Date into YYYY MM DD text for slot dates
 	*/
 	const pad = (n: number) => String(n).padStart(2, "0");
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function isBlank(v: string) {
+	/*
+		Treat empty text and whitespace only text as blank
+	*/
 	return !v || v.trim() === "";
 }
 
 function isPhone(v: string) {
 	/*
-		Basic phone validation used by the profile form.
+		Basic phone validation used by the profile form
 	*/
 	return /^\+?\d[\d\s().-]{7,}$/.test(v.trim());
 }
 
 function isZip(v: string) {
 	/*
-		Allow either 5-digit ZIP or ZIP+4 format.
+		Allow either 5 digit ZIP or ZIP plus 4 format
 	*/
 	return /^\d{5}(-\d{4})?$/.test(v.trim());
 }
 
 function is2LetterState(v: string) {
 	/*
-		Require a 2-letter state code.
+		Require a 2 letter state code
 	*/
 	return /^[A-Za-z]{2}$/.test(v.trim());
 }
 
 function normalizeUserInfo(profile: UserProfileData): UserInfoDraft {
 	/*
-		Pull only the editable profile fields into the user info draft shape.
+		Copy only the editable profile fields into the user info draft
+
+		The form edits this draft instead of editing the full profile object directly
 	*/
 	return {
 		legalFirstName: profile.legalFirstName || "",
@@ -210,7 +238,9 @@ function normalizeUserInfo(profile: UserProfileData): UserInfoDraft {
 
 function normalizePetForDraft(pet: Pet) {
 	/*
-		Normalize a pet record into the editable draft shape used by the form.
+		Copy a pet record into the editable draft shape used by the pet form
+
+		The age is converted to text because input fields store typed values as strings
 	*/
 	return {
 		petName: pet.petName || "",
@@ -229,7 +259,9 @@ function normalizePetForDraft(pet: Pet) {
 
 function shallowEqual(a: Record<string, any>, b: Record<string, any>) {
 	/*
-		Shallow comparison used for dirty-checking form drafts.
+		Compare two simple objects by checking their direct fields
+
+		This is used to tell if a draft has changed from the saved version
 	*/
 	const keys = Object.keys(a);
 	if (keys.length !== Object.keys(b).length) return false;
@@ -242,7 +274,9 @@ function shallowEqual(a: Record<string, any>, b: Record<string, any>) {
 }
 
 /*
-	Local development sample appointments.
+	Local development sample appointments
+
+	Used only when DEV_BYPASS_AUTH is true
 */
 const DEV_APPOINTMENTS: Appointment[] = [
 	{
@@ -275,7 +309,9 @@ const DEV_APPOINTMENTS: Appointment[] = [
 ];
 
 /*
-	Local development sample pets.
+	Local development sample pets
+
+	Used only when DEV_BYPASS_AUTH is true
 */
 const DEV_PETS: Pet[] = [
 	{
@@ -317,12 +353,18 @@ const DEV_PETS: Pet[] = [
 ];
 
 function startOfDay(d: Date) {
+	/*
+		Get the first millisecond of the same day
+	*/
 	const x = new Date(d);
 	x.setHours(0, 0, 0, 0);
 	return x;
 }
 
 function endOfDay(d: Date) {
+	/*
+		Get the last millisecond of the same day
+	*/
 	const x = new Date(d);
 	x.setHours(23, 59, 59, 999);
 	return x;
@@ -331,7 +373,10 @@ function endOfDay(d: Date) {
 function mysqlDateTimeToIso(mysqlDt: string) {
 	/*
 		Convert MySQL datetime text into ISO text that JavaScript Date
-		parses more reliably.
+		parses more reliably
+
+		The backend may send something like 2026 04 30 14:00:00 with spaces,
+		so this makes it easier for the frontend to work with
 	*/
 	const s = String(mysqlDt || "");
 	if (!s) return new Date(NaN).toISOString();
@@ -341,7 +386,7 @@ function mysqlDateTimeToIso(mysqlDt: string) {
 
 function addMinutes(iso: string, mins: number) {
 	/*
-		Add minutes to an ISO datetime string and return the new ISO value.
+		Add appointment duration to the start time so the UI can show an end time
 	*/
 	const d = new Date(iso);
 	if (Number.isNaN(d.getTime())) return null;
@@ -351,7 +396,7 @@ function addMinutes(iso: string, mins: number) {
 
 function mysqlDateOnly(mysqlDt: string) {
 	/*
-		Pull only the date portion from a MySQL datetime string.
+		Pull only the date portion from a MySQL datetime string
 	*/
 	const s = String(mysqlDt || "");
 	const datePart = s.split(" ")[0] || "";
@@ -360,23 +405,53 @@ function mysqlDateOnly(mysqlDt: string) {
 
 function mysqlTimeOnly(mysqlDt: string) {
 	/*
-		Pull HH:MM time text from a MySQL datetime string.
+		Pull HH:MM time text from a MySQL datetime string
 	*/
 	const s = String(mysqlDt || "");
 	const timePart = s.split(" ")[1] || "";
 	return timePart.slice(0, 5);
 }
 
+function formatReasonLabel(reasonKey: string) {
+	/*
+		Turn backend reason keys like WELLNESS_EXAM into Wellness Exam
+	*/
+	return String(reasonKey || "")
+		.toLowerCase()
+		.split("_")
+		.filter(Boolean)
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join(" ");
+}
+
+function formatCardDate(value: string) {
+	/*
+		Format appointment date text for the reservation cards
+	*/
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return value;
+	return date.toLocaleDateString("en-US", { year: "numeric", month: "numeric", day: "numeric" });
+}
+
+function formatCardTime(value: string) {
+	/*
+		Format appointment time text for the reservation cards
+	*/
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return value;
+	return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 async function fetchProfile(userID: number) {
 	/*
-		Load the current user's profile record.
+		Load the current user's profile record
 	*/
 	return api<UserProfileData>(`/profile?userID=${userID}`, { method: "GET" });
 }
 
 async function updateProfile(userID: number, payload: Partial<UserProfileData>) {
 	/*
-		Update editable profile fields or biography.
+		Update editable profile fields or biography
 	*/
 	return api<UserProfileData>(`/profile?userID=${userID}`, {
 		method: "PUT",
@@ -386,7 +461,7 @@ async function updateProfile(userID: number, payload: Partial<UserProfileData>) 
 
 async function uploadProfileImage(userID: number, file: File) {
 	/*
-		Upload one profile picture file for the current user.
+		Upload one profile picture file for the current user
 	*/
 	const formData = new FormData();
 	formData.append("profileImage", file);
@@ -408,46 +483,56 @@ async function uploadProfileImage(userID: number, file: File) {
 
 function mapAppointmentsToReservations(rows: Appointment[]) {
 	/*
-		Convert raw appointment rows into the smaller reservation shape
-		this page actually renders.
+		Convert raw appointment rows into the smaller reservation shape this page renders
+
+		The backend gives appointment style fields like appointmentID, date, and durationMinutes
+		The profile page wants card friendly fields like id, startTime, endTime, and canModify
 	*/
 	const nowMs = Date.now();
 
 	return rows.map((a) => {
+		/*
+			Turn the backend start date into an ISO start time, then calculate the end time
+		*/
 		const startIso = mysqlDateTimeToIso(a.date);
 		const endIso = addMinutes(startIso, Number(a.durationMinutes || 0));
-		const itemName = `${a.reasonKey || "APPOINTMENT"} (Room ${a.roomNumber})`;
 		const startMs = new Date(startIso).getTime();
 
 		return {
 			id: Number(a.appointmentID),
 			petID: a.petID ?? null,
+			petName: a.petName || "Unknown Pet",
+			reasonKey: a.reasonKey,
+			roomNumber: a.roomNumber ?? null,
 			startTime: startIso,
 			endTime: endIso,
-			itemName,
-			reasonKey: a.reasonKey,
 			appointmentDateRaw: mysqlDateOnly(a.date),
 			startTimeRaw: mysqlTimeOnly(a.date),
+			summaryIsFinalized: Boolean(a.summaryIsFinalized),
 			canModify: startMs >= nowMs,
 		};
 	});
 }
 
 /*
-	User profile page.
+	User profile page
 
-	Shows:
-	- user info
-	- profile picture
-	- biography
-	- appointments
-	- pet profiles
+	This page shows the user's profile info, profile picture, biography,
+	appointments, and pet profiles
 
-	Also lets the user cancel or reschedule upcoming appointments.
+	It also lets the user cancel or reschedule upcoming appointments
 */
 export default function UserProfile() {
+	/*
+		Authenticated user loaded from the backend
+	*/
 	const [authUser, setAuthUser] = useState<AuthUser | null>(null);
 
+	/*
+		Saved profile is the backend version
+
+		Profile draft is the editable form version
+	*/
 	const [profile, setProfile] = useState<UserProfileData | null>(null);
 	const [profileDraft, setProfileDraft] = useState<UserInfoDraft>({
 		legalFirstName: "",
@@ -461,20 +546,38 @@ export default function UserProfile() {
 	const [profileErrors, setProfileErrors] = useState<UserInfoErrors>({});
 	const [savingProfileInfo, setSavingProfileInfo] = useState(false);
 
+	/*
+		Reservations are the mapped appointment cards shown in past, today, and future
+	*/
 	const [reservations, setReservations] = useState<Reservation[]>([]);
+
+	/*
+		Biography has its own draft because it saves separately from the main info card
+	*/
 	const [bioDraft, setBioDraft] = useState("");
 
+	/*
+		Pets is the saved backend data
+
+		Pet drafts are the editable form values for each pet, keyed by petID
+	*/
 	const [pets, setPets] = useState<Pet[]>([]);
 	const [petDrafts, setPetDrafts] = useState<Record<number, ReturnType<typeof normalizePetForDraft>>>({});
 	const [petErrors, setPetErrors] = useState<Record<number, PetErrors>>({});
 	const [savingPetId, setSavingPetId] = useState<number | null>(null);
 
+	/*
+		Page level loading and error state
+	*/
 	const [loading, setLoading] = useState(true);
 	const [savingBio, setSavingBio] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	/*
-		Profile picture editor state.
+		Profile picture editor state
+
+		The selected file is the real file object
+		The preview URL is only for showing the image before upload
 	*/
 	const [pictureEditOpen, setPictureEditOpen] = useState(false);
 	const [selectedPictureFile, setSelectedPictureFile] = useState<File | null>(null);
@@ -483,10 +586,10 @@ export default function UserProfile() {
 	const [savingPicture, setSavingPicture] = useState(false);
 
 	/*
-		Reschedule state.
+		Reschedule state
 
-		When rescheduleTarget is set, the calendar panel appears and the
-		user can pick a new slot for that appointment.
+		When rescheduleTarget is set, the calendar panel appears and the user
+		can pick a new slot for that appointment
 	*/
 	const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null);
 	const [rescheduleSlots, setRescheduleSlots] = useState<any[]>([]);
@@ -498,13 +601,18 @@ export default function UserProfile() {
 	const [rescheduleBusy, setRescheduleBusy] = useState(false);
 	const [actionMessage, setActionMessage] = useState<string>("");
 
+	/*
+		fileInputRef lets the custom Choose Image button open the hidden file input
+
+		rescheduleSectionRef lets the page scroll down to the reschedule calendar
+	*/
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const rescheduleSectionRef = useRef<HTMLDivElement | null>(null);
 
 	async function loadAllProfileData() {
 		/*
-			Load all page data in one place so initial load and refresh-after-action
-			can reuse the same logic.
+			Load all page data in one place so initial load and refresh after action
+			can reuse the same logic
 		*/
 		if (DEV_BYPASS_AUTH) {
 			setAuthUser(DEV_USER);
@@ -514,6 +622,9 @@ export default function UserProfile() {
 			setReservations(mapAppointmentsToReservations(DEV_APPOINTMENTS));
 			setPets(DEV_PETS);
 
+			/*
+				Build editable pet drafts from the local sample pet data
+			*/
 			const nextPetDrafts: Record<number, ReturnType<typeof normalizePetForDraft>> = {};
 			for (const pet of DEV_PETS) {
 				nextPetDrafts[pet.petID] = normalizePetForDraft(pet);
@@ -522,17 +633,29 @@ export default function UserProfile() {
 			return;
 		}
 
+		/*
+			Load the current logged in user first because profile and pets need the userID
+		*/
 		const me = await getCurrentUser();
 		setAuthUser(me);
 
+		/*
+			Load the saved profile, then copy its editable fields into the form draft
+		*/
 		const p = await fetchProfile(me.userID);
 		setProfile(p);
 		setProfileDraft(normalizeUserInfo(p));
 		setBioDraft(p.userBio || "");
 
+		/*
+			Load raw backend appointments, convert them to reservation cards, then store them
+		*/
 		const appts = await getMyAppointments();
 		setReservations(mapAppointmentsToReservations(appts));
 
+		/*
+			Load saved pets, then build one editable draft object for each pet
+		*/
 		const savedPets = await getPetsForUser(me.userID);
 		setPets(savedPets);
 
@@ -545,10 +668,10 @@ export default function UserProfile() {
 
 	useEffect(() => {
 		/*
-			Initial page load.
+			Initial page load
 
-			Dev mode uses local sample data.
-			Real mode loads auth, profile, appointments, and pets.
+			Dev mode uses local sample data
+			Real mode loads auth, profile, appointments, and pets
 		*/
 		(async () => {
 			try {
@@ -565,8 +688,9 @@ export default function UserProfile() {
 
 	useEffect(() => {
 		/*
-			Clean up any preview object URL when it changes or when
-			the component unmounts.
+			Clean up any preview object URL when it changes or when the component unmounts
+
+			Object URLs are browser memory, so they should be released when not needed
 		*/
 		return () => {
 			if (picturePreviewUrl) {
@@ -577,7 +701,7 @@ export default function UserProfile() {
 
 	useEffect(() => {
 		/*
-			When reschedule mode opens, scroll the calendar section into view.
+			When reschedule mode opens, scroll the calendar section into view
 		*/
 		if (!rescheduleTarget) return;
 
@@ -593,8 +717,9 @@ export default function UserProfile() {
 
 	const { past, today, future } = useMemo(() => {
 		/*
-			Split reservations into past, today, and future buckets
-			for the three reservation columns.
+			Split reservations into past, today, and future buckets for the three columns
+
+			This recalculates only when reservations changes
 		*/
 		const now = new Date();
 		const start = startOfDay(now).getTime();
@@ -612,6 +737,11 @@ export default function UserProfile() {
 			else today.push(r);
 		}
 
+		/*
+			Past shows newest first
+
+			Today and future show soonest first
+		*/
 		past.sort((a, b) => +new Date(b.startTime) - +new Date(a.startTime));
 		today.sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
 		future.sort((a, b) => +new Date(a.startTime) - +new Date(b.startTime));
@@ -621,29 +751,32 @@ export default function UserProfile() {
 
 	const userInfoDirty = useMemo(() => {
 		/*
-			Check whether the editable user info card has unsaved changes.
+			Check whether the editable user info card has unsaved changes
 		*/
 		if (!profile) return false;
 		return !shallowEqual(profileDraft, normalizeUserInfo(profile));
 	}, [profile, profileDraft]);
 
-    const [pictureVersion, setPictureVersion] = useState(0);
+	const [pictureVersion, setPictureVersion] = useState(0);
 
-    const currentProfileImageSrc = useMemo(() => {
-        /*
-            Show the preview image first if one is selected, otherwise use
-            the saved profile image, then finally fall back to a default.
-            Add a cache-busting query string for saved profile pictures so
-            the browser does not keep showing an older cached image.
-        */
-        if (picturePreviewUrl) return picturePreviewUrl;
-        if (profile?.profileImagePath) return `${profile.profileImagePath}?v=${pictureVersion}`;
-        return "/default-profile.svg";
-    }, [picturePreviewUrl, profile?.profileImagePath, pictureVersion]);
+	const currentProfileImageSrc = useMemo(() => {
+		/*
+			Show the preview image first if one is selected
+
+			If there is no preview, show the saved profile image
+
+			If there is no saved profile image, show the default image
+
+			The version query makes the browser reload the saved image after upload
+		*/
+		if (picturePreviewUrl) return picturePreviewUrl;
+		if (profile?.profileImagePath) return `${profile.profileImagePath}?v=${pictureVersion}`;
+		return "/default-profile.svg";
+	}, [picturePreviewUrl, profile?.profileImagePath, pictureVersion]);
 
 	async function onSaveBio() {
 		/*
-			Save only the biography text.
+			Save only the biography text
 		*/
 		if (!authUser || !profile) return;
 
@@ -670,7 +803,7 @@ export default function UserProfile() {
 
 	function onProfileDraftChange(field: keyof UserInfoDraft, value: string) {
 		/*
-			Update one user info draft field and clear its old error.
+			Update one user info draft field and clear that field's old error
 		*/
 		setProfileDraft((prev) => ({ ...prev, [field]: value }));
 		setProfileErrors((prev) => ({ ...prev, [field]: "" }));
@@ -678,7 +811,10 @@ export default function UserProfile() {
 
 	function validateUserInfoDraft() {
 		/*
-			Validate the editable user info fields before saving.
+			Validate the editable user info fields before saving
+
+			A field is required only if the original saved profile already had that field
+			or if the user typed something into that field
 		*/
 		if (!profile) return false;
 
@@ -722,7 +858,7 @@ export default function UserProfile() {
 
 	async function onSaveUserInfo() {
 		/*
-			Save the editable user info card if there are valid changes.
+			Save the editable user info card if there are valid changes
 		*/
 		if (!authUser || !profile) return;
 		if (!userInfoDirty) return;
@@ -758,7 +894,7 @@ export default function UserProfile() {
 
 	function onOpenPictureEdit() {
 		/*
-			Open the picture edit area and clear any old picture error.
+			Open the picture edit area and clear any old picture error
 		*/
 		setPictureEditOpen(true);
 		setPictureError("");
@@ -766,7 +902,7 @@ export default function UserProfile() {
 
 	function clearPictureSelection() {
 		/*
-			Clear the currently selected image file and preview.
+			Clear the selected image file, preview image, and file input value
 		*/
 		if (picturePreviewUrl) {
 			URL.revokeObjectURL(picturePreviewUrl);
@@ -783,7 +919,7 @@ export default function UserProfile() {
 
 	function onPictureFileChange(e: React.ChangeEvent<HTMLInputElement>) {
 		/*
-			Validate the selected image and create a local preview.
+			Validate the selected image and create a local preview
 		*/
 		const file = e.target.files?.[0] || null;
 
@@ -815,7 +951,7 @@ export default function UserProfile() {
 
 	async function onConfirmPicture() {
 		/*
-			Upload the selected image and update the profile picture.
+			Upload the selected image and update the profile picture
 		*/
 		if (!authUser || !selectedPictureFile || !profile) return;
 
@@ -838,7 +974,7 @@ export default function UserProfile() {
 
 			const updatedProfile = await uploadProfileImage(authUser.userID, selectedPictureFile);
 			setProfile(updatedProfile);
-            setPictureVersion(Date.now());
+			setPictureVersion(Date.now());
 			setPictureEditOpen(false);
 			clearPictureSelection();
 			setActionMessage("profile picture updated");
@@ -851,7 +987,7 @@ export default function UserProfile() {
 
 	function onPetDraftChange(petID: number, field: string, value: string) {
 		/*
-			Update one pet draft field and clear that field's old error.
+			Update one pet draft field and clear that field's old error
 		*/
 		setPetDrafts((prev) => ({
 			...prev,
@@ -872,7 +1008,7 @@ export default function UserProfile() {
 
 	function petDraftIsDirty(pet: Pet) {
 		/*
-			Check whether one pet card has unsaved changes.
+			Check whether one pet card has unsaved changes
 		*/
 		const original = normalizePetForDraft(pet);
 		const draft = petDrafts[pet.petID] || original;
@@ -881,13 +1017,18 @@ export default function UserProfile() {
 
 	function validatePetDraft(pet: Pet) {
 		/*
-			Validate one pet draft before saving it.
+			Validate one pet draft before saving it
+
+			The same optional required logic is used here as the user info form
 		*/
 		const original = normalizePetForDraft(pet);
 		const draft = petDrafts[pet.petID] || original;
 		const nextErrors: PetErrors = {};
 
 		function requireIfNeeded(field: keyof typeof draft, message = "required") {
+			/*
+				Only require the field if the saved pet already had it or the user started typing it
+			*/
 			if (!isBlank(draft[field]) || !isBlank(original[field])) {
 				if (isBlank(draft[field])) {
 					(nextErrors as any)[field] = message;
@@ -925,7 +1066,7 @@ export default function UserProfile() {
 
 	async function onSavePet(pet: Pet) {
 		/*
-			Save one edited pet profile card.
+			Save one edited pet profile card
 		*/
 		if (!authUser) return;
 		if (!petDraftIsDirty(pet)) return;
@@ -960,10 +1101,16 @@ export default function UserProfile() {
 				age: draft.age === "" ? null : Number(draft.age),
 			} as any);
 
+			/*
+				Update the saved pet list with the backend response
+			*/
 			setPets((prev) =>
 				prev.map((p) => (p.petID === pet.petID ? ({ ...p, ...updated } as Pet) : p))
 			);
 
+			/*
+				Reset this pet's draft to match the saved backend version
+			*/
 			setPetDrafts((prev) => ({
 				...prev,
 				[pet.petID]: normalizePetForDraft(updated as Pet),
@@ -979,8 +1126,7 @@ export default function UserProfile() {
 
 	async function beginReschedule(reservation: Reservation) {
 		/*
-			Load available slots for the selected reservation so the
-			reschedule calendar can open.
+			Load available slots for the selected reservation so the reschedule calendar can open
 		*/
 		if (!authUser) return;
 
@@ -1013,6 +1159,11 @@ export default function UserProfile() {
 				return;
 			}
 
+			/*
+				Ask the availability route for slots for the same appointment reason and pet
+
+				ignoreAppointmentID keeps the appointment from blocking its own reschedule slots
+			*/
 			const resp = await getAvailability({
 				reasonKey: reservation.reasonKey as ReasonKey,
 				userID: authUser.userID,
@@ -1033,7 +1184,7 @@ export default function UserProfile() {
 
 	function onRescheduleDateBrowse(nextDate: string) {
 		/*
-			If the user browses to another date, clear the old selected slot.
+			If the user browses to another date, clear the old selected slot
 		*/
 		setRescheduleSelectedSlotId("");
 		setRescheduleDate(nextDate);
@@ -1042,7 +1193,7 @@ export default function UserProfile() {
 
 	function onRescheduleSlotSelect(value: { date: string; startTime: string; slotId?: string }) {
 		/*
-			Store the slot the user picked in the calendar.
+			Store the slot the user picked in the calendar
 		*/
 		setRescheduleSelectedSlotId(value.slotId || "");
 		setRescheduleDate(value.date);
@@ -1051,7 +1202,7 @@ export default function UserProfile() {
 
 	function cancelReschedule() {
 		/*
-			Close the reschedule panel and clear its temporary state.
+			Close the reschedule panel and clear its temporary state
 		*/
 		setRescheduleTarget(null);
 		setRescheduleSlots([]);
@@ -1063,7 +1214,7 @@ export default function UserProfile() {
 
 	async function onCancelAppointment(reservation: Reservation) {
 		/*
-			Cancel one appointment, then refresh the profile data.
+			Cancel one appointment, then refresh the profile data
 		*/
 		try {
 			setActionMessage("");
@@ -1092,7 +1243,7 @@ export default function UserProfile() {
 
 	async function confirmReschedule() {
 		/*
-			Confirm the reschedule using the selected new date and time.
+			Confirm the reschedule using the selected new date and time
 		*/
 		if (!rescheduleTarget) return;
 		if (!rescheduleDate || !rescheduleStartTime) {
@@ -1584,42 +1735,82 @@ function ReservationBox({
 	onReschedule: (reservation: Reservation) => void;
 }) {
 	/*
-		Reusable reservation list used for the past, today, and future columns.
+		Reusable appointment card section used for the past, today, and future columns
 	*/
+	const nowMs = Date.now();
+
 	return (
 		<section className="card">
 			<h2>{title}</h2>
 			{items.length === 0 ? (
 				<p className="hint">No reservations.</p>
 			) : (
-				<ul className="resList">
-					{items.map((r) => (
-						<li key={r.id} className="resItem">
-							<div className="resName"><b>{r.itemName ?? "Reservation"}</b></div>
-							<div className="resTime">{new Date(r.startTime).toLocaleString()}</div>
+				<div className="userAppointmentList">
+					{items.map((reservation) => {
+						/*
+							Compare the appointment start and end times to the current time
 
-							{r.canModify ? (
-								<div className="reservationActionRow">
-									<button
-										type="button"
-										className="miniDangerBtn"
-										onClick={() => onCancel(r)}
-									>
-										Cancel
-									</button>
+							This decides whether the card is ongoing, ended, or still upcoming
+						*/
+						const startMs = new Date(reservation.startTime).getTime();
+						const endMs = reservation.endTime ? new Date(reservation.endTime).getTime() : startMs;
+						const isOngoing = nowMs >= startMs && nowMs < endMs;
+						const canShowRating = nowMs >= endMs;
+						const canCancelOrReschedule = nowMs < startMs;
 
-									<button
-										type="button"
-										className="miniPrimaryBtn"
-										onClick={() => onReschedule(r)}
-									>
-										Reschedule
-									</button>
+						return (
+							<div key={reservation.id} className={`userAppointmentCard${isOngoing ? " userAppointmentCardOngoing" : ""}`}>
+								<div className="userAppointmentCardHeader">
+									<div>
+										<h3>{formatReasonLabel(reservation.reasonKey)}</h3>
+										<p className="userAppointmentMetaLine">For: {reservation.petName || "Unknown Pet"}</p>
+									</div>
+									<div className="userAppointmentStatusWrap">
+										{isOngoing ? <span className="userAppointmentBadge userAppointmentBadgeOngoing">ONGOING</span> : null}
+									</div>
 								</div>
-							) : null}
-						</li>
-					))}
-				</ul>
+
+								<div className="userAppointmentMetaGrid">
+									<div className="userAppointmentMetaItem">
+										<span className="userAppointmentMetaLabel">Date</span>
+										<span className="userAppointmentMetaValue">{formatCardDate(reservation.startTime)}</span>
+									</div>
+									<div className="userAppointmentMetaItem">
+										<span className="userAppointmentMetaLabel">Start Time</span>
+										<span className="userAppointmentMetaValue">{formatCardTime(reservation.startTime)}</span>
+									</div>
+									<div className="userAppointmentMetaItem">
+										<span className="userAppointmentMetaLabel">End Time</span>
+										<span className="userAppointmentMetaValue">{reservation.endTime ? formatCardTime(reservation.endTime) : "N/A"}</span>
+									</div>
+									<div className="userAppointmentMetaItem">
+										<span className="userAppointmentMetaLabel">Room</span>
+										<span className="userAppointmentMetaValue">{reservation.roomNumber ? `Room ${reservation.roomNumber}` : "N/A"}</span>
+									</div>
+								</div>
+
+								<div className="userAppointmentActionRow">
+									{reservation.summaryIsFinalized ? (
+										<Link className="miniPrimaryBtn userAppointmentLinkBtn" to={`/user/appointments/${reservation.id}/summary`}>View Summary</Link>
+									) : null}
+
+									{canCancelOrReschedule ? (
+										<>
+											<button type="button" className="miniDangerBtn" onClick={() => onCancel(reservation)}>Cancel</button>
+											<button type="button" className="miniPrimaryBtn" onClick={() => onReschedule(reservation)}>Reschedule</button>
+										</>
+									) : null}
+								</div>
+
+								{isOngoing ? (
+									<p className="userAppointmentHint">This appointment is still ongoing, so rating is not available yet</p>
+								) : null}
+
+								{canShowRating ? <div className="userAppointmentRatingSpacer" /> : null}
+							</div>
+						);
+					})}
+				</div>
 			)}
 		</section>
 	);
