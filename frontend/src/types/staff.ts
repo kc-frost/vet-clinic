@@ -87,6 +87,8 @@ export type StaffAppointment = {
 	appointmentDate: string;
 	appointmentTime: string;
 	appointmentDateTime: string;
+	durationMinutes?: number;
+	summaryIsFinalized?: boolean | number;
 	assignedRoleKey: StaffRoleKey | string;
 };
 

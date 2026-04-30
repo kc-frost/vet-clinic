@@ -241,3 +241,112 @@
 	box-sizing: border-box;
 	resize: vertical;
 }
+
+
+.staffAppointmentList {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.staffAppointmentCard {
+	border: 1px solid #cfd8e3;
+	border-radius: 16px;
+	padding: 14px;
+	background: #fbfdff;
+}
+
+.staffAppointmentCardOngoing {
+	border-color: #d9480f;
+	background: #fff7ed;
+	box-shadow: 0 0 0 1px rgba(217, 72, 15, 0.08);
+}
+
+.staffAppointmentHeader {
+	display: flex;
+	justify-content: space-between;
+	gap: 14px;
+	align-items: flex-start;
+	margin-bottom: 12px;
+}
+
+.staffAppointmentPetName {
+	font-size: 18px;
+	font-weight: 700;
+}
+
+.staffAppointmentService {
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: #294d75;
+	margin-top: 2px;
+}
+
+.staffAppointmentMeta {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	text-align: right;
+	color: #394b5f;
+}
+
+.staffAppointmentActionsRow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+}
+
+.staffAppointmentActionBtn {
+	margin-top: 0;
+}
+
+.staffAppointmentBadge {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 10px;
+	border-radius: 999px;
+	font-size: 13px;
+	font-weight: 700;
+	border: 1px solid transparent;
+}
+
+.staffAppointmentBadgeTiming {
+	background: #eef5fc;
+	color: #163b63;
+	border-color: #c8d9ee;
+}
+
+.staffAppointmentBadgeOngoing {
+	background: #ffedd5;
+	color: #c2410c;
+	border-color: #fdba74;
+	font-weight: 800;
+}
+
+.staffAppointmentBadgeFinalized {
+	background: #e8f7ee;
+	color: #0b6b2d;
+	border-color: #b7e3c7;
+}
+
+.staffAppointmentBadgeEditable {
+	background: #eff6ff;
+	color: #1d4ed8;
+	border-color: #bfdbfe;
+}
+
+.staffCancelPanelInline {
+	margin-top: 14px;
+}
+
+@media (max-width: 1100px) {
+	.staffAppointmentHeader {
+		flex-direction: column;
+	}
+
+	.staffAppointmentMeta {
+		text-align: left;
+	}
+}

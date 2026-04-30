@@ -10,6 +10,7 @@ import Register from "../pages/public/Register";
 
 import Inventory from "../pages/staff/Inventory";
 import StaffDashboard from "../pages/staff/StaffDashboard";
+import AppointmentSummary from "../pages/staff/AppointmentSummary";
 import Reservation from "../pages/public/Reservation";
 import ViewAppointments from "../pages/public/ViewAppointments";
 import UserProfile from "../pages/public/UserProfile";
@@ -37,9 +38,10 @@ export default function AppRouter() {
 						<Route path="/userprofile" element={<UserProfile />} />
 					</Route>
 
-					{/* Staff-only route inside the public layout area. */}
+					{/* Staff-only routes inside the public layout area. */}
 					<Route element={<RequireStaff />}>
 						<Route path="/staff/dashboard" element={<StaffDashboard />} />
+						<Route path="/staff/appointments/:appointmentID/summary" element={<AppointmentSummary />} />
 					</Route>
 				</Route>
 
@@ -48,11 +50,11 @@ export default function AppRouter() {
 					<Route path="/admin" element={<AdminLayout />}>
 						{/* Visiting /staff should immediately go to /admin/analytics. */}
 						<Route index element={<Navigate to="analytics" replace />} />
-            			<Route path="analytics" element={<AdminAnalytics />} />
+						<Route path="analytics" element={<AdminAnalytics />} />
 						<Route path="inventory" element={<Inventory />} />
 						<Route path="users" element={<ViewAllUsers />} />
 						<Route path="appointments" element={<ViewAppointments />} />
-           			    <Route path="issues" element={<AdminIssues />} />
+						<Route path="issues" element={<AdminIssues />} />
 					</Route>
 				</Route>
 
@@ -62,6 +64,3 @@ export default function AppRouter() {
 		</BrowserRouter>
 	);
 }
-
-
-// commented out auth wrappers for testing 

@@ -96,10 +96,16 @@ function getEditWindowState(appointmentDateValue, durationMinutes, isFinalized) 
 // Session gives userID, but appointment assignments use staffID
 async function getStaffContextByUserID(conn, userID) {
 	const [rows] = await conn.execute(
-		`SELECT staffID, userID
-		 FROM staff
-		 WHERE userID = ?
-			AND isActive = 1
+		`SELECT
+			s.staffID,
+			s.userID,
+			c.legalFirstName,
+			c.legalLastName
+		 FROM staff s
+		 INNER JOIN customer c
+			on c.userID = s.userID
+		 WHERE s.userID = ?
+			AND s.isActive = 1
 		 LIMIT 1`,
 		[userID]
 	);
@@ -110,7 +116,12 @@ async function getStaffContextByUserID(conn, userID) {
 		throw error;
 	}
 
-	return { staffID: Number(rows[0].staffID), userID: Number(rows[0].userID) };
+	return {
+		staffID: Number(rows[0].staffID),
+		userID: Number(rows[0].userID),
+		legalFirstName: rows[0].legalFirstName || "",
+		legalLastName: rows[0].legalLastName || "",
+	};
 }
 
 /*
@@ -170,7 +181,9 @@ async function loadStaffAppointmentContext(conn, staffID, appointmentID) {
 			s.draftHeartwormPreventionCurrent,
 			s.isFinalized,
 			s.finalizedByStaffID,
-			s.finalizedAt
+			s.finalizedAt,
+			fc.legalFirstName AS finalizedByStaffFirstName,
+			fc.legalLastName AS finalizedByStaffLastName
 		 FROM appointment_staff aps
 		 INNER JOIN appointment a
 			on a.appointmentID = aps.appointmentID
@@ -182,6 +195,10 @@ async function loadStaffAppointmentContext(conn, staffID, appointmentID) {
 			on af.appointmentID = a.appointmentID
 		 LEFT JOIN appointment_summary s
 			on s.appointmentID = a.appointmentID
+		 LEFT JOIN staff fs
+			on fs.staffID = s.finalizedByStaffID
+		 LEFT JOIN customer fc
+			on fc.userID = fs.userID
 		 WHERE aps.staffID = ?
 			AND a.appointmentID = ?
 		 LIMIT 1`,
@@ -254,7 +271,9 @@ async function loadCustomerAppointmentContext(conn, userID, appointmentID) {
 			s.draftHeartwormPreventionCurrent,
 			s.isFinalized,
 			s.finalizedByStaffID,
-			s.finalizedAt
+			s.finalizedAt,
+			fc.legalFirstName AS finalizedByStaffFirstName,
+			fc.legalLastName AS finalizedByStaffLastName
 		 FROM appointment a
 		 INNER JOIN customer c
 			on c.userID = a.userID
@@ -264,6 +283,10 @@ async function loadCustomerAppointmentContext(conn, userID, appointmentID) {
 			on af.appointmentID = a.appointmentID
 		 LEFT JOIN appointment_summary s
 			on s.appointmentID = a.appointmentID
+		 LEFT JOIN staff fs
+			on fs.staffID = s.finalizedByStaffID
+		 LEFT JOIN customer fc
+			on fc.userID = fs.userID
 		 WHERE a.userID = ?
 			AND a.appointmentID = ?
 		 LIMIT 1`,
@@ -338,6 +361,8 @@ async function ensureSummaryRow(conn, row) {
 	row.isFinalized = 0;
 	row.finalizedByStaffID = null;
 	row.finalizedAt = null;
+	row.finalizedByStaffFirstName = null;
+	row.finalizedByStaffLastName = null;
 	row.symptoms = row.symptoms || "";
 	row.diagnosis = row.diagnosis || "";
 	row.medicationPrescribed = row.medicationPrescribed || "";
@@ -378,6 +403,7 @@ function buildSummaryResponse(row) {
 			notes: row.notes || "",
 			isFinalized: Boolean(row.isFinalized),
 			finalizedByStaffID: row.finalizedByStaffID === null ? null : Number(row.finalizedByStaffID),
+			finalizedByStaffName: [row.finalizedByStaffFirstName, row.finalizedByStaffLastName].filter(Boolean).join(" ") || null,
 			finalizedAt: toIsoDateTime(row.finalizedAt),
 		},
 		miniPetProfile: {
@@ -742,6 +768,8 @@ export async function finalizeSummary(sessionUserID, rawAppointmentID) {
 			}
 
 			await finalizeSummaryInsideTransaction(conn, row, staffContext.staffID, true);
+			row.finalizedByStaffFirstName = staffContext.legalFirstName;
+			row.finalizedByStaffLastName = staffContext.legalLastName;
 		}
 
 		await conn.commit();

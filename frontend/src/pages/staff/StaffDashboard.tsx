@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import {
 	getMyStaffProfile,
@@ -16,8 +17,6 @@ import "../../styles/staffDashboard.css";
 
 const DEV_BYPASS_AUTH = false;
 
-// Type for one row of staff availability in the frontend.
-// Each day stores the display name, database day number
 type AvailabilityDay = {
 	day: string;
 	dayOfWeek: number;
@@ -25,13 +24,13 @@ type AvailabilityDay = {
 	startTime: string;
 	endTime: string;
 };
-// Type for each dropdown time option.
-// "value" is what gets saved/sent to backend,
-// "label" is what the user sees in the UI
+
 type TimeOption = {
 	value: string;
 	label: string;
 };
+
+type SummaryFilterValue = "" | "FINALIZED" | "EDIT_SUMMARY";
 
 const MOCK_STAFF_PROFILE: MyStaffProfile = {
 	userID: 1,
@@ -44,9 +43,7 @@ const MOCK_STAFF_PROFILE: MyStaffProfile = {
 	phone: "555-123-4567",
 	roleKeys: ["XRAY_TECH", "GP_VET"],
 };
-// Default weekly availability state for the page.
-// Starts with every day disabled, but each day already has
-// a default work range of 9:00 AM to 5:00 PM
+
 const INITIAL_AVAILABILITY: AvailabilityDay[] = [
 	{ day: "Monday", dayOfWeek: 1, enabled: false, startTime: "09:00:00", endTime: "17:00:00" },
 	{ day: "Tuesday", dayOfWeek: 2, enabled: false, startTime: "09:00:00", endTime: "17:00:00" },
@@ -57,8 +54,6 @@ const INITIAL_AVAILABILITY: AvailabilityDay[] = [
 	{ day: "Sunday", dayOfWeek: 7, enabled: false, startTime: "09:00:00", endTime: "17:00:00" },
 ];
 
-// Builds the dropdown options for availability times.
-// This generates 15-minute interval options from 9:00 AM to 5:00 PM
 function generateTimeOptions(): TimeOption[] {
 	const options: TimeOption[] = [];
 
@@ -77,43 +72,39 @@ function generateTimeOptions(): TimeOption[] {
 			options.push({ value, label });
 		}
 	}
+
 	return options;
 }
-// Full list of generated time options
+
 const TIME_OPTIONS = generateTimeOptions();
-// Start times cannot begin at 5:00 PM because there would be no valid end time after that
 const START_TIME_OPTIONS = TIME_OPTIONS.filter((option) => option.value < "17:00:00");
 
-// Returns only valid end times after the selected start time
 function getEndTimeOptions(startTime: string): TimeOption[] {
 	const startIndex = TIME_OPTIONS.findIndex((option) => option.value === startTime);
 	if (startIndex === -1) return TIME_OPTIONS;
 	return TIME_OPTIONS.slice(startIndex + 1);
 }
-// Converts an appointment's datetime string into a numeric timestamp
+
 function appointmentDateTimeValue(appointment: StaffAppointment) {
 	const raw = String(appointment.appointmentDateTime || "").trim();
 	if (!raw) return new Date(NaN).getTime();
 	return new Date(raw.replace(" ", "T")).getTime();
 }
-// Formats service/reason keys into a more readable label
+
 function formatReasonLabel(reasonKey: string) {
 	return String(reasonKey || "").replaceAll("_", " ");
 }
-// Returns the timestamp for the beginning of today.
-// Used to separate today's appointments from future ones
+
 function startOfTodayMs() {
 	const now = new Date();
 	return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
-// Returns the timestamp for the very end of today
+
 function endOfTodayMs() {
 	const now = new Date();
 	return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
 }
-// Converts a date input string (YYYY-MM-DD) into a timestamp.
-// Can return either the start of that day or the end of that day,
-// depending on how the date is being used in filters
+
 function dateStringToMs(dateText: string, useEndOfDay: boolean) {
 	if (!dateText) return null;
 
@@ -128,13 +119,12 @@ function dateStringToMs(dateText: string, useEndOfDay: boolean) {
 	if (useEndOfDay) return new Date(year, month, day, 23, 59, 59, 999).getTime();
 	return new Date(year, month, day, 0, 0, 0, 0).getTime();
 }
-// Checks whether an appointment matches the currently selected role filter.
-// If no role filter is selected, all appointments are allowed through
+
 function appointmentMatchesRole(appointment: StaffAppointment, roleFilter: string) {
 	if (!roleFilter) return true;
 	return String(appointment.assignedRoleKey || "").toUpperCase() === roleFilter.toUpperCase();
 }
-// Formats notification timestamps into a readable local date/time string
+
 function formatNotificationTime(createdAt: string) {
 	const raw = String(createdAt || "").trim();
 	if (!raw) return "";
@@ -146,10 +136,6 @@ function formatNotificationTime(createdAt: string) {
 }
 
 function getFriendlyAvailabilityMessage(error: unknown) {
-	/*
-		Show one readable message for schedule conflicts instead of
-		showing raw API error text to the staff user.
-	*/
 	const rawMessage = error instanceof Error ? error.message : "";
 	const normalizedMessage = rawMessage.toLowerCase();
 
@@ -166,42 +152,76 @@ function getFriendlyAvailabilityMessage(error: unknown) {
 }
 
 function getFriendlyCancelMessage(error: unknown) {
-	/*
-		Show one readable message for common cancel failures instead of
-		dumping raw backend text straight into the page
-	*/
 	const rawMessage = error instanceof Error ? error.message : "";
 	const normalizedMessage = rawMessage.toLowerCase();
 
-	if (normalizedMessage.includes("reason")) {
-		return "A cancellation reason is required";
-	}
-
-	if (normalizedMessage.includes("own assigned appointments")) {
-		return "You can only cancel appointments assigned to you";
-	}
-
-	if (normalizedMessage.includes("past appointments")) {
-		return "Past appointments cannot be canceled";
-	}
-
-	if (normalizedMessage.includes("already canceled")) {
-		return "This appointment was already canceled";
-	}
+	if (normalizedMessage.includes("reason")) return "A cancellation reason is required";
+	if (normalizedMessage.includes("own assigned appointments")) return "You can only cancel appointments assigned to you";
+	if (normalizedMessage.includes("past appointments")) return "Past appointments cannot be canceled";
+	if (normalizedMessage.includes("already canceled")) return "This appointment was already canceled";
 
 	return error instanceof Error ? error.message : "Failed to cancel appointment";
 }
 
+function getAppointmentWindow(appointment: StaffAppointment) {
+	const startAt = appointmentDateTimeValue(appointment);
+	const durationMinutes = Number(appointment.durationMinutes || 60);
+	const endAt = startAt + durationMinutes * 60 * 1000;
+	const editWindowStart = startAt - 32 * 60 * 60 * 1000;
+	const editWindowEnd = endAt + 32 * 60 * 60 * 1000;
+	return { startAt, endAt, editWindowStart, editWindowEnd };
+}
+
+function getTimingStatus(appointment: StaffAppointment, nowMs: number) {
+	const { startAt, endAt } = getAppointmentWindow(appointment);
+	if (nowMs >= startAt && nowMs < endAt) return "ONGOING";
+	if (nowMs < startAt) return "Upcoming";
+	return "Ended";
+}
+
+function isFinalizedDisplay(appointment: StaffAppointment, nowMs: number) {
+	const { editWindowEnd } = getAppointmentWindow(appointment);
+	return Boolean(Number(appointment.summaryIsFinalized || 0)) || nowMs > editWindowEnd;
+}
+
+function isInsideSummaryEditWindow(appointment: StaffAppointment, nowMs: number) {
+	const { editWindowStart, editWindowEnd } = getAppointmentWindow(appointment);
+	return nowMs >= editWindowStart && nowMs <= editWindowEnd;
+}
+
+function canShowSummaryButton(appointment: StaffAppointment, nowMs: number) {
+	return isFinalizedDisplay(appointment, nowMs) || isInsideSummaryEditWindow(appointment, nowMs);
+}
+
+function getSummaryStatusLabel(appointment: StaffAppointment, nowMs: number) {
+	if (isFinalizedDisplay(appointment, nowMs)) return "Finalized";
+	if (isInsideSummaryEditWindow(appointment, nowMs)) return "Edit Summary";
+	return "";
+}
+
+function matchesSummaryFilter(appointment: StaffAppointment, summaryFilter: SummaryFilterValue, nowMs: number) {
+	if (!summaryFilter) return true;
+	if (summaryFilter === "FINALIZED") return isFinalizedDisplay(appointment, nowMs);
+	if (summaryFilter === "EDIT_SUMMARY") return !isFinalizedDisplay(appointment, nowMs) && isInsideSummaryEditWindow(appointment, nowMs);
+	return true;
+}
+
+function canShowCancelButton(appointment: StaffAppointment, nowMs: number) {
+	const { startAt } = getAppointmentWindow(appointment);
+	return nowMs < startAt;
+}
+
+function buildAppointmentSummaryPath(appointmentID: number) {
+	return `/staff/appointments/${appointmentID}/summary`;
+}
+
 export default function StaffDashboard() {
-    // Main page state for staff profile and loading/error handling.
 	const [profile, setProfile] = useState<MyStaffProfile | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [pageError, setPageError] = useState("");
 
-	// Availability state stores one row per weekday.
 	const [availability, setAvailability] = useState<AvailabilityDay[]>(INITIAL_AVAILABILITY);
 	const [availabilityMessage, setAvailabilityMessage] = useState("");
-	// State for appointment and notification data loaded from backend.
 	const [appointments, setAppointments] = useState<StaffAppointment[]>([]);
 	const [notifications, setNotifications] = useState<StaffNotification[]>([]);
 	const [notificationMessage, setNotificationMessage] = useState("");
@@ -212,28 +232,32 @@ export default function StaffDashboard() {
 	const [cancelReason, setCancelReason] = useState("");
 	const [cancelNeedsConfirm, setCancelNeedsConfirm] = useState(false);
 
-	// Filter state for today's appointments and future appointments.
 	const [todayRoleFilter, setTodayRoleFilter] = useState("");
+	const [todaySummaryFilter, setTodaySummaryFilter] = useState<SummaryFilterValue>("");
+
 	const [futureRoleFilter, setFutureRoleFilter] = useState("");
 	const [futureStartDate, setFutureStartDate] = useState("");
 	const [futureEndDate, setFutureEndDate] = useState("");
+	const [futureSummaryFilter, setFutureSummaryFilter] = useState<SummaryFilterValue>("");
+
+	const [pastRoleFilter, setPastRoleFilter] = useState("");
+	const [pastStartDate, setPastStartDate] = useState("");
+	const [pastEndDate, setPastEndDate] = useState("");
+	const [pastSummaryFilter, setPastSummaryFilter] = useState<SummaryFilterValue>("");
 
 	useEffect(() => {
 		let cancelled = false;
 
-		// Loads all dashboard data when the page first opens
 		async function loadProfile() {
 			try {
 				setLoading(true);
 				setPageError("");
 
 				if (DEV_BYPASS_AUTH) {
-					if (!cancelled) {
-						setProfile(MOCK_STAFF_PROFILE);
-					}
+					if (!cancelled) setProfile(MOCK_STAFF_PROFILE);
 					return;
 				}
-				// Fetch all dashboard-related backend data
+
 				const profileData = await getMyStaffProfile();
 				const availabilityData = await getMyStaffAvailability();
 				const appointmentsData = await getMyStaffAppointments();
@@ -244,31 +268,18 @@ export default function StaffDashboard() {
 					setAppointments(appointmentsData);
 					setNotifications(notificationsData);
 
-                    // Merge backend availability into the default weekly structure.
-					// If a day exists in saved availability, mark it enabled
-					// and apply its saved start/end times.
 					const mappedAvailability = INITIAL_AVAILABILITY.map((day) => {
 						const savedDay = availabilityData.find((item) => item.dayOfWeek === day.dayOfWeek);
 						if (!savedDay) return day;
-
-						return {
-							...day,
-							enabled: true,
-							startTime: savedDay.startTime,
-							endTime: savedDay.endTime,
-						};
+						return { ...day, enabled: true, startTime: savedDay.startTime, endTime: savedDay.endTime };
 					});
 
 					setAvailability(mappedAvailability);
 				}
 			} catch (err) {
-				if (!cancelled) {
-					setPageError(err instanceof Error ? err.message : "Failed to load staff dashboard data");
-				}
+				if (!cancelled) setPageError(err instanceof Error ? err.message : "Failed to load staff dashboard data");
 			} finally {
-				if (!cancelled) {
-					setLoading(false);
-				}
+				if (!cancelled) setLoading(false);
 			}
 		}
 
@@ -279,32 +290,29 @@ export default function StaffDashboard() {
 		};
 	}, []);
 
-	// Builds the dropdown options for role filters by extracting
-	// unique assigned roles from loaded appointments.
 	const roleOptions = useMemo(() => {
 		const uniqueRoles = [...new Set(appointments.map((appointment) => String(appointment.assignedRoleKey || "")).filter(Boolean))];
 		return uniqueRoles.sort((a, b) => a.localeCompare(b));
 	}, [appointments]);
 
-	// Creates a filtered/sorted list of appointments happening today.
-	const todayAppointments = useMemo(() => {
-		const startToday = startOfTodayMs();
-		const endToday = endOfTodayMs();
+	const nowMs = Date.now();
+	const startToday = startOfTodayMs();
+	const endToday = endOfTodayMs();
 
+	const todayAppointments = useMemo(() => {
 		return appointments
 			.filter((appointment) => {
 				const appointmentMs = appointmentDateTimeValue(appointment);
 				if (!Number.isFinite(appointmentMs)) return false;
 				if (appointmentMs < startToday || appointmentMs > endToday) return false;
-				return appointmentMatchesRole(appointment, todayRoleFilter);
+				if (!appointmentMatchesRole(appointment, todayRoleFilter)) return false;
+				if (!matchesSummaryFilter(appointment, todaySummaryFilter, nowMs)) return false;
+				return true;
 			})
 			.sort((a, b) => appointmentDateTimeValue(a) - appointmentDateTimeValue(b));
-	}, [appointments, todayRoleFilter]);
+	}, [appointments, todayRoleFilter, todaySummaryFilter, startToday, endToday, nowMs]);
 
-	// Creates a filtered/sorted list of future appointments.
-	// Supports filtering by role and optional start/end date range.
 	const futureAppointments = useMemo(() => {
-		const endToday = endOfTodayMs();
 		const filterStartMs = dateStringToMs(futureStartDate, false);
 		const filterEndMs = dateStringToMs(futureEndDate, true);
 
@@ -314,20 +322,36 @@ export default function StaffDashboard() {
 				if (!Number.isFinite(appointmentMs)) return false;
 				if (appointmentMs <= endToday) return false;
 				if (!appointmentMatchesRole(appointment, futureRoleFilter)) return false;
+				if (!matchesSummaryFilter(appointment, futureSummaryFilter, nowMs)) return false;
 				if (filterStartMs !== null && appointmentMs < filterStartMs) return false;
 				if (filterEndMs !== null && appointmentMs > filterEndMs) return false;
 				return true;
 			})
 			.sort((a, b) => appointmentDateTimeValue(a) - appointmentDateTimeValue(b));
-	}, [appointments, futureRoleFilter, futureStartDate, futureEndDate]);
-    // Toggles whether a weekday is enabled for availability.
+	}, [appointments, futureRoleFilter, futureStartDate, futureEndDate, futureSummaryFilter, endToday, nowMs]);
+
+	const pastAppointments = useMemo(() => {
+		const filterStartMs = dateStringToMs(pastStartDate, false);
+		const filterEndMs = dateStringToMs(pastEndDate, true);
+
+		return appointments
+			.filter((appointment) => {
+				const appointmentMs = appointmentDateTimeValue(appointment);
+				if (!Number.isFinite(appointmentMs)) return false;
+				if (appointmentMs >= startToday) return false;
+				if (!appointmentMatchesRole(appointment, pastRoleFilter)) return false;
+				if (!matchesSummaryFilter(appointment, pastSummaryFilter, nowMs)) return false;
+				if (filterStartMs !== null && appointmentMs < filterStartMs) return false;
+				if (filterEndMs !== null && appointmentMs > filterEndMs) return false;
+				return true;
+			})
+			.sort((a, b) => appointmentDateTimeValue(b) - appointmentDateTimeValue(a));
+	}, [appointments, pastRoleFilter, pastStartDate, pastEndDate, pastSummaryFilter, startToday, nowMs]);
+
 	function handleAvailabilityToggle(index: number) {
 		setAvailability((prev) => prev.map((item, i) => i === index ? { ...item, enabled: !item.enabled } : item));
 	}
 
-	// Updates the selected start or end time for a day.
-	// If the start time changes and the current end time is no longer valid,
-	// it automatically shifts the end time to the next valid option
 	function handleTimeChange(index: number, field: "startTime" | "endTime", value: string) {
 		setAvailability((prev) => prev.map((item, i) => {
 			if (i !== index) return item;
@@ -342,13 +366,10 @@ export default function StaffDashboard() {
 		}));
 	}
 
-	// Validates and saves the selected availability to the backend.
-	// Checks that at least one day is enabled and that each enabled day
-	// has a valid start/end time range.
 	async function handleSaveAvailability() {
 		setAvailabilityMessage("");
-
 		const enabledDays = availability.filter((day) => day.enabled);
+
 		if (enabledDays.length === 0) {
 			setAvailabilityMessage("Please select at least one available day");
 			return;
@@ -370,16 +391,12 @@ export default function StaffDashboard() {
 			setAvailabilityMessage(getFriendlyAvailabilityMessage(err));
 		}
 	}
-	
-	// Marks a notification as read and removes it from local state
-	// so the UI updates immediately after dismissal
+
 	async function handleDismissNotification(notificationID: number) {
 		try {
 			setNotificationMessage("");
 			setMarkingNotificationID(notificationID);
-
 			await markMyStaffNotificationRead(notificationID);
-
 			setNotifications((prev) => prev.filter((note) => note.notificationID !== notificationID));
 			setNotificationMessage("Notification dismissed");
 		} catch (err) {
@@ -390,7 +407,6 @@ export default function StaffDashboard() {
 	}
 
 	function openCancelPanel(appointmentID: number) {
-		// Opening a different appointment should reset the text and confirm state
 		setAppointmentMessage("");
 		setCancelPanelAppointmentID(appointmentID);
 		setCancelReason("");
@@ -398,7 +414,6 @@ export default function StaffDashboard() {
 	}
 
 	function closeCancelPanel() {
-		// Closing the panel should clear out the in progress cancel state too
 		setCancelPanelAppointmentID(null);
 		setCancelReason("");
 		setCancelNeedsConfirm(false);
@@ -416,9 +431,7 @@ export default function StaffDashboard() {
 		try {
 			setAppointmentMessage("");
 			setCancelingAppointmentID(cancelPanelAppointmentID);
-
 			await cancelMyStaffAppointment(cancelPanelAppointmentID, { cancellationReason: trimmedReason });
-
 			const updatedAppointments = await getMyStaffAppointments();
 			setAppointments(updatedAppointments);
 			setAppointmentMessage("Appointment canceled successfully");
@@ -430,10 +443,122 @@ export default function StaffDashboard() {
 		}
 	}
 
+	function clearTodayFilters() {
+		setTodayRoleFilter("");
+		setTodaySummaryFilter("");
+	}
+
 	function clearFutureFilters() {
 		setFutureRoleFilter("");
 		setFutureStartDate("");
 		setFutureEndDate("");
+		setFutureSummaryFilter("");
+	}
+
+	function clearPastFilters() {
+		setPastRoleFilter("");
+		setPastStartDate("");
+		setPastEndDate("");
+		setPastSummaryFilter("");
+	}
+
+	function renderSummaryFilter(value: SummaryFilterValue, setValue: (value: SummaryFilterValue) => void) {
+		return (
+			<div className="staffFilterField">
+				<label className="staffDashboardLabel">Summary Status</label>
+				<select className="staffDashboardInput" value={value} onChange={(e) => setValue(e.target.value as SummaryFilterValue)}>
+					<option value="">All Summaries</option>
+					<option value="FINALIZED">Finalized</option>
+					<option value="EDIT_SUMMARY">Edit Summary</option>
+				</select>
+			</div>
+		);
+	}
+
+	function renderAppointmentCard(appointment: StaffAppointment, section: "today" | "future" | "past") {
+		const timingStatus = getTimingStatus(appointment, nowMs);
+		const summaryStatus = getSummaryStatusLabel(appointment, nowMs);
+		const showSummaryButton = canShowSummaryButton(appointment, nowMs);
+		const showCancelButton = section !== "past" && canShowCancelButton(appointment, nowMs);
+		const isOngoing = timingStatus === "ONGOING";
+
+		return (
+			<div className={`staffAppointmentCard${isOngoing ? " staffAppointmentCardOngoing" : ""}`} key={appointment.appointmentID}>
+				<div className="staffAppointmentHeader">
+					<div>
+						<div className="staffAppointmentPetName">{appointment.petName}</div>
+						<div className="staffAppointmentService">{formatReasonLabel(appointment.service)}</div>
+					</div>
+					<div className="staffAppointmentMeta">
+						<div>{appointment.appointmentDate} @ {appointment.appointmentTime}</div>
+						<div>Assigned Role: {appointment.assignedRoleKey}</div>
+					</div>
+				</div>
+
+				<div className="staffAppointmentActionsRow">
+					<span className={`staffAppointmentBadge ${isOngoing ? "staffAppointmentBadgeOngoing" : "staffAppointmentBadgeTiming"}`}>{timingStatus}</span>
+
+					{summaryStatus ? (
+						<span className={`staffAppointmentBadge ${summaryStatus === "Finalized" ? "staffAppointmentBadgeFinalized" : "staffAppointmentBadgeEditable"}`}>{summaryStatus}</span>
+					) : null}
+
+					{showSummaryButton ? (
+						<Link className="staffDashboardPrimaryBtn staffAppointmentActionBtn" to={buildAppointmentSummaryPath(appointment.appointmentID)}>
+							{summaryStatus === "Finalized" ? "View Summary" : "Work on Summary"}
+						</Link>
+					) : null}
+
+					{showCancelButton ? (
+						<button
+							type="button"
+							className="staffDashboardSecondaryBtn staffAppointmentActionBtn"
+							onClick={() => openCancelPanel(appointment.appointmentID)}
+							disabled={cancelingAppointmentID === appointment.appointmentID}
+						>
+							{cancelingAppointmentID === appointment.appointmentID ? "Canceling..." : "Cancel Appointment"}
+						</button>
+					) : null}
+				</div>
+
+				{cancelPanelAppointmentID === appointment.appointmentID ? (
+					<div className="staffCancelPanel staffCancelPanelInline">
+						<label className="staffDashboardLabel" htmlFor={`cancel-reason-${appointment.appointmentID}`}>Cancellation Reason</label>
+						<textarea
+							id={`cancel-reason-${appointment.appointmentID}`}
+							className="staffDashboardTextarea"
+							value={cancelReason}
+							onChange={(e) => {
+								setCancelReason(e.target.value);
+								if (cancelNeedsConfirm) setCancelNeedsConfirm(false);
+							}}
+							rows={4}
+							placeholder="Enter the reason for canceling this appointment"
+						/>
+
+						<div className="staffDashboardActions">
+							{cancelNeedsConfirm ? (
+								<>
+									<button
+										type="button"
+										className="staffDashboardPrimaryBtn"
+										onClick={() => handleCancelAppointment()}
+										disabled={cancelingAppointmentID === appointment.appointmentID}
+									>
+										{cancelingAppointmentID === appointment.appointmentID ? "Canceling..." : "Confirm Cancel"}
+									</button>
+									<button type="button" className="staffDashboardSecondaryBtn" onClick={() => setCancelNeedsConfirm(false)}>Back</button>
+								</>
+							) : (
+								<>
+									<button type="button" className="staffDashboardPrimaryBtn" onClick={() => setCancelNeedsConfirm(true)}>Continue Cancel</button>
+									<button type="button" className="staffDashboardSecondaryBtn" onClick={closeCancelPanel}>Close</button>
+								</>
+							)}
+						</div>
+					</div>
+				) : null}
+			</div>
+		);
 	}
 
 	return (
@@ -537,31 +662,20 @@ export default function StaffDashboard() {
 									))}
 								</select>
 							</div>
+
+							{renderSummaryFilter(todaySummaryFilter, setTodaySummaryFilter)}
+
+							<div className="staffFilterButtonRow">
+								<button type="button" className="staffDashboardSecondaryBtn" onClick={clearTodayFilters}>Clear Today Filters</button>
+							</div>
 						</div>
 
-						{todayAppointments.length === 0 ? (
-							<p>No appointments for today.</p>
-						) : (
-							<ul className="staffDashboardList">
-								{todayAppointments.map((appt) => (
-									<li className="staffDashboardListItem" key={appt.appointmentID}>
-										<div><b>{appt.petName}</b> — {formatReasonLabel(appt.service)}</div>
-										<div>{appt.appointmentDate} @ {appt.appointmentTime}</div>
-										<div>Assigned Role: {appt.assignedRoleKey}</div>
+						{appointmentMessage ? <div className="staffDashboardMessage">{appointmentMessage}</div> : null}
 
-										<div className="staffDashboardActions">
-											<button
-												type="button"
-												className="staffDashboardSecondaryBtn"
-												onClick={() => openCancelPanel(appt.appointmentID)}
-												disabled={cancelingAppointmentID === appt.appointmentID}
-											>
-												{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Cancel Appointment"}
-											</button>
-										</div>
-									</li>
-								))}
-							</ul>
+						{todayAppointments.length === 0 ? <p>No appointments for today.</p> : (
+							<div className="staffAppointmentList">
+								{todayAppointments.map((appointment) => renderAppointmentCard(appointment, "today"))}
+							</div>
 						)}
 					</section>
 
@@ -589,74 +703,55 @@ export default function StaffDashboard() {
 								<input className="staffDashboardInput" type="date" value={futureEndDate} onChange={(e) => setFutureEndDate(e.target.value)} />
 							</div>
 
+							{renderSummaryFilter(futureSummaryFilter, setFutureSummaryFilter)}
+
 							<div className="staffFilterButtonRow">
 								<button type="button" className="staffDashboardSecondaryBtn" onClick={clearFutureFilters}>Clear Future Filters</button>
 							</div>
 						</div>
 
-						{appointmentMessage ? <div className="staffDashboardMessage">{appointmentMessage}</div> : null}
+						{futureAppointments.length === 0 ? <p>No future appointments.</p> : (
+							<div className="staffAppointmentList">
+								{futureAppointments.map((appointment) => renderAppointmentCard(appointment, "future"))}
+							</div>
+						)}
+					</section>
 
-						{futureAppointments.length === 0 ? (
-							<p>No future appointments.</p>
-						) : (
-							<ul className="staffDashboardList">
-								{futureAppointments.map((appt) => (
-									<li className="staffDashboardListItem" key={appt.appointmentID}>
-										<div><b>{appt.petName}</b> — {formatReasonLabel(appt.service)}</div>
-										<div>{appt.appointmentDate} @ {appt.appointmentTime}</div>
-										<div>Assigned Role: {appt.assignedRoleKey}</div>
+					<section className="staffDashboardCard">
+						<h2>Past Appointments</h2>
 
-										<div className="staffDashboardActions">
-											<button
-												type="button"
-												className="staffDashboardSecondaryBtn"
-												onClick={() => openCancelPanel(appt.appointmentID)}
-												disabled={cancelingAppointmentID === appt.appointmentID}
-											>
-												{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Cancel Appointment"}
-											</button>
-										</div>
+						<div className="staffFilterPanel">
+							<div className="staffFilterField">
+								<label className="staffDashboardLabel">Assigned Role</label>
+								<select className="staffDashboardInput" value={pastRoleFilter} onChange={(e) => setPastRoleFilter(e.target.value)}>
+									<option value="">All Roles</option>
+									{roleOptions.map((roleKey) => (
+										<option key={roleKey} value={roleKey}>{roleKey}</option>
+									))}
+								</select>
+							</div>
 
-										{cancelPanelAppointmentID === appt.appointmentID ? (
-											<div className="staffCancelPanel">
-												<label className="staffDashboardLabel" htmlFor={`cancel-reason-${appt.appointmentID}`}>Cancellation Reason</label>
-												<textarea
-													id={`cancel-reason-${appt.appointmentID}`}
-													className="staffDashboardTextarea"
-													value={cancelReason}
-													onChange={(e) => {
-														setCancelReason(e.target.value);
-														if (cancelNeedsConfirm) setCancelNeedsConfirm(false);
-													}}
-													rows={4}
-													placeholder="Enter the reason for canceling this appointment"
-												/>
+							<div className="staffFilterField">
+								<label className="staffDashboardLabel">Start Date</label>
+								<input className="staffDashboardInput" type="date" value={pastStartDate} onChange={(e) => setPastStartDate(e.target.value)} />
+							</div>
 
-												<div className="staffDashboardActions">
-													{cancelNeedsConfirm ? (
-														<>
-															<button
-																type="button"
-																className="staffDashboardPrimaryBtn"
-																onClick={() => handleCancelAppointment()}
-																disabled={cancelingAppointmentID === appt.appointmentID}
-															>
-																{cancelingAppointmentID === appt.appointmentID ? "Canceling..." : "Confirm Cancel"}
-															</button>
-															<button type="button" className="staffDashboardSecondaryBtn" onClick={() => setCancelNeedsConfirm(false)}>Back</button>
-														</>
-													) : (
-														<>
-															<button type="button" className="staffDashboardPrimaryBtn" onClick={() => setCancelNeedsConfirm(true)}>Continue Cancel</button>
-															<button type="button" className="staffDashboardSecondaryBtn" onClick={closeCancelPanel}>Close</button>
-														</>
-													)}
-												</div>
-											</div>
-										) : null}
-									</li>
-								))}
-							</ul>
+							<div className="staffFilterField">
+								<label className="staffDashboardLabel">End Date</label>
+								<input className="staffDashboardInput" type="date" value={pastEndDate} onChange={(e) => setPastEndDate(e.target.value)} />
+							</div>
+
+							{renderSummaryFilter(pastSummaryFilter, setPastSummaryFilter)}
+
+							<div className="staffFilterButtonRow">
+								<button type="button" className="staffDashboardSecondaryBtn" onClick={clearPastFilters}>Clear Past Filters</button>
+							</div>
+						</div>
+
+						{pastAppointments.length === 0 ? <p>No past appointments.</p> : (
+							<div className="staffAppointmentList">
+								{pastAppointments.map((appointment) => renderAppointmentCard(appointment, "past"))}
+							</div>
 						)}
 					</section>
 
@@ -665,9 +760,7 @@ export default function StaffDashboard() {
 
 						{notificationMessage ? <div className="staffDashboardMessage">{notificationMessage}</div> : null}
 
-						{notifications.length === 0 ? (
-							<p>No notifications right now.</p>
-						) : (
+						{notifications.length === 0 ? <p>No notifications right now.</p> : (
 							<ul className="staffDashboardList">
 								{notifications.map((note) => (
 									<li className="staffDashboardListItem staffNotificationItem" key={note.notificationID}>

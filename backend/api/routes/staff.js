@@ -129,9 +129,10 @@ router.get("/me/appointments", requireStaff, async (req, res) => {
 		const staffID = Number(staffRows[0].staffID);
 
 		/*
-			Load upcoming appointments assigned to this staff member.
-			This joins appointment data plus pet/form fallback info
-			so the frontend can display a complete schedule row.
+			Load assigned appointments for the dashboard.
+
+			Keep the last 6 months plus all future appointments.
+			The frontend splits them into today's, future, and past buckets.
 		*/
 		const [rows] = await pool.query(
 			`SELECT
@@ -141,6 +142,8 @@ router.get("/me/appointments", requireStaff, async (req, res) => {
 				DATE_FORMAT(a.date, '%Y-%m-%d') AS appointmentDate,
 				TIME_FORMAT(a.date, '%h:%i %p') AS appointmentTime,
 				DATE_FORMAT(a.date, '%Y-%m-%d %H:%i:%s') AS appointmentDateTime,
+				a.durationMinutes,
+				COALESCE(s.isFinalized, 0) AS summaryIsFinalized,
 				aps.assignedRoleKey
 			 FROM appointment_staff aps
 			 INNER JOIN appointment a
@@ -149,10 +152,12 @@ router.get("/me/appointments", requireStaff, async (req, res) => {
 				ON p.petID = a.petID
 			 LEFT JOIN appointment_form af
 				ON af.appointmentID = a.appointmentID
+			 LEFT JOIN appointment_summary s
+				ON s.appointmentID = a.appointmentID
 			 WHERE aps.staffID = ?
-				AND a.date >= CURDATE()
 				AND COALESCE(a.isCanceled, 0) = 0
 				AND COALESCE(a.underReview, 0) = 0
+				AND a.date >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
 			 ORDER BY a.date ASC`,
 			[staffID]
 		);

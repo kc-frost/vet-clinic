@@ -1,0 +1,274 @@
+.appointmentSummaryPage {
+	max-width: 1280px;
+	margin: 0 auto;
+	padding: 24px;
+}
+
+.appointmentSummaryTopBar {
+	margin-bottom: 14px;
+}
+
+.appointmentSummaryBackBtn {
+	display: inline-block;
+	padding: 9px 13px;
+	border-radius: 10px;
+	border: 1px solid #333;
+	background: #eef5fc;
+	color: #163b63;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.appointmentSummaryHeader {
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+	align-items: flex-start;
+	margin-bottom: 12px;
+}
+
+.appointmentSummaryTitle {
+	margin: 0 0 6px;
+}
+
+.appointmentSummarySubtext {
+	margin: 0;
+	opacity: 0.82;
+}
+
+.appointmentSummaryHeaderActions {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
+.appointmentSummaryPrimaryBtn,
+.appointmentSummarySecondaryBtn,
+.appointmentSummaryLinkBtn {
+	padding: 10px 14px;
+	border-radius: 10px;
+	border: 1px solid #333;
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.appointmentSummaryPrimaryBtn {
+	background: #4d79b9;
+	color: #fff;
+}
+
+.appointmentSummarySecondaryBtn,
+.appointmentSummaryLinkBtn {
+	background: #eef5fc;
+	color: #163b63;
+}
+
+.appointmentSummaryPrimaryBtn:disabled,
+.appointmentSummarySecondaryBtn:disabled {
+	opacity: 0.72;
+	cursor: not-allowed;
+}
+
+.appointmentSummarySaveLine {
+	margin-bottom: 16px;
+	font-weight: 700;
+}
+
+.appointmentSummarySaveStateSaving {
+	color: #7a5300;
+}
+
+.appointmentSummarySaveStateSaved {
+	color: #0b6b2d;
+}
+
+.appointmentSummarySaveStateError {
+	color: #b42318;
+}
+
+.appointmentSummaryTopGrid,
+.appointmentSummaryWorkGrid {
+	display: grid;
+	gap: 16px;
+	margin-bottom: 16px;
+}
+
+.appointmentSummaryTopGrid {
+	grid-template-columns: 1fr 1fr;
+	align-items: stretch;
+}
+
+.appointmentSummaryWorkGrid {
+	grid-template-columns: 1.1fr 1fr;
+	align-items: start;
+}
+
+.appointmentSummaryWorkGridSingle {
+	grid-template-columns: 1fr;
+}
+
+.appointmentSummaryCard {
+	border: 1px solid #333;
+	border-radius: 12px;
+	padding: 16px;
+	background: #fff;
+}
+
+.appointmentSummaryCard h2,
+.appointmentSummaryCard h3 {
+	margin-top: 0;
+}
+
+.appointmentSummaryDetailsGrid,
+.appointmentSummaryMiniProfileGrid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 10px 14px;
+}
+
+.appointmentSummaryDetailItem {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.appointmentSummaryDetailLabel {
+	font-weight: 700;
+}
+
+.appointmentSummaryDetailValue {
+	overflow-wrap: anywhere;
+}
+
+.appointmentSummaryStatusBox {
+	margin-top: 16px;
+	padding-top: 14px;
+	border-top: 1px solid #d9e4ef;
+}
+
+.appointmentSummaryStatusGrid {
+	display: grid;
+	grid-template-columns: 1fr 1fr 2fr;
+	gap: 10px 14px;
+}
+
+.appointmentSummaryBadge {
+	display: inline-block;
+	width: fit-content;
+	padding: 4px 9px;
+	border-radius: 999px;
+	font-weight: 700;
+	background: #eef5fc;
+	color: #163b63;
+}
+
+.appointmentSummaryBadgeGreen {
+	background: #e8f7ee;
+	color: #0b6b2d;
+}
+
+.appointmentSummaryBadgeYellow {
+	background: #fff4d6;
+	color: #7a5300;
+}
+
+.appointmentSummaryBadgeGray {
+	background: #f0f1f3;
+	color: #333;
+}
+
+.appointmentSummaryField {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 14px;
+}
+
+.appointmentSummaryLabel {
+	font-weight: 700;
+}
+
+.appointmentSummaryTextarea,
+.appointmentSummarySelect {
+	width: 100%;
+	padding: 10px;
+	border-radius: 10px;
+	border: 1px solid #9ba8b7;
+	background: #fff;
+	box-sizing: border-box;
+}
+
+.appointmentSummaryTextarea {
+	resize: vertical;
+}
+
+.appointmentSummaryInlineError,
+.appointmentSummaryError,
+.appointmentSummaryMessage {
+	padding: 12px 14px;
+	border-radius: 12px;
+	margin-bottom: 14px;
+}
+
+.appointmentSummaryError,
+.appointmentSummaryInlineError {
+	border: 1px solid #5a2a2a;
+	color: #b42318;
+}
+
+.appointmentSummaryMessage {
+	border: 1px solid #333;
+}
+
+.appointmentSummarySectionTitle {
+	margin-top: 18px;
+}
+
+.appointmentSummaryInfoBox {
+	padding: 10px 12px;
+	border: 1px solid #d9e4ef;
+	border-radius: 10px;
+	background: #f8fbff;
+	margin-bottom: 12px;
+}
+
+.appointmentSummaryImageWrap {
+	margin-bottom: 14px;
+}
+
+.appointmentSummaryImage {
+	display: block;
+	max-width: 360px;
+	width: 100%;
+	border-radius: 12px;
+	border: 1px solid #9ba8b7;
+	background: #fff;
+}
+
+.appointmentSummaryBottomActions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 16px;
+}
+
+@media (max-width: 980px) {
+	.appointmentSummaryHeader,
+	.appointmentSummaryTopGrid,
+	.appointmentSummaryWorkGrid,
+	.appointmentSummaryWorkGridSingle,
+	.appointmentSummaryDetailsGrid,
+	.appointmentSummaryMiniProfileGrid,
+	.appointmentSummaryStatusGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.appointmentSummaryHeader {
+		flex-direction: column;
+	}
+
+	.appointmentSummaryHeaderActions,
+	.appointmentSummaryBottomActions {
+		justify-content: flex-start;
+	}
+}
