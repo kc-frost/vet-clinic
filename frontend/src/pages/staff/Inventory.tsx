@@ -55,6 +55,7 @@ const INVENTORY_CATALOG_OPTIONS: InventoryCatalogOption[] = [
 	{ value: "NAIL_GRINDER_DISPOSABLE_HEAD", label: "Nail Grinder Disposable Head", isConsumable: true },
 	{ value: "PET_WIPE_PACK", label: "Pet Wipe Pack", isConsumable: true },
 	{ value: "FLEA_TREATMENT_SHAMPOO_DOSE", label: "Flea Treatment Shampoo Dose", isConsumable: true },
+	{ value: "PET_SAFE_DYE_DOSE", label: "Pet-Safe Dye Dose", isConsumable: true },
 	{ value: "STERILE_BANDAGE_PACK", label: "Sterile Bandage Pack", isConsumable: true },
 	{ value: "SALINE_FLUSH", label: "Saline Flush", isConsumable: true },
 	{ value: "ANESTHESIA_MACHINE", label: "Anesthesia Machine", isConsumable: false },

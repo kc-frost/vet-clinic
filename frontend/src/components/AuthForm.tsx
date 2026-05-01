@@ -54,6 +54,39 @@ function validateAdminCode(adminCodeRaw: string): string {
 	return "";
 }
 
+function getBackendMessage(rawMessage: string): string {
+	try {
+		const jsonStart = rawMessage.indexOf("{");
+		if (jsonStart >= 0) {
+			const parsed = JSON.parse(rawMessage.slice(jsonStart));
+			if (typeof parsed?.message === "string") return parsed.message.trim();
+		}
+	} catch {
+		return "";
+	}
+
+	return "";
+}
+
+function friendlyAuthErrorMessage(err: unknown, mode: AuthMode): string {
+	const rawMessage = err instanceof Error ? err.message : "";
+	const backendMessage = getBackendMessage(rawMessage);
+	const messageToCheck = (backendMessage || rawMessage).toLowerCase();
+
+	if (messageToCheck.includes("invalid credentials")) return "Invalid email or password.";
+	if (messageToCheck.includes("email already in use")) return "An account with this email already exists.";
+	if (messageToCheck.includes("invalid admin code")) return "The admin code is invalid.";
+	if (messageToCheck.includes("network") || messageToCheck.includes("failed to fetch")) {
+		return "Could not connect to the server. Please try again.";
+	}
+
+	if (backendMessage) return backendMessage;
+
+	return mode === "login"
+		? "Login failed. Please check your email and password."
+		: "Registration failed. Please check your information and try again.";
+}
+
 export default function AuthForm({ mode, onSubmit, isSubmitting = false }: AuthFormProps) {
 	// mode controls the displayed text and whether the admin code input shows up
 	const title = mode === "login" ? "Login" : "Register";
@@ -153,7 +186,7 @@ export default function AuthForm({ mode, onSubmit, isSubmitting = false }: AuthF
 
 			await onSubmit(email.trim(), password);
 		} catch (err) {
-			setFormError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+			setFormError(friendlyAuthErrorMessage(err, mode));
 		}
 	}
 
@@ -161,7 +194,6 @@ export default function AuthForm({ mode, onSubmit, isSubmitting = false }: AuthF
 		<div className="auth-page">
 			<div className="auth-card">
 				<h1 className="auth-title">{title}</h1>
-				<p className="auth-subtitle">Veterinary Clinic + Doggy Daycare</p>
 
 				{/* general error box for request failures */}
 				{formError ? <div className="auth-form-error">{formError}</div> : null}

@@ -2,7 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "../styles/publicLayout.css";
 import NavButton from "../components/NavButton";
-import { getCurrentUser, type AuthUser } from "../api/auth";
+import { getCurrentUser, logout, type AuthUser } from "../api/auth";
 
 export default function PublicLayout() {
 	/*
@@ -48,20 +48,26 @@ export default function PublicLayout() {
 	const isAdmin = !!currentUser?.isAdmin;
 	const isStaff = !!currentUser?.isStaff;
 
+	async function handleLogout() {
+		try {
+			await logout();
+			setCurrentUser(null);
+			window.location.href = "/";
+		} catch (err) {
+			console.error("Logout failed", err);
+		}
+	}
+
 	return (
 		<>
 			<header className="public-header">
 				<nav className="public-nav">
 					<NavButton to="/" className="nav-brand">
-						Vet Clinic
+						PetWell Clinic🐾
 					</NavButton>
 
 					<div className="nav-right">
-						<button type="button" className="nav-btn">About</button>
-						<button type="button" className="nav-btn">Services</button>
-						<button type="button" className="nav-btn">Contact</button>
-
-						{/* Only admins should see the admin-only navigation link */}
+{/* Only admins should see the admin-only navigation link */}
 						{isAdmin ? (
 							<NavButton to="/admin/analytics" className="nav-btn">
 								Admin Area
@@ -75,7 +81,7 @@ export default function PublicLayout() {
 							</NavButton>
 						) : null}
 
-						{/* Logged-in users still get appointment/profile links */}
+						{/* Logged-in users get appointment/profile links and can end their session */}
 						{isLoggedIn ? (
 							<>
 								<NavButton to="/reservation" className="nav-btn">
@@ -84,16 +90,20 @@ export default function PublicLayout() {
 								<NavButton to="/userprofile" className="nav-btn">
 									My Profile
 								</NavButton>
+								<button type="button" className="nav-btn" onClick={handleLogout}>
+									Logout
+								</button>
 							</>
-						) : null}
-
-						{/* Keep login/register visible all the time so you can switch accounts fast */}
-						<NavButton to="/login" className="nav-btn">
-							Login
-						</NavButton>
-						<NavButton to="/register" className="nav-btn nav-btn--cta">
-							Register
-						</NavButton>
+						) : (
+							<>
+								<NavButton to="/login" className="nav-btn">
+									Login
+								</NavButton>
+								<NavButton to="/register" className="nav-btn nav-btn--cta">
+									Register
+								</NavButton>
+							</>
+						)}
 					</div>
 				</nav>
 			</header>

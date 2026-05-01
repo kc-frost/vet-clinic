@@ -3,6 +3,16 @@ import { Link, useParams } from "react-router-dom";
 import { getCustomerAppointmentSummary } from "../../api/appointmentSummary";
 import type { CustomerAppointmentSummaryResponse } from "../../types/appointmentSummary";
 import "../../styles/appointmentSummaryView.css";
+import style1 from "../../assets/groomingStyles/style1.jpg";
+import style2 from "../../assets/groomingStyles/style2.webp";
+import style3 from "../../assets/groomingStyles/style3.webp";
+import style4 from "../../assets/groomingStyles/style4.webp";
+import style5 from "../../assets/groomingStyles/style5.webp";
+import style6 from "../../assets/groomingStyles/style6.webp";
+import style7 from "../../assets/groomingStyles/style7.webp";
+import style8 from "../../assets/groomingStyles/style8.jpg";
+import style9 from "../../assets/groomingStyles/style9.jpg";
+import style10 from "../../assets/groomingStyles/style10.jpg";
 
 function formatReasonLabel(reasonKey: string) {
 	// Turns backend reason keys like WELLNESS_EXAM into a readable label
@@ -42,6 +52,35 @@ function DetailItem({ label, value }: { label: string; value: string | number | 
 			<span className="appointmentSummaryViewDetailValue">{value || "N/A"}</span>
 		</div>
 	);
+}
+
+const GROOMING_DYE_STYLE_IMAGES: Record<string, string> = {
+	STYLE_1: style1,
+	STYLE_2: style2,
+	STYLE_3: style3,
+	STYLE_4: style4,
+	STYLE_5: style5,
+	STYLE_6: style6,
+	STYLE_7: style7,
+	STYLE_8: style8,
+	STYLE_9: style9,
+	STYLE_10: style10,
+};
+
+function isGroomingReason(reasonKey: string) {
+	return ["BASIC_GROOMING", "FLEA_BATH_GROOMING", "GROOMING_DYE"].includes(String(reasonKey || "").toUpperCase());
+}
+
+function getGroomingImagePath(summaryData: CustomerAppointmentSummaryResponse) {
+	const referencePhotoPath = summaryData.appointment.groomingReferencePhotoPath;
+	if (referencePhotoPath) return referencePhotoPath;
+
+	const styleKey = String(summaryData.appointment.groomingDyeStyleKey || "").toUpperCase();
+	return GROOMING_DYE_STYLE_IMAGES[styleKey] || "";
+}
+
+function formatStyleKey(styleKey: string) {
+	return String(styleKey || "").replaceAll("_", " ");
 }
 
 function SummaryField({ label, value }: { label: string; value: string }) {
@@ -127,6 +166,9 @@ export default function AppointmentSummaryView() {
     // if still no summary data, render nothing
 	if (!summaryData) return null;
 
+	const groomingAppointment = isGroomingReason(summaryData.appointment.reasonKey);
+	const groomingImagePath = getGroomingImagePath(summaryData);
+
 	return (
 		<div className="appointmentSummaryViewPage">
 			<div className="appointmentSummaryViewTopBar">
@@ -162,6 +204,33 @@ export default function AppointmentSummaryView() {
 					<DetailItem label="Heartworm Prevention" value={summaryData.miniPetProfile.heartwormPreventionCurrent} />
 				</div>
 			</section>
+
+			{groomingAppointment ? (
+				<section className="appointmentSummaryViewCard">
+					<h2>Grooming Details</h2>
+
+					{summaryData.appointment.groomingDyeStyleKey ? (
+						<div className="appointmentSummaryViewInfoBox">
+							<strong>Requested Style:</strong> {formatStyleKey(summaryData.appointment.groomingDyeStyleKey)}
+						</div>
+					) : null}
+
+					{groomingImagePath ? (
+						<div className="appointmentSummaryViewImageWrap">
+							<span className="appointmentSummaryViewDetailLabel">
+								{summaryData.appointment.groomingReferencePhotoPath ? "Reference Photo" : "Selected Preset Style"}
+							</span>
+							<img className="appointmentSummaryViewImage" src={groomingImagePath} alt="Grooming style reference" />
+						</div>
+					) : null}
+
+					{summaryData.appointment.groomingStyleNotes ? (
+						<div className="appointmentSummaryViewInfoBox">
+							<strong>Customer Style Notes:</strong> {summaryData.appointment.groomingStyleNotes}
+						</div>
+					) : null}
+				</section>
+			) : null}
 
 			<section className="appointmentSummaryViewCard">
 				<h2>Appointment Summary</h2>

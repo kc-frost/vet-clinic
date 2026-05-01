@@ -20,6 +20,7 @@ import SlotCalendar from "../../components/calendar/SlotCalendar";
 
 import { getCurrentUser } from "../../api/auth";
 import { createReservation, getAvailability, getPetsForUser, getReservationProfile } from "../../api/reservations";
+import GroomingCustomizationSection from "../../components/reservation/GroomingCustomizationSection";
 
 type Step = {
 	id: string;
@@ -28,11 +29,21 @@ type Step = {
 
 // reservation form sections shown in the progress bar
 // step.id is used to decide which JSX block renders below
-const STEPS: Step[] = [
+const BASE_STEPS: Step[] = [
 	{ id: "owner", title: "Owner" },
 	{ id: "pet", title: "Pet" },
 	{ id: "medical", title: "Medical" },
 	{ id: "appointment", title: "Appointment" },
+	{ id: "insurance", title: "Insurance" },
+	{ id: "review", title: "Review" },
+];
+
+const GROOMING_DYE_STEPS: Step[] = [
+	{ id: "owner", title: "Owner" },
+	{ id: "pet", title: "Pet" },
+	{ id: "medical", title: "Medical" },
+	{ id: "appointment", title: "Appointment" },
+	{ id: "groomingDye", title: "Grooming Dye" },
 	{ id: "insurance", title: "Insurance" },
 	{ id: "review", title: "Review" },
 ];
@@ -106,11 +117,16 @@ export default function Reservation() {
 	// used to decide which future steps can be clicked directly
 	const [furthestReachedStepIndex, setFurthestReachedStepIndex] = useState(0);
 
+	const isDog = formData.petType.trim().toLowerCase() === "dog";
+	const isGroomingDye = formData.reasonKey === "GROOMING_DYE" && isDog;
+	const steps = isGroomingDye ? GROOMING_DYE_STEPS : BASE_STEPS;
+	const safeStepIndex = Math.min(stepIndex, steps.length - 1);
+
 	// derived current step object
 	// used for:
 	//  rendering the correct section JSX
 	//  rendering progress text
-	const step = STEPS[stepIndex];
+	const step = steps[safeStepIndex];
 
 	// available time slots returned by the backend
 	// loaded from GET /api/reservations/availability?reasonKey=...&userID=...&petID=...&days=...
@@ -294,6 +310,38 @@ export default function Reservation() {
 			return;
 		}
 
+		if (name === "petType") {
+			setFormData((prev) => ({
+				...prev,
+				petType: value,
+				reasonKey: "",
+				appointmentDate: "",
+				startTime: "",
+				reasonDetails: "",
+				groomingDyeStyleKey: "",
+				groomingReferencePhotoName: "",
+				groomingReferencePhotoFile: null,
+				groomingStyleNotes: "",
+				consentToFormInfo: false,
+			}));
+
+			setSelectedSlotId("");
+			setAvailableSlots([]);
+			setFurthestReachedStepIndex(1);
+
+			setErrors((prev) => {
+				const next = { ...prev };
+				delete next.petType;
+				delete next.reasonKey;
+				delete next.appointmentDate;
+				delete next.startTime;
+				delete next.consentToFormInfo;
+				return next;
+			});
+
+			return;
+		}
+
 		onFieldChange(name as keyof ReservationFormData, value as any);
 	}
 
@@ -337,10 +385,13 @@ export default function Reservation() {
 		const p = pets.find((x) => x.petID === petID);
 		if (!p) return;
 
+		const nextPetType = p.petType || "";
+		const nextPetIsDog = nextPetType.trim().toLowerCase() === "dog";
+
 		setFormData((prev) => ({
 			...prev,
 			petName: p.petName || "",
-			petType: p.petType || "",
+			petType: nextPetType,
 			breed: p.breed || "",
 			petSex: p.petSex || "",
 			spayedNeutered: p.spayedNeutered || "",
@@ -352,6 +403,15 @@ export default function Reservation() {
 			pastInjuriesConditions: p.pastInjuriesConditions || "",
 			vaccinationsUpToDate: p.vaccinationsUpToDate || "",
 			heartwormPreventionCurrent: p.heartwormPreventionCurrent || "",
+			reasonKey: nextPetIsDog ? prev.reasonKey : "",
+			appointmentDate: nextPetIsDog ? prev.appointmentDate : "",
+			startTime: nextPetIsDog ? prev.startTime : "",
+			reasonDetails: nextPetIsDog ? prev.reasonDetails : "",
+			groomingDyeStyleKey: nextPetIsDog ? prev.groomingDyeStyleKey : "",
+			groomingReferencePhotoName: nextPetIsDog ? prev.groomingReferencePhotoName : "",
+			groomingReferencePhotoFile: nextPetIsDog ? prev.groomingReferencePhotoFile : null,
+			groomingStyleNotes: nextPetIsDog ? prev.groomingStyleNotes : "",
+			consentToFormInfo: false,
 		}));
 	}
 
@@ -366,6 +426,11 @@ export default function Reservation() {
 			reasonKey: nextReason,
 			appointmentDate: "",
 			startTime: "",
+			groomingDyeStyleKey: nextReason === "GROOMING_DYE" ? prev.groomingDyeStyleKey : "",
+			groomingReferencePhotoName: nextReason === "GROOMING_DYE" ? prev.groomingReferencePhotoName : "",
+			groomingReferencePhotoFile: nextReason === "GROOMING_DYE" ? prev.groomingReferencePhotoFile : null,
+			groomingStyleNotes: nextReason === "GROOMING_DYE" ? prev.groomingStyleNotes : "",
+			consentToFormInfo: false,
 		}));
 
 		// clear reason/slot errors since the user is making a new selection
@@ -374,6 +439,7 @@ export default function Reservation() {
 			delete next.reasonKey;
 			delete next.appointmentDate;
 			delete next.startTime;
+			delete next.consentToFormInfo;
 			return next;
 		});
 	}
@@ -502,12 +568,15 @@ export default function Reservation() {
 	function validateStepByIndex(index: number) {
 		let e: ReservationFormErrors = {};
 
-		if (STEPS[index].id === "owner") e = validateOwner(formData);
-		else if (STEPS[index].id === "pet") e = validatePet(formData);
-		else if (STEPS[index].id === "medical") e = validateMedical(formData);
-		else if (STEPS[index].id === "appointment") e = validateAppointment(formData);
-		else if (STEPS[index].id === "insurance") e = validateInsurance(formData);
-		else if (STEPS[index].id === "review") e = validateConsent(formData);
+		const targetStep = steps[index];
+
+		if (targetStep.id === "owner") e = validateOwner(formData);
+		else if (targetStep.id === "pet") e = validatePet(formData);
+		else if (targetStep.id === "medical") e = validateMedical(formData);
+		else if (targetStep.id === "appointment") e = validateAppointment(formData);
+		else if (targetStep.id === "groomingDye") e = {};
+		else if (targetStep.id === "insurance") e = validateInsurance(formData);
+		else if (targetStep.id === "review") e = validateConsent(formData);
 
 		setErrors(e);
 		return Object.keys(e).length === 0;
@@ -516,14 +585,14 @@ export default function Reservation() {
 	// runs validation only for the current section
 	// called by Next and by Submit
 	function validateCurrentStep() {
-		return validateStepByIndex(stepIndex);
+		return validateStepByIndex(safeStepIndex);
 	}
 
 	function goNext() {
 		if (!validateCurrentStep()) return;
 
-		setStepIndex((i) => {
-			const next = Math.min(i + 1, STEPS.length - 1);
+		setStepIndex(() => {
+			const next = Math.min(safeStepIndex + 1, steps.length - 1);
 			setFurthestReachedStepIndex((prev) => Math.max(prev, next));
 			return next;
 		});
@@ -537,16 +606,16 @@ export default function Reservation() {
 	// and jump forward only if each step in between validates successfully
 	function goToStep(targetIndex: number) {
 		if (isSubmitted) return;
-		if (targetIndex === stepIndex) return;
+		if (targetIndex === safeStepIndex) return;
 
 		// moving backward is always okay
-		if (targetIndex < stepIndex) {
+		if (targetIndex < safeStepIndex) {
 			setStepIndex(targetIndex);
 			return;
 		}
 
 		// if user is moving forward, validate every step in between
-		for (let i = stepIndex; i < targetIndex; i++) {
+		for (let i = safeStepIndex; i < targetIndex; i++) {
 			const valid = validateStepByIndex(i);
 			if (!valid) {
 				setStepIndex(i);
@@ -633,13 +702,13 @@ export default function Reservation() {
 
 	// UI text for the step progress line
 	const progressText = useMemo(() => {
-		return `Step ${stepIndex + 1} of ${STEPS.length}: ${step.title}`;
-	}, [stepIndex, step.title]);
+		return `Step ${safeStepIndex + 1} of ${steps.length}: ${step.title}`;
+	}, [safeStepIndex, steps.length, step.title]);
 
 	if (isLoadingUser) {
 		return (
 			<div className="reservation-page">
-				<h1>Make a Reservation</h1>
+				<h1>Make an Appointment</h1>
 				<p>Loading...</p>
 			</div>
 		);
@@ -648,7 +717,7 @@ export default function Reservation() {
 	if (userLoadError) {
 		return (
 			<div className="reservation-page">
-				<h1>Make a Reservation</h1>
+				<h1>Make an Appointment</h1>
 				<p className="error-text">{userLoadError}</p>
 			</div>
 		);
@@ -657,7 +726,7 @@ export default function Reservation() {
 	if (!currentUser) {
 		return (
 			<div className="reservation-page">
-				<h1>Make a Reservation</h1>
+				<h1>Make an Appointment</h1>
 				<p className="error-text">not logged in</p>
 			</div>
 		);
@@ -665,14 +734,14 @@ export default function Reservation() {
 
 	return (
 		<div className="reservation-page">
-			<h1>Make a Reservation</h1>
+			<h1>Make an Appointment</h1>
 			<p className="step-progress">{progressText}</p>
 
 			<div className="step-indicator">
-				{STEPS.map((s, idx) => {
-					const isActive = idx === stepIndex;
-					const isCompleted = idx < stepIndex;
-					const canClick = !isSubmitted && (idx <= furthestReachedStepIndex || idx <= stepIndex + 1 || idx < stepIndex);
+				{steps.map((s, idx) => {
+					const isActive = idx === safeStepIndex;
+					const isCompleted = idx < safeStepIndex;
+					const canClick = !isSubmitted && (idx <= furthestReachedStepIndex || idx <= safeStepIndex + 1 || idx < safeStepIndex);
 
 					return (
 						<div
@@ -729,7 +798,7 @@ export default function Reservation() {
 								onChange={(e) => onReasonChange(e.target.value as any)}
 							>
 								<option value="">Select a reason</option>
-								{REASON_OPTIONS.map((opt) => (
+								{REASON_OPTIONS.filter((opt) => opt.value !== "GROOMING_DYE" || isDog).map((opt) => (
 									<option key={opt.value} value={opt.value}>
 										{opt.label}
 									</option>
@@ -782,6 +851,20 @@ export default function Reservation() {
 					</div>
 				) : null}
 
+				{step.id === "groomingDye" ? (
+					<GroomingCustomizationSection
+						value={{
+							groomingDyeStyleKey: formData.groomingDyeStyleKey,
+							groomingReferencePhotoName: formData.groomingReferencePhotoName,
+							groomingReferencePhotoFile: formData.groomingReferencePhotoFile,
+							groomingStyleNotes: formData.groomingStyleNotes,
+						}}
+						onChange={(updates) => {
+							setFormData((prev) => ({ ...prev, ...updates }));
+						}}
+					/>
+				) : null}
+
 				{step.id === "insurance" ? (
 					<InsuranceStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
 				) : null}
@@ -800,13 +883,13 @@ export default function Reservation() {
 				) : null}
 
 				<div className="navigation-buttons">
-					{stepIndex > 0 && !isSubmitted ? (
+					{safeStepIndex > 0 && !isSubmitted ? (
 						<button type="button" onClick={goBack} className="back-button">
 							Back
 						</button>
 					) : null}
 
-					{stepIndex < STEPS.length - 1 && !isSubmitted ? (
+					{safeStepIndex < steps.length - 1 && !isSubmitted ? (
 						<button type="button" onClick={goNext} className="next-button">
 							Next
 						</button>

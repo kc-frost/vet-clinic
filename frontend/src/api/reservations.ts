@@ -34,11 +34,39 @@ export async function getAvailability(params: {
 // POST /api/reservations
 // creates an appointment booking using the reservation payload
 export async function createReservation(payload: CreateReservationPayload) {
-	return api<CreateReservationResponse>("/reservations", {
+	const file = payload.formData.groomingReferencePhotoFile;
+
+	if (!file) {
+		return api<CreateReservationResponse>("/reservations", {
+			method: "POST",
+			body: payload,
+		});
+	}
+
+	const multipart = new FormData();
+	multipart.append("payload", JSON.stringify({
+		...payload,
+		formData: {
+			...payload.formData,
+			groomingReferencePhotoFile: null,
+		},
+	}));
+	multipart.append("groomingReferencePhoto", file);
+
+	const res = await fetch("/api/reservations", {
 		method: "POST",
-		body: payload,
+		credentials: "include",
+		body: multipart,
 	});
+
+	if (!res.ok) {
+		const errorText = await res.text().catch(() => "");
+		throw new Error(`POST /reservations failed (${res.status}) ${errorText}`);
+	}
+
+	return res.json();
 }
+
 
 // GET /api/reservations/profile?userID=
 // returns customer profile fields used to autofill the reservation sections

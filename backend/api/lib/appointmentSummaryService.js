@@ -676,6 +676,12 @@ async function createFollowUpInsideTransaction(conn, row, payload) {
 	const appointmentDate = cleanText(payload?.appointmentDate);
 	const startTime = cleanText(payload?.startTime);
 
+	if (reasonKey.toUpperCase() === "GROOMING_DYE") {
+		const error = new Error("Grooming dye follow-up appointments must be created from the normal reservation form");
+		error.status = 400;
+		throw error;
+	}
+
 	if (!reasonKey || !appointmentDate || !startTime) {
 		const error = new Error("reasonKey, appointmentDate, and startTime are required");
 		error.status = 400;

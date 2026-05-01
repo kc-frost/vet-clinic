@@ -17,6 +17,16 @@ import type { AvailableSlot, ReasonKey } from "../../types/reservation";
 import { REASON_OPTIONS } from "../../types/reservation";
 import SlotCalendar from "../../components/calendar/SlotCalendar";
 import "../../styles/appointmentSummary.css";
+import style1 from "../../assets/groomingStyles/style1.jpg";
+import style2 from "../../assets/groomingStyles/style2.webp";
+import style3 from "../../assets/groomingStyles/style3.webp";
+import style4 from "../../assets/groomingStyles/style4.webp";
+import style5 from "../../assets/groomingStyles/style5.webp";
+import style6 from "../../assets/groomingStyles/style6.webp";
+import style7 from "../../assets/groomingStyles/style7.webp";
+import style8 from "../../assets/groomingStyles/style8.jpg";
+import style9 from "../../assets/groomingStyles/style9.jpg";
+import style10 from "../../assets/groomingStyles/style10.jpg";
 
 // How long staff has to stop typing before autosave runs
 const SAVE_DELAY_MS = 700;
@@ -24,13 +34,16 @@ const VACCINATION_OPTIONS = ["Yes", "No", "Unsure"];
 const HEARTWORM_OPTIONS = ["Yes", "No", "Unsure", "NotApplicable"];
 
 const GROOMING_DYE_STYLE_IMAGES: Record<string, string> = {
-	// Update these paths when the preset dye images are added to the frontend
-	RAINBOW_TAIL: "/images/grooming-dye/rainbow-tail.png",
-	PASTEL_EARS: "/images/grooming-dye/pastel-ears.png",
-	PAW_PRINT: "/images/grooming-dye/paw-print.png",
-	OMBRE: "/images/grooming-dye/ombre.png",
-	SPORTY_STRIPES: "/images/grooming-dye/sporty-stripes.png",
-	SURPRISE_ME: "/images/grooming-dye/surprise-me.png",
+	STYLE_1: style1,
+	STYLE_2: style2,
+	STYLE_3: style3,
+	STYLE_4: style4,
+	STYLE_5: style5,
+	STYLE_6: style6,
+	STYLE_7: style7,
+	STYLE_8: style8,
+	STYLE_9: style9,
+	STYLE_10: style10,
 };
 
 // Safe blank values for the editable pet profile form before backend data loads
@@ -578,7 +591,7 @@ async function handleFinalize() {
 						<span className="appointmentSummaryLabel">Follow-Up Reason</span>
 						<select className="appointmentSummarySelect" value={followUpReasonKey} onChange={(e) => handleFollowUpReasonChange(e.target.value)} disabled={!canCreateFollowUp || followUpLoading}>
 							<option value="">Select</option>
-							{REASON_OPTIONS.map((option) => (
+							{REASON_OPTIONS.filter((option) => option.value !== "GROOMING_DYE").map((option) => (
 								<option key={option.value} value={option.value}>{option.label}</option>
 							))}
 						</select>

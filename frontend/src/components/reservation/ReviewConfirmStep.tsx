@@ -88,6 +88,26 @@ export default function ReviewConfirmStep({
 					<strong>Start time:</strong> {formData.startTime || "—"}
 				</p>
 
+				{formData.reasonKey === "GROOMING_DYE" ? (
+					<div className="grooming-review-box">
+						<h4>Grooming Dye Customization</h4>
+						<p>
+							<strong>Dye style:</strong>{" "}
+							{formData.groomingDyeStyleKey
+								? formData.groomingDyeStyleKey.replaceAll("_", " ")
+								: formData.groomingReferencePhotoName
+								? "User provided a reference photo"
+								: "—"}
+						</p>
+						<p>
+							<strong>Reference photo:</strong> {formData.groomingReferencePhotoName || "No photo uploaded"}
+						</p>
+						<p>
+							<strong>Style notes:</strong> {formData.groomingStyleNotes || "—"}
+						</p>
+					</div>
+				) : null}
+
 				{/* reasonDetails is optional, so only show it if the user typed something */}
 				{formData.reasonDetails ? (
 					<p>

@@ -8,6 +8,7 @@ export type ReasonKey =
 	| "CAST_CHANGE"
 	| "BASIC_GROOMING"
 	| "FLEA_BATH_GROOMING"
+	| "GROOMING_DYE"
 	| "EMERGENCY_TRAUMA"
 	| "ULTRASOUND";
 
@@ -62,6 +63,11 @@ export const REASON_OPTIONS: ReasonOption[] = [
 		value: "FLEA_BATH_GROOMING",
 		label: "Flea Bath Grooming",
 		description: "Grooming session with flea treatment bath.",
+	},
+	{
+		value: "GROOMING_DYE",
+		label: "Grooming with Dye",
+		description: "Grooming appointment with custom dye style options.",
 	},
 	{
 		value: "EMERGENCY_TRAUMA",
@@ -185,6 +191,12 @@ export type ReservationFormData = {
 	startTime: string;
 	reasonDetails: string;
 
+	// grooming dye customization fields
+	groomingDyeStyleKey: string;
+	groomingReferencePhotoName: string;
+	groomingReferencePhotoFile: File | null;
+	groomingStyleNotes: string;
+
 	// medical/safety snapshot fields
 	currentMedications: string;
 	medicationHistory: string;
@@ -225,6 +237,11 @@ export const INITIAL_RESERVATION_FORM: ReservationFormData = {
 	appointmentDate: "",
 	startTime: "",
 	reasonDetails: "",
+
+	groomingDyeStyleKey: "",
+	groomingReferencePhotoName: "",
+	groomingReferencePhotoFile: null,
+	groomingStyleNotes: "",
 
 	currentMedications: "",
 	medicationHistory: "",
