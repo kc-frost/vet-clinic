@@ -160,8 +160,7 @@ export default function AuthForm({ mode, onSubmit, isSubmitting = false }: AuthF
 	return (
 		<div className="auth-page">
 			<div className="auth-card">
-				<h1 className="auth-title">{title}</h1>
-				<p className="auth-subtitle">Veterinary Clinic + Doggy Daycare</p>
+				<h1 className="auth-title">{title}</h1>		
 
 				{/* general error box for request failures */}
 				{formError ? <div className="auth-form-error">{formError}</div> : null}

@@ -32,8 +32,9 @@ export default function AppRouter() {
 					<Route path="/register" element={<Register />} />
 
 					{/* These pages require any logged-in user. */}
+					<Route path="/reservation" element={<Reservation />} />
+
 					<Route element={<RequireAuth />}>
-						<Route path="/reservation" element={<Reservation />} />
 						<Route path="/userprofile" element={<UserProfile />} />
 					</Route>
 
@@ -64,4 +65,3 @@ export default function AppRouter() {
 }
 
 
-// commented out auth wrappers for testing 

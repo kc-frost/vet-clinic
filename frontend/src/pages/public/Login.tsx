@@ -12,13 +12,12 @@ export default function Login() {
 		try {
 			await login(email, password);
 			navigate("/");
-		} catch (err) {
-			const message = err instanceof Error ? err.message : "Login failed. Please check your credentials and try again.";
-			throw new Error(message);
+		} catch {
+			throw new Error("The email or password you entered is incorrect. Please try again.");
 		} finally {
 			setIsSubmitting(false);
 		}
-	}
+	} 
 
 	return <AuthForm mode="login" onSubmit={handleLogin} isSubmitting={isSubmitting} />;
 }

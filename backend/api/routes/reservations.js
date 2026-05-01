@@ -4,6 +4,9 @@ import { requireAuth } from "../lib/authMiddleware.js";
 import { handleImmediateNotificationsForNewAppointment } from "../lib/notifications.js";
 import { getRule, REASON_RULES } from "../lib/reservationRules.js";
 import { cancelAppointment } from "../lib/appointmentCancellationService.js";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
 
 const router = express.Router();
 
@@ -14,6 +17,30 @@ const router = express.Router();
 const OPEN_MINUTES = 9 * 60;
 const CLOSE_MINUTES = 17 * 60;
 const SLOT_STEP_MINUTES = 15;
+
+const groomingUploadDir = path.resolve(process.cwd(), "uploads/grooming-reference");
+
+fs.mkdirSync(groomingUploadDir, { recursive: true });
+
+const groomingReferenceUpload = multer({
+	storage: multer.diskStorage({
+		destination: (_req, _file, cb) => cb(null, groomingUploadDir),
+		filename: (_req, file, cb) => {
+			const safeOriginalName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+			cb(null, `${Date.now()}-${safeOriginalName}`);
+		},
+	}),
+	fileFilter: (_req, file, cb) => {
+		if (!file.mimetype.startsWith("image/")) {
+			cb(new Error("Only image uploads are allowed."));
+			return;
+		}
+		cb(null, true);
+	},
+	limits: {
+		fileSize: 5 * 1024 * 1024,
+	},
+});
 
 function pad2(n) {
 
@@ -1522,10 +1549,13 @@ async function insertAppointmentForm(conn, appointmentID, form) {
 		pastInjuriesConditions,
 		vaccinationsUpToDate,
 		heartwormPreventionCurrent,
+		groomingDyeStyleKey,
+		groomingReferencePhotoPath,
+		groomingStyleNotes,
 		insuranceProvider,
 		insuranceMemberId,
 		consentToFormInfo
-	) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
+	) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
 
 	const params = [
 		appointmentID,
@@ -1549,6 +1579,9 @@ async function insertAppointmentForm(conn, appointmentID, form) {
 		form.pastInjuriesConditions,
 		form.vaccinationsUpToDate,
 		form.heartwormPreventionCurrent,
+		form.groomingDyeStyleKey || null,
+		form.groomingReferencePhotoPath || form.groomingReferencePhotoName || null,
+		form.groomingStyleNotes || null,
 		form.insuranceProvider || null,
 		form.insuranceMemberId || null,
 		form.consentToFormInfo ? 1 : 0,
@@ -1771,6 +1804,10 @@ function validateAndBuildForm(body) {
 			vaccinationsUpToDate: vaccinationsUpToDate.trim(),
 			heartwormPreventionCurrent: heartwormPreventionCurrent.trim(),
 
+			groomingDyeStyleKey: trimOrNull(form.groomingDyeStyleKey),
+			groomingReferencePhotoPath: trimOrNull(form.groomingReferencePhotoPath),
+			groomingStyleNotes: trimOrNull(form.groomingStyleNotes),
+
 			insuranceProvider: trimOrNull(form.insuranceProvider),
 			insuranceMemberId: trimOrNull(form.insuranceMemberId),
 
@@ -1779,9 +1816,21 @@ function validateAndBuildForm(body) {
 	};
 }
 
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", requireAuth, groomingReferenceUpload.single("groomingReferencePhoto"), async (req, res) => {
 	try {
-		const body = req.body || {};
+		let body = req.body || {};
+
+		if (req.body?.payload) {
+			body = JSON.parse(req.body.payload);
+		}
+		
+		if (req.file) {
+			body.formData = {
+				...(body.formData || {}),
+				groomingReferencePhotoPath: `/uploads/grooming-reference/${req.file.filename}`,
+				groomingReferencePhotoName: req.file.originalname,
+			};
+		}
 
 		/*
 			Resolve the appointment rule from either reasonKey or

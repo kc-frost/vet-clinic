@@ -8,6 +8,7 @@ export type ReasonKey =
 	| "CAST_CHANGE"
 	| "BASIC_GROOMING"
 	| "FLEA_BATH_GROOMING"
+	| "GROOMING_DYE"
 	| "EMERGENCY_TRAUMA"
 	| "ULTRASOUND";
 
@@ -73,6 +74,13 @@ export const REASON_OPTIONS: ReasonOption[] = [
 		label: "Ultrasound",
 		description: "Ultrasound imaging and diagnostics.",
 	},
+	{
+		value: "GROOMING_DYE",
+		label: "Grooming with Dye",
+		description: "Grooming appointment with custom dye style options."
+	}
+
+
 ];
 
 export type CurrentUser = {
@@ -183,6 +191,12 @@ export type ReservationFormData = {
 	startTime: string;
 	reasonDetails: string;
 
+	// grooming dye customization fields
+	groomingDyeStyleKey: string;
+	groomingReferencePhotoName: string;
+	groomingReferencePhotoFile: File | null;
+	groomingStyleNotes: string;
+
 	// medical/safety snapshot fields
 	currentMedications: string;
 	knownAllergies: string;
@@ -221,6 +235,13 @@ export const INITIAL_RESERVATION_FORM: ReservationFormData = {
 	appointmentDate: "",
 	startTime: "",
 	reasonDetails: "",
+
+
+	groomingDyeStyleKey: "",
+	groomingReferencePhotoName: "",
+	groomingReferencePhotoFile: null,
+	groomingStyleNotes: "",
+
 
 	currentMedications: "",
 	knownAllergies: "",

@@ -21,6 +21,7 @@ import SlotCalendar from "../../components/calendar/SlotCalendar";
 import { getCurrentUser } from "../../api/auth";
 import { createReservation, getAvailability, getPetsForUser, getReservationProfile } from "../../api/reservations";
 
+import GroomingCustomizationSection from "../../components/reservation/GroomingCustomizationSection";
 type Step = {
 	id: string;
 	title: string;
@@ -28,11 +29,21 @@ type Step = {
 
 // reservation form sections shown in the progress bar
 // step.id is used to decide which JSX block renders below
-const STEPS: Step[] = [
+const BASE_STEPS: Step[] = [
 	{ id: "owner", title: "Owner" },
 	{ id: "pet", title: "Pet" },
 	{ id: "medical", title: "Medical" },
 	{ id: "appointment", title: "Appointment" },
+	{ id: "insurance", title: "Insurance" },
+	{ id: "review", title: "Review" },
+];
+
+const GROOMING_DYE_STEPS: Step[] = [
+	{ id: "owner", title: "Owner" },
+	{ id: "pet", title: "Pet" },
+	{ id: "medical", title: "Medical" },
+	{ id: "appointment", title: "Appointment" },
+	{ id: "groomingDye", title: "Grooming Dye" },
 	{ id: "insurance", title: "Insurance" },
 	{ id: "review", title: "Review" },
 ];
@@ -102,15 +113,15 @@ export default function Reservation() {
 	// changing this changes which section is rendered
 	const [stepIndex, setStepIndex] = useState(0);
 
-	// highest step the user has successfully reached so far
-	// used to decide which future steps can be clicked directly
 	const [furthestReachedStepIndex, setFurthestReachedStepIndex] = useState(0);
 
-	// derived current step object
-	// used for:
-	//  rendering the correct section JSX
-	//  rendering progress text
-	const step = STEPS[stepIndex];
+	const isDog = formData.petType.trim().toLowerCase() === "dog";
+	const isGroomingDye = formData.reasonKey === "GROOMING_DYE" && isDog;
+	
+	const steps = isGroomingDye ? GROOMING_DYE_STEPS : BASE_STEPS;
+	
+	const safeStepIndex = Math.min(stepIndex, steps.length - 1);
+	const step = steps[safeStepIndex];
 
 	// available time slots returned by the backend
 	// loaded from GET /api/reservations/availability?reasonKey=...&userID=...&petID=...&days=...
@@ -154,14 +165,11 @@ export default function Reservation() {
 			try {
 				setIsLoadingUser(true);
 				setUserLoadError("");
-
 				const me = await getCurrentUser();
 				if (!alive) return;
-
+				
 				setCurrentUser(me);
-
-				// email is tied to the account
-				// this mirrors it into the form so the Owner section can display it
+				
 				setFormData((prev) => ({ ...prev, email: me.email }));
 			} catch (err: any) {
 				if (!alive) return;
@@ -235,14 +243,12 @@ export default function Reservation() {
 	// alive is the cancellation flag pattern again
 	useEffect(() => {
 		let alive = true;
-
 		(async () => {
 			if (!currentUser) return;
 			if (!formData.reasonKey) return;
-
+	
 			setSlotsLoading(true);
 			setSlotsError("");
-
 			try {
 				const resp = await getAvailability({
 					reasonKey: formData.reasonKey as ReasonKey,
@@ -250,6 +256,7 @@ export default function Reservation() {
 					petID: selectedPetId,
 					days: 90,
 				});
+	
 				if (!alive) return;
 				setAvailableSlots(resp.slots || []);
 			} catch (err: any) {
@@ -261,7 +268,6 @@ export default function Reservation() {
 				setSlotsLoading(false);
 			}
 		})();
-
 		return () => {
 			alive = false;
 		};
@@ -283,17 +289,50 @@ export default function Reservation() {
 		clearFieldError(field);
 	}
 
-	// shared change handler for inputs/selects/textareas
-	// input name must match a key in ReservationFormData
 	function onInputChange(e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
 		const { name, value, type } = e.target;
-
+	
 		if (type === "checkbox") {
 			const checked = (e.target as HTMLInputElement).checked;
 			onFieldChange(name as keyof ReservationFormData, checked as any);
 			return;
 		}
-
+	
+		// If pet type changes, reset appointment-specific progress.
+		// This prevents old dog-only Grooming Dye selections from staying active
+		// after the user changes the pet to Cat/Other.
+		if (name === "petType") {
+			setFormData((prev) => ({
+				...prev,
+				petType: value,
+				reasonKey: "",
+				appointmentDate: "",
+				startTime: "",
+				reasonDetails: "",
+				groomingDyeStyleKey: "",
+				groomingReferencePhotoName: "",
+				groomingReferencePhotoFile: null,
+				groomingStyleNotes: "",
+				consentToFormInfo: false,
+			}));
+	
+			setSelectedSlotId("");
+			setAvailableSlots([]);
+			setFurthestReachedStepIndex(1);
+	
+			setErrors((prev) => {
+				const next = { ...prev };
+				delete next.petType;
+				delete next.reasonKey;
+				delete next.appointmentDate;
+				delete next.startTime;
+				delete next.consentToFormInfo;
+				return next;
+			});
+	
+			return;
+		}
+	
 		onFieldChange(name as keyof ReservationFormData, value as any);
 	}
 
@@ -356,20 +395,25 @@ export default function Reservation() {
 	function onReasonChange(nextReason: ReasonKey | "") {
 		setSelectedSlotId("");
 		setAvailableSlots([]);
-
+	
 		setFormData((prev) => ({
 			...prev,
 			reasonKey: nextReason,
 			appointmentDate: "",
 			startTime: "",
+			groomingDyeStyleKey: nextReason === "GROOMING_DYE" ? prev.groomingDyeStyleKey : "",
+			groomingReferencePhotoName: nextReason === "GROOMING_DYE" ? prev.groomingReferencePhotoName : "",
+			groomingReferencePhotoFile: nextReason === "GROOMING_DYE" ? prev.groomingReferencePhotoFile : null,
+			groomingStyleNotes: nextReason === "GROOMING_DYE" ? prev.groomingStyleNotes : "",
+			consentToFormInfo: false,
 		}));
-
-		// clear reason/slot errors since the user is making a new selection
+	
 		setErrors((prev) => {
 			const next = { ...prev };
 			delete next.reasonKey;
 			delete next.appointmentDate;
 			delete next.startTime;
+			delete next.consentToFormInfo;
 			return next;
 		});
 	}
@@ -496,12 +540,15 @@ export default function Reservation() {
 	function validateStepByIndex(index: number) {
 		let e: ReservationFormErrors = {};
 
-		if (STEPS[index].id === "owner") e = validateOwner(formData);
-		else if (STEPS[index].id === "pet") e = validatePet(formData);
-		else if (STEPS[index].id === "medical") e = validateMedical(formData);
-		else if (STEPS[index].id === "appointment") e = validateAppointment(formData);
-		else if (STEPS[index].id === "insurance") e = validateInsurance(formData);
-		else if (STEPS[index].id === "review") e = validateConsent(formData);
+		const targetStep = steps[index];
+
+		if (targetStep.id === "owner") e = validateOwner(formData);
+		else if (targetStep.id === "pet") e = validatePet(formData);
+		else if (targetStep.id === "medical") e = validateMedical(formData);
+		else if (targetStep.id === "appointment") e = validateAppointment(formData);
+		else if (targetStep.id === "groomingDye") e = {};
+		else if (targetStep.id === "insurance") e = validateInsurance(formData);
+		else if (targetStep.id === "review") e = validateConsent(formData);
 
 		setErrors(e);
 		return Object.keys(e).length === 0;
@@ -517,7 +564,7 @@ export default function Reservation() {
 		if (!validateCurrentStep()) return;
 
 		setStepIndex((i) => {
-			const next = Math.min(i + 1, STEPS.length - 1);
+			const next = Math.min(i + 1, steps.length - 1);
 			setFurthestReachedStepIndex((prev) => Math.max(prev, next));
 			return next;
 		});
@@ -624,189 +671,210 @@ export default function Reservation() {
 			zipCode: prev.zipCode,
 		}));
 	}
+// UI text for the step progress line
+const progressText = useMemo(() => {
+	return `Step ${safeStepIndex + 1} of ${steps.length}: ${step.title}`;
+}, [safeStepIndex, steps.length, step.title]);
 
-	// UI text for the step progress line
-	const progressText = useMemo(() => {
-		return `Step ${stepIndex + 1} of ${STEPS.length}: ${step.title}`;
-	}, [stepIndex, step.title]);
 
-	if (isLoadingUser) {
-		return (
-			<div className="reservation-page">
-				<h1>Make a Reservation</h1>
-				<p>Loading...</p>
-			</div>
-		);
-	}
-
-	if (userLoadError) {
-		return (
-			<div className="reservation-page">
-				<h1>Make a Reservation</h1>
-				<p className="error-text">{userLoadError}</p>
-			</div>
-		);
-	}
-
-	if (!currentUser) {
-		return (
-			<div className="reservation-page">
-				<h1>Make a Reservation</h1>
-				<p className="error-text">not logged in</p>
-			</div>
-		);
-	}
-
+if (isLoadingUser) {
 	return (
 		<div className="reservation-page">
 			<h1>Make a Reservation</h1>
-			<p className="step-progress">{progressText}</p>
-
-			<div className="step-indicator">
-				{STEPS.map((s, idx) => {
-					const isActive = idx === stepIndex;
-					const isCompleted = idx < stepIndex;
-					const canClick = !isSubmitted && (idx <= furthestReachedStepIndex || idx <= stepIndex + 1 || idx < stepIndex);
-
-					return (
-						<div
-							key={s.id}
-							className={`step ${isActive ? "active" : ""} ${isCompleted ? "completed" : ""} ${canClick ? "step-clickable" : ""}`}
-							onClick={() => {
-								if (canClick) goToStep(idx);
-							}}
-							onKeyDown={(e) => {
-								if (canClick) onStepKeyDown(e, idx);
-							}}
-							role="button"
-							tabIndex={canClick ? 0 : -1}
-							aria-current={isActive ? "step" : undefined}
-							aria-disabled={!canClick}
-							title={canClick ? `Go to ${s.title}` : "Complete previous steps first"}
-						>
-							{s.title}
-						</div>
-					);
-				})}
-			</div>
-
-			<div className="form-container">
-				{step.id === "owner" ? (
-					<OwnerDetailsStep formData={formData} errors={errors} onChange={onInputChange} />
-				) : null}
-
-				{step.id === "pet" ? (
-					<PetInformationStep
-						formData={formData}
-						errors={errors}
-						onChange={onInputChange}
-						pets={pets}
-						selectedPetId={selectedPetId}
-						onSelectPet={onSelectPet}
-					/>
-				) : null}
-
-				{step.id === "medical" ? (
-					<MedicalHistoryStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
-				) : null}
-
-				{step.id === "appointment" ? (
-					<div>
-						<h2>Appointment Details</h2>
-						<p>Select a reason, then pick a highlighted date and time.</p>
-
-						<div className="form-row">
-							<label>Reason for visit</label>
-							<select
-								name="reasonKey"
-								value={formData.reasonKey}
-								onChange={(e) => onReasonChange(e.target.value as any)}
-							>
-								<option value="">Select a reason</option>
-								{REASON_OPTIONS.map((opt) => (
-									<option key={opt.value} value={opt.value}>
-										{opt.label}
-									</option>
-								))}
-							</select>
-							{errors.reasonKey ? <p className="field-error">{errors.reasonKey}</p> : null}
-						</div>
-
-						<div className="form-row">
-							<label>Available dates and times</label>
-
-							{!formData.reasonKey ? (
-								<div className="availability-placeholder">
-									Select a reason first to load available dates and times.
-								</div>
-							) : (
-								<SlotCalendar
-									key={formData.reasonKey}
-									slots={availableSlots}
-									value={
-										formData.appointmentDate && formData.startTime
-											? {
-													date: formData.appointmentDate,
-													startTime: formData.startTime,
-													slotId: selectedSlotId || undefined,
-											  }
-											: null
-									}
-									onSelectSlot={onSlotSelect}
-									onBrowseDateChange={onCalendarDateChange}
-									isLoading={slotsLoading}
-									errorText={slotsError}
-								/>
-							)}
-
-							{errors.startTime || errors.appointmentDate ? (
-								<p className="field-error">select a time slot</p>
-							) : null}
-						</div>
-
-						<div className="form-row">
-							<label>Notes (optional)</label>
-							<textarea
-								name="reasonDetails"
-								value={formData.reasonDetails}
-								onChange={onInputChange}
-								rows={4}
-							/>
-						</div>
-					</div>
-				) : null}
-
-				{step.id === "insurance" ? (
-					<InsuranceStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
-				) : null}
-
-				{step.id === "review" ? (
-					<ReviewConfirmStep
-						formData={formData}
-						errors={errors}
-						onFieldChange={onFieldChange}
-						onSubmit={onSubmit}
-						isSubmitting={isSubmitting}
-						isSubmitted={isSubmitted}
-						submitMessage={submitMessage}
-						onCreateNewAppointment={onCreateNewAppointment}
-					/>
-				) : null}
-
-				<div className="navigation-buttons">
-					{stepIndex > 0 && !isSubmitted ? (
-						<button type="button" onClick={goBack} className="back-button">
-							Back
-						</button>
-					) : null}
-
-					{stepIndex < STEPS.length - 1 && !isSubmitted ? (
-						<button type="button" onClick={goNext} className="next-button">
-							Next
-						</button>
-					) : null}
-				</div>
-			</div>
+			<p>Loading...</p>
 		</div>
 	);
 }
+
+if (userLoadError) {
+	return (
+		<div className="reservation-page">
+			<h1>Make a Reservation</h1>
+			<p className="error-text">{userLoadError}</p>
+		</div>
+	);
+}
+
+if (!currentUser) {
+	return (
+		<div className="reservation-page">
+			<h1>Make a Reservation</h1>
+			<p className="error-text">not logged in</p>
+		</div>
+	);
+}
+
+return (
+	<div className="reservation-page">
+		<h1>Make a Reservation</h1>
+		<p className="step-progress">{progressText}</p>
+
+		<div className="step-indicator">
+			{steps.map((s, idx) => {
+				const isActive = idx === stepIndex;
+				const isCompleted = idx < stepIndex;
+				const canClick = !isSubmitted && (idx <= furthestReachedStepIndex || idx <= stepIndex + 1 || idx < stepIndex);
+
+				return (
+					<div
+						key={s.id}
+						className={`step ${isActive ? "active" : ""} ${isCompleted ? "completed" : ""} ${canClick ? "step-clickable" : ""}`}
+						onClick={() => {
+							if (canClick) goToStep(idx);
+						}}
+						onKeyDown={(e) => {
+							if (canClick) onStepKeyDown(e, idx);
+						}}
+						role="button"
+						tabIndex={canClick ? 0 : -1}
+						aria-current={isActive ? "step" : undefined}
+						aria-disabled={!canClick}
+						title={canClick ? `Go to ${s.title}` : "Complete previous steps first"}
+					>
+						{s.title}
+					</div>
+				);
+			})}
+		</div>
+
+		<div className="form-container">
+			{step.id === "owner" ? (
+				<OwnerDetailsStep formData={formData} errors={errors} onChange={onInputChange} />
+			) : null}
+
+			{step.id === "pet" ? (
+				<PetInformationStep
+					formData={formData}
+					errors={errors}
+					onChange={onInputChange}
+					pets={pets}
+					selectedPetId={selectedPetId}
+					onSelectPet={onSelectPet}
+				/>
+			) : null}
+
+			{step.id === "medical" ? (
+				<MedicalHistoryStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
+			) : null}
+
+			{step.id === "appointment" ? (
+				<div>
+					<h2>Appointment Details</h2>
+					<p>Select a reason, then pick a highlighted date and time.</p>
+
+					<div className="form-row">
+						<label>Reason for visit</label>
+						<select
+							name="reasonKey"
+							value={formData.reasonKey}
+							onChange={(e) => onReasonChange(e.target.value as any)}
+						>
+							<option value="">Select a reason</option>
+							{REASON_OPTIONS.filter((opt) => {
+								if (opt.value === "GROOMING_DYE") {
+									return isDog;
+								}
+								return true;
+							}).map((opt) => (
+								<option key={opt.value} value={opt.value}>
+									{opt.label}
+								</option>
+							))}
+						</select>
+						{errors.reasonKey ? <p className="field-error">{errors.reasonKey}</p> : null}
+					</div>
+
+					<div className="form-row">
+						<label>Available dates and times</label>
+
+						{!formData.reasonKey ? (
+							<div className="availability-placeholder">
+								Select a reason first to load available dates and times.
+							</div>
+						) : (
+							<SlotCalendar
+								key={formData.reasonKey}
+								slots={availableSlots}
+								value={
+									formData.appointmentDate && formData.startTime
+										? {
+												date: formData.appointmentDate,
+												startTime: formData.startTime,
+												slotId: selectedSlotId || undefined,
+										  }
+										: null
+								}
+								onSelectSlot={onSlotSelect}
+								onBrowseDateChange={onCalendarDateChange}
+								isLoading={slotsLoading}
+								errorText={slotsError}
+							/>
+						)}
+
+						{errors.startTime || errors.appointmentDate ? (
+							<p className="field-error">select a time slot</p>
+						) : null}
+					</div>
+
+					<div className="form-row">
+						<label>Notes (optional)</label>
+						<textarea
+							name="reasonDetails"
+							value={formData.reasonDetails}
+							onChange={onInputChange}
+							rows={4}
+						/>
+					</div>
+				</div>
+			) : null}
+			{step.id === "groomingDye" ? (
+				<GroomingCustomizationSection
+					value={{
+						groomingDyeStyleKey: formData.groomingDyeStyleKey,
+						groomingReferencePhotoName: formData.groomingReferencePhotoName,
+						groomingReferencePhotoFile: formData.groomingReferencePhotoFile,
+						groomingStyleNotes: formData.groomingStyleNotes,
+					}}
+					onChange={(updates) => {
+						setFormData((prev) => ({
+							...prev,
+							...updates,
+						}));
+					}}
+				/>
+			) : null}
+			
+
+			{step.id === "insurance" ? (
+				<InsuranceStep formData={formData} errors={errors} onFieldChange={onFieldChange} />
+			) : null}
+
+			{step.id === "review" ? (
+				<ReviewConfirmStep
+					formData={formData}
+					errors={errors}
+					onFieldChange={onFieldChange}
+					onSubmit={onSubmit}
+					isSubmitting={isSubmitting}
+					isSubmitted={isSubmitted}
+					submitMessage={submitMessage}
+					onCreateNewAppointment={onCreateNewAppointment}
+				/>
+			) : null}
+
+			<div className="navigation-buttons">
+				{stepIndex > 0 && !isSubmitted ? (
+					<button type="button" onClick={goBack} className="back-button">
+						Back
+					</button>
+				) : null}
+
+            {safeStepIndex < steps.length - 1 && !isSubmitted ? (
+					<button type="button" onClick={goNext} className="next-button">
+						Next
+					</button>
+				) : null}
+			</div>
+		</div>
+	</div>
+);}

@@ -31,7 +31,7 @@
 	width: min(1360px, 100%);
 	margin: 0 auto 24px auto;
 	display: grid;
-	grid-template-columns: repeat(6, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
 	gap: 14px;
 }
 
@@ -449,4 +449,115 @@
 	font-size: 15px;
 	font-weight: 700;
 	color: #b42318;
+}
+
+/* grooming dye customization */
+.grooming-section {
+	margin-top: 22px;
+	padding: 20px;
+	border: 1px solid #cad8e8;
+	border-radius: 16px;
+	background: #f7fbff;
+}
+
+.grooming-section-header {
+	margin-bottom: 18px;
+}
+
+.grooming-section-header h3 {
+	margin: 0 0 6px 0;
+	color: #25436d;
+}
+
+.grooming-section-header p {
+	margin: 0;
+	color: #426386;
+}
+.grooming-style-card {
+	border: 2px solid #cad8e8;
+	border-radius: 14px;
+	background: #edf3fa;
+	padding: 10px;
+	cursor: pointer;
+	text-align: left;
+	transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.grooming-style-card img {
+	width: 100%;
+	height: 135px;
+	object-fit: cover;
+	border-radius: 10px;
+	display: block;
+	margin-bottom: 8px;
+}
+
+.grooming-style-card:hover {
+	transform: translateY(-1px);
+	border-color: #6f93c0;
+	box-shadow: 0 8px 18px rgba(25, 53, 85, 0.1);
+}
+
+.grooming-style-card.selected {
+	border-color: #4d79b9;
+	box-shadow: 0 0 0 3px rgba(78, 121, 185, 0.18);
+}
+
+.grooming-style-card img {
+	width: 100%;
+	height: 150px;
+	object-fit: contain;
+	border-radius: 10px;
+	display: block;
+	margin-bottom: 8px;
+	background: #f7fbff;
+}
+.grooming-style-grid {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 16px;
+	margin-bottom: 18px;
+}
+
+.grooming-style-card span {
+	font-size: 14px;
+	font-weight: 800;
+	color: #284a74;
+}
+
+.grooming-actions {
+	margin-bottom: 18px;
+}
+
+.surprise-button {
+	border: 1px solid #3e72ad;
+	background: #3e72ad;
+	color: #ffffff;
+	border-radius: 10px;
+	padding: 10px 16px;
+	font-size: 14px;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.surprise-button:hover {
+	background: #315f92;
+	border-color: #315f92;
+}
+
+.grooming-review-box {
+	margin: 14px 0;
+	padding: 14px;
+	border: 1px solid #cad8e8;
+	border-radius: 12px;
+	background: #edf5fe;
+}
+
+.grooming-review-box h4 {
+	margin: 0 0 10px 0;
+	color: #25436d;
+}
+
+.grooming-review-box p {
+	margin: 6px 0;
 }

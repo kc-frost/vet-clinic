@@ -138,6 +138,21 @@ const REASON_RULES = {
 		],
 	},
 
+	GROOMING_DYE: {
+		reasonKey: "GROOMING_DYE",
+		durationMinutes: 75,
+		requiredStaff: [{ roleKey: "GROOMER", qty: 1 }],
+		roomType: "GROOMING",
+		nonConsumables: [],
+		consumables: [
+			{ itemKey: "TROPICLEAN_SHAMPOO_DOSE", qty: 1 },
+			{ itemKey: "EAR_CLEANING_SOLUTION_DOSE", qty: 1 },
+			{ itemKey: "NAIL_GRINDER_DISPOSABLE_HEAD", qty: 1 },
+			{ itemKey: "PET_WIPE_PACK", qty: 1 },
+			{ itemKey: "PET_SAFE_DYE_DOSE", qty: 1 },
+		],
+	},
+
 	EMERGENCY_TRAUMA: {
 		reasonKey: "EMERGENCY_TRAUMA",
 		durationMinutes: 120,
@@ -186,6 +201,7 @@ const REASON_ALIASES = {
 	emergency: "EMERGENCY_TRAUMA",
 	emergency_trauma: "EMERGENCY_TRAUMA",
 	ultrasound: "ULTRASOUND",
+	grooming_dye: "GROOMING_DYE"
 };
 
 /*
@@ -670,10 +686,13 @@ async function insertAppointmentFormFromSnapshot(conn, appointmentID, form) {
 			pastInjuriesConditions,
 			vaccinationsUpToDate,
 			heartwormPreventionCurrent,
+			groomingDyeStyleKey,
+			groomingReferencePhotoPath,
+			groomingStyleNotes,
 			insuranceProvider,
 			insuranceMemberId,
 			consentToFormInfo
-		) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		[
 			appointmentID,
 			form.legalFirstName,
@@ -696,6 +715,9 @@ async function insertAppointmentFormFromSnapshot(conn, appointmentID, form) {
 			form.pastInjuriesConditions,
 			form.vaccinationsUpToDate,
 			form.heartwormPreventionCurrent,
+			form.groomingDyeStyleKey || null,
+			form.groomingReferencePhotoPath || null,
+			form.groomingStyleNotes || null,
 			form.insuranceProvider || null,
 			form.insuranceMemberId || null,
 			form.consentToFormInfo ? 1 : 0,

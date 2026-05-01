@@ -120,6 +120,22 @@ export const REASON_RULES = {
 			{ itemKey: "PET_WIPE_PACK", qty: 1 },
 		],
 	},
+	
+	GROOMING_DYE: {
+		reasonKey: "GROOMING_DYE",
+		durationMinutes: 75,
+		requiredStaff: [{ roleKey: "GROOMER", qty: 1 }],
+		roomType: "GROOMING",
+		nonConsumables: [],
+		consumables: [
+			{ itemKey: "TROPICLEAN_SHAMPOO_DOSE", qty: 1 },
+			{ itemKey: "EAR_CLEANING_SOLUTION_DOSE", qty: 1 },
+			{ itemKey: "NAIL_GRINDER_DISPOSABLE_HEAD", qty: 1 },
+			{ itemKey: "PET_WIPE_PACK", qty: 1 },
+			{ itemKey: "PET_SAFE_DYE_DOSE", qty: 1 },
+		],
+	},
+	
 
 	EMERGENCY_TRAUMA: {
 		reasonKey: "EMERGENCY_TRAUMA",
@@ -162,9 +178,11 @@ const REASON_ALIASES = {
 	cast_change: "CAST_CHANGE",
 	basic_grooming: "BASIC_GROOMING",
 	flea_bath_grooming: "FLEA_BATH_GROOMING",
+	grooming_dye: "GROOMING_DYE",
 	emergency: "EMERGENCY_TRAUMA",
 	emergency_trauma: "EMERGENCY_TRAUMA",
 	ultrasound: "ULTRASOUND",
+
 };
 
 export function normalizeReasonKey(rawReasonKey) {
