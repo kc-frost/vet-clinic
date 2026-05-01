@@ -279,8 +279,12 @@ create table appointment_summary(
 	finalizedByStaffID int null,
 	finalizedAt datetime null,
 
+	-- one follow up can be linked back to one summary source appointment
+	followUpAppointmentID int null,
+
 	foreign key (appointmentID) references appointment(appointmentID),
-	foreign key (finalizedByStaffID) references staff(staffID)
+	foreign key (finalizedByStaffID) references staff(staffID),
+	foreign key (followUpAppointmentID) references appointment(appointmentID)
 );
 
 -- links consumables used by each appointment

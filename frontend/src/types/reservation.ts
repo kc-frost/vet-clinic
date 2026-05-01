@@ -105,7 +105,9 @@ export type PetProfile = {
 	height: number | null;
 	behavior: string;
 	currentMedications: string;
+	medicationHistory: string;
 	knownAllergies: string;
+	currentConditions: string;
 	pastInjuriesConditions: string;
 	vaccinationsUpToDate: string;
 	heartwormPreventionCurrent: string;
@@ -185,7 +187,9 @@ export type ReservationFormData = {
 
 	// medical/safety snapshot fields
 	currentMedications: string;
+	medicationHistory: string;
 	knownAllergies: string;
+	currentConditions: string;
 	pastInjuriesConditions: string;
 	vaccinationsUpToDate: string;
 	heartwormPreventionCurrent: string;
@@ -223,7 +227,9 @@ export const INITIAL_RESERVATION_FORM: ReservationFormData = {
 	reasonDetails: "",
 
 	currentMedications: "",
+	medicationHistory: "",
 	knownAllergies: "",
+	currentConditions: "",
 	pastInjuriesConditions: "",
 	vaccinationsUpToDate: "",
 	heartwormPreventionCurrent: "",

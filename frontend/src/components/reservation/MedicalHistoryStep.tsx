@@ -56,6 +56,36 @@ export default function MedicalHistoryStep({formData, errors, onFieldChange}: Me
 			</div>
 
 			<div className="form-row">
+				<label htmlFor="medicationHistory">Medication History *</label>
+				<textarea
+					id="medicationHistory"
+					rows={3}
+					maxLength={500}
+					value={formData.medicationHistory}
+					onChange={(e) => onFieldChange("medicationHistory", e.target.value)}
+					placeholder="Past medications. If none, type 'None'."
+				/>
+				{errors.medicationHistory ? (
+					<p className="field-error">{errors.medicationHistory}</p>
+				) : null}
+			</div>
+
+			<div className="form-row">
+				<label htmlFor="currentConditions">Current Conditions *</label>
+				<textarea
+					id="currentConditions"
+					rows={3}
+					maxLength={500}
+					value={formData.currentConditions}
+					onChange={(e) => onFieldChange("currentConditions", e.target.value)}
+					placeholder="Current diagnosed issues or concerns. If none, type 'None'."
+				/>
+				{errors.currentConditions ? (
+					<p className="field-error">{errors.currentConditions}</p>
+				) : null}
+			</div>
+
+			<div className="form-row">
 				<label htmlFor="knownAllergies">Known Allergies *</label>
 				<textarea
 					id="knownAllergies"

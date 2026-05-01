@@ -30,8 +30,14 @@ function toDisplayDateTime(value) {
 }
 
 function formatReasonLabel(reasonKey) {
-	/* Turn a reason key like WELLNESS_EXAM into display text. */
-	return String(reasonKey || "").replaceAll("_", " ");
+	/* Turn a reason key like WELLNESS_EXAM into readable title text */
+	return String(reasonKey || "")
+		.replaceAll("_", " ")
+		.toLowerCase()
+		.split(/\s+/)
+		.filter(Boolean)
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(" ");
 }
 
 function getHoursUntil(dateValue) {
@@ -280,14 +286,15 @@ async function sendCustomer24HourEmails() {
 			continue;
 		}
 
-		const scheduledText = toSqlDateTimeString(row.date);
+		const scheduledText = toDisplayDateTime(row.date);
 		const helloName = row.legalFirstName ? ` ${row.legalFirstName}` : "";
 		const petText = row.petName ? ` for ${row.petName}` : "";
+		const reasonLabel = formatReasonLabel(row.reasonKey);
 
 		await sendEmail({
 			to: row.email,
 			subject: "Appointment reminder",
-			text: `Hello${helloName}, this is a reminder that your ${row.reasonKey} appointment${petText} is scheduled for ${scheduledText}.`,
+			text: `Hello${helloName}, this is a reminder that your ${reasonLabel} appointment${petText} is scheduled for ${scheduledText}.`,
 		});
 
 		await logEmail({

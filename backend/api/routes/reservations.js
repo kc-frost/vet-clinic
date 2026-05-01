@@ -620,7 +620,7 @@ router.get("/pets", requireAuth, async (req, res) => {
 	try {
 		/*
 			Use the authenticated session user only when loading pets
-			for the reservation wizard dropdown.
+			for the reservation wizard dropdown
 		*/
 		const userID = resolveUserIdFromRequest(req);
 
@@ -630,7 +630,7 @@ router.get("/pets", requireAuth, async (req, res) => {
 		}
 
 		/*
-			Load all saved pets for this user in alphabetical order.
+			Load all saved pets for this user in alphabetical order
 		*/
 		const [rows] = await pool.execute(
 			`select
@@ -645,7 +645,9 @@ router.get("/pets", requireAuth, async (req, res) => {
 				height,
 				behavior,
 				currentMedications,
+				medicationHistory,
 				knownAllergies,
+				currentConditions,
 				pastInjuriesConditions,
 				vaccinationsUpToDate,
 				heartwormPreventionCurrent
@@ -669,7 +671,9 @@ router.get("/pets", requireAuth, async (req, res) => {
 				height: p.height === null || p.height === undefined ? null : Number(p.height),
 				behavior: p.behavior || "",
 				currentMedications: p.currentMedications || "",
+				medicationHistory: p.medicationHistory || "",
 				knownAllergies: p.knownAllergies || "",
+				currentConditions: p.currentConditions || "",
 				pastInjuriesConditions: p.pastInjuriesConditions || "",
 				vaccinationsUpToDate: p.vaccinationsUpToDate || "",
 				heartwormPreventionCurrent: p.heartwormPreventionCurrent || "",
@@ -684,7 +688,7 @@ router.get("/pets", requireAuth, async (req, res) => {
 router.patch("/pets/:petID", requireAuth, async (req, res) => {
 	try {
 		/*
-			Only allow the logged-in user to update one of their own pets.
+			Only allow the logged-in user to update one of their own pets
 		*/
 		const userID = resolveUserIdFromRequest(req);
 		const petID = Number(req.params.petID);
@@ -702,25 +706,24 @@ router.patch("/pets/:petID", requireAuth, async (req, res) => {
 		const body = req.body || {};
 
 		/*
-			Normalize all incoming editable pet fields before saving.
+			Normalize all incoming editable pet fields before saving
 		*/
 		const petName = String(body.petName || "");
 		const petType = String(body.petType || "");
 		const breed = String(body.breed || "");
 		const petSex = String(body.petSex || "");
 		const spayedNeutered = String(body.spayedNeutered || "");
-		const age =
-			body.age === "" || body.age === null || body.age === undefined
-				? null
-				: Number(body.age);
+		const age = body.age === "" || body.age === null || body.age === undefined ? null : Number(body.age);
 		const currentMedications = String(body.currentMedications || "");
+		const medicationHistory = String(body.medicationHistory || "");
 		const knownAllergies = String(body.knownAllergies || "");
+		const currentConditions = String(body.currentConditions || "");
 		const pastInjuriesConditions = String(body.pastInjuriesConditions || "");
 		const vaccinationsUpToDate = String(body.vaccinationsUpToDate || "");
 		const heartwormPreventionCurrent = String(body.heartwormPreventionCurrent || "");
 
 		/*
-			Update the pet only if it belongs to the currently logged-in user.
+			Update the pet only if it belongs to the currently logged-in user
 		*/
 		const [result] = await pool.execute(
 			`update pet set
@@ -731,7 +734,9 @@ router.patch("/pets/:petID", requireAuth, async (req, res) => {
 				spayedNeutered = ?,
 				age = ?,
 				currentMedications = ?,
+				medicationHistory = ?,
 				knownAllergies = ?,
+				currentConditions = ?,
 				pastInjuriesConditions = ?,
 				vaccinationsUpToDate = ?,
 				heartwormPreventionCurrent = ?
@@ -744,7 +749,9 @@ router.patch("/pets/:petID", requireAuth, async (req, res) => {
 				spayedNeutered,
 				age,
 				currentMedications,
+				medicationHistory,
 				knownAllergies,
+				currentConditions,
 				pastInjuriesConditions,
 				vaccinationsUpToDate,
 				heartwormPreventionCurrent,
@@ -760,7 +767,7 @@ router.patch("/pets/:petID", requireAuth, async (req, res) => {
 
 		/*
 			Re-read the updated pet so the response matches the exact
-			current database state.
+			current database state
 		*/
 		const [rows] = await pool.execute(
 			`select
@@ -775,12 +782,14 @@ router.patch("/pets/:petID", requireAuth, async (req, res) => {
 				height,
 				behavior,
 				currentMedications,
+				medicationHistory,
 				knownAllergies,
+				currentConditions,
 				pastInjuriesConditions,
 				vaccinationsUpToDate,
 				heartwormPreventionCurrent
-			from pet
-			where petID = ? and userID = ?`,
+			 from pet
+			 where petID = ? and userID = ?`,
 			[petID, userID]
 		);
 
@@ -802,7 +811,9 @@ router.patch("/pets/:petID", requireAuth, async (req, res) => {
 			height: p.height === null || p.height === undefined ? null : Number(p.height),
 			behavior: p.behavior || "",
 			currentMedications: p.currentMedications || "",
+			medicationHistory: p.medicationHistory || "",
 			knownAllergies: p.knownAllergies || "",
+			currentConditions: p.currentConditions || "",
 			pastInjuriesConditions: p.pastInjuriesConditions || "",
 			vaccinationsUpToDate: p.vaccinationsUpToDate || "",
 			heartwormPreventionCurrent: p.heartwormPreventionCurrent || "",
@@ -1498,7 +1509,7 @@ async function reserveConsumables(conn, rule) {
 async function insertAppointmentForm(conn, appointmentID, form) {
 	/*
 		Store a snapshot of the submitted reservation form so the exact
-		booking-time information is preserved even if profiles change later.
+		booking-time information is preserved even if profiles change later
 	*/
 	const sql = `insert into appointment_form (
 		appointmentID,
@@ -1518,14 +1529,19 @@ async function insertAppointmentForm(conn, appointmentID, form) {
 		petAge,
 		reasonDetails,
 		currentMedications,
+		medicationHistory,
 		knownAllergies,
+		currentConditions,
 		pastInjuriesConditions,
 		vaccinationsUpToDate,
 		heartwormPreventionCurrent,
+		groomingDyeStyleKey,
+		groomingReferencePhotoPath,
+		groomingStyleNotes,
 		insuranceProvider,
 		insuranceMemberId,
 		consentToFormInfo
-	) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
+	) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
 
 	const params = [
 		appointmentID,
@@ -1545,10 +1561,15 @@ async function insertAppointmentForm(conn, appointmentID, form) {
 		form.petAge,
 		form.reasonDetails || "",
 		form.currentMedications,
+		form.medicationHistory,
 		form.knownAllergies,
+		form.currentConditions,
 		form.pastInjuriesConditions,
 		form.vaccinationsUpToDate,
 		form.heartwormPreventionCurrent,
+		form.groomingDyeStyleKey || null,
+		form.groomingReferencePhotoPath || null,
+		form.groomingStyleNotes || null,
 		form.insuranceProvider || null,
 		form.insuranceMemberId || null,
 		form.consentToFormInfo ? 1 : 0,
@@ -1606,7 +1627,7 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 	/*
 		Pet profile behavior is optional. If pet profiles are disabled and
 		no existing petID was chosen, the appointment just stores the
-		snapshot form data and leaves appointment.petID as null.
+		snapshot form data and leaves appointment.petID as null
 	*/
 	const createPetProfile = body?.createPetProfile === true || body?.enablePetProfiles === true;
 
@@ -1623,7 +1644,9 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 		spayedNeutered: form.spayedNeutered,
 		age: Number(form.petAge),
 		currentMedications: form.currentMedications,
+		medicationHistory: form.medicationHistory,
 		knownAllergies: form.knownAllergies,
+		currentConditions: form.currentConditions,
 		pastInjuriesConditions: form.pastInjuriesConditions,
 		vaccinationsUpToDate: form.vaccinationsUpToDate,
 		heartwormPreventionCurrent: form.heartwormPreventionCurrent,
@@ -1632,7 +1655,7 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 	if (petID) {
 		/*
 			If an existing pet was chosen, update that saved pet profile
-			so it matches the newest submitted information.
+			so it matches the newest submitted information
 		*/
 		await conn.execute(
 			`update pet set
@@ -1643,7 +1666,9 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 			spayedNeutered = ?,
 			age = ?,
 			currentMedications = ?,
+			medicationHistory = ?,
 			knownAllergies = ?,
+			currentConditions = ?,
 			pastInjuriesConditions = ?,
 			vaccinationsUpToDate = ?,
 			heartwormPreventionCurrent = ?
@@ -1656,7 +1681,9 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 				petFields.spayedNeutered,
 				petFields.age,
 				petFields.currentMedications,
+				petFields.medicationHistory,
 				petFields.knownAllergies,
+				petFields.currentConditions,
 				petFields.pastInjuriesConditions,
 				petFields.vaccinationsUpToDate,
 				petFields.heartwormPreventionCurrent,
@@ -1669,7 +1696,7 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 	}
 
 	/*
-		Otherwise create a brand-new saved pet profile for this user.
+		Otherwise create a brand-new saved pet profile for this user
 	*/
 	const [result] = await conn.execute(
 		`insert into pet (
@@ -1681,11 +1708,13 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 			spayedNeutered,
 			age,
 			currentMedications,
+			medicationHistory,
 			knownAllergies,
+			currentConditions,
 			pastInjuriesConditions,
 			vaccinationsUpToDate,
 			heartwormPreventionCurrent
-		) values (?,?,?,?,?,?,?,?,?,?,?,?)`,
+		) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		[
 			userID,
 			petFields.petName,
@@ -1695,7 +1724,9 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 			petFields.spayedNeutered,
 			petFields.age,
 			petFields.currentMedications,
+			petFields.medicationHistory,
 			petFields.knownAllergies,
+			petFields.currentConditions,
 			petFields.pastInjuriesConditions,
 			petFields.vaccinationsUpToDate,
 			petFields.heartwormPreventionCurrent,
@@ -1708,7 +1739,7 @@ async function maybeCreateOrUpdatePetProfile(conn, userID, body, form) {
 function validateAndBuildForm(body) {
 	/*
 		Validate required reservation wizard fields and return a cleaned
-		form object ready for saving if everything passes.
+		form object ready for saving if everything passes
 	*/
 	const form = pickFormData(body);
 	const missing = [];
@@ -1733,7 +1764,9 @@ function validateAndBuildForm(body) {
 	if (petAge === null || petAge < 0) missing.push("petAge");
 
 	const currentMedications = requireField(form.currentMedications, "currentMedications", missing);
+	const medicationHistory = requireField(form.medicationHistory, "medicationHistory", missing);
 	const knownAllergies = requireField(form.knownAllergies, "knownAllergies", missing);
+	const currentConditions = requireField(form.currentConditions, "currentConditions", missing);
 	const pastInjuriesConditions = requireField(form.pastInjuriesConditions, "pastInjuriesConditions", missing);
 	const vaccinationsUpToDate = requireField(form.vaccinationsUpToDate, "vaccinationsUpToDate", missing);
 	const heartwormPreventionCurrent = requireField(form.heartwormPreventionCurrent, "heartwormPreventionCurrent", missing);
@@ -1766,16 +1799,174 @@ function validateAndBuildForm(body) {
 			reasonDetails: stringOrEmpty(form.reasonDetails).trim(),
 
 			currentMedications: currentMedications.trim(),
+			medicationHistory: medicationHistory.trim(),
 			knownAllergies: knownAllergies.trim(),
+			currentConditions: currentConditions.trim(),
 			pastInjuriesConditions: pastInjuriesConditions.trim(),
 			vaccinationsUpToDate: vaccinationsUpToDate.trim(),
 			heartwormPreventionCurrent: heartwormPreventionCurrent.trim(),
+			groomingDyeStyleKey: trimOrNull(form.groomingDyeStyleKey),
+			groomingReferencePhotoPath: trimOrNull(form.groomingReferencePhotoPath),
+			groomingStyleNotes: trimOrNull(form.groomingStyleNotes),
 
 			insuranceProvider: trimOrNull(form.insuranceProvider),
 			insuranceMemberId: trimOrNull(form.insuranceMemberId),
 
 			consentToFormInfo,
 		},
+	};
+}
+
+export async function createReservationForUser(conn, userID, body) {
+	const rule = getRule(body.reasonKey || body.reasonForVisit);
+	if (!rule) {
+		const error = new Error("invalid reasonKey");
+		error.status = 400;
+		throw error;
+	}
+
+	let appointmentDate = String(body.appointmentDate || "");
+	let startTime = String(body.startTime || "");
+
+	if ((!appointmentDate || !startTime) && body.slotId) {
+		const parsed = parseSlotId(body.slotId);
+		appointmentDate = parsed?.date || appointmentDate;
+		startTime = parsed?.startTime || startTime;
+	}
+
+	if ((!appointmentDate || !startTime) && body.appointmentTimeSlot) {
+		const parsed = parseSlotId(body.appointmentTimeSlot);
+		appointmentDate = parsed?.date || appointmentDate;
+		startTime = parsed?.startTime || startTime;
+	}
+
+	if (!isValidDateOnly(appointmentDate) || !isValidTimeOnly(startTime)) {
+		const error = new Error("invalid appointmentDate or startTime");
+		error.status = 400;
+		throw error;
+	}
+
+	const startMinutes = timeStrToMinutes(startTime);
+	const endMinutes = startMinutes + Number(rule.durationMinutes || 0);
+	if (Number.isNaN(startMinutes) || startMinutes % SLOT_STEP_MINUTES !== 0) {
+		const error = new Error("startTime must be on the 15 minute grid");
+		error.status = 400;
+		throw error;
+	}
+	if (startMinutes < OPEN_MINUTES || endMinutes > CLOSE_MINUTES) {
+		const error = new Error("requested time is outside clinic hours");
+		error.status = 400;
+		throw error;
+	}
+
+	const endTime = minutesToTimeStr(endMinutes);
+	const startSql = formatSqlDateTime(appointmentDate, startTime);
+	const endSql = formatSqlDateTime(appointmentDate, endTime);
+
+	const formResult = validateAndBuildForm(body);
+	if (!formResult.ok) {
+		const error = new Error(formResult.error);
+		error.status = 400;
+		throw error;
+	}
+
+	const form = formResult.form;
+
+	const [userRows] = await conn.execute(
+		"select userID from customer where userID = ? and coalesce(isDeactivated, 0) = 0",
+		[userID]
+	);
+	if (!userRows.length) {
+		const error = new Error("missing or invalid userID");
+		error.status = 400;
+		throw error;
+	}
+
+	const petResult = await maybeCreateOrUpdatePetProfile(conn, userID, body, form);
+	const petID = petResult.petID;
+
+	if (petID) {
+		const [petOverlapRows] = await conn.execute(
+			`select appointmentID
+			 from appointment
+			 where petID = ?
+			 and date < ?
+			 and date_add(date, interval durationMinutes minute) > ?
+			 and coalesce(isCanceled, 0) = 0
+			 for update`,
+			[petID, endSql, startSql]
+		);
+
+		if (petOverlapRows.length) {
+			const error = new Error("that pet already has an overlapping appointment");
+			error.status = 409;
+			throw error;
+		}
+	}
+
+	const staffAssignments = await selectAvailableStaffAssignment(conn, rule, appointmentDate, startSql, endSql);
+	if (!staffAssignments) {
+		const error = new Error("no staff available for that time");
+		error.status = 409;
+		throw error;
+	}
+
+	const roomNumber = await selectAvailableRoom(conn, rule.roomType, startSql, endSql);
+	if (!roomNumber) {
+		const error = new Error("no room available for that time");
+		error.status = 409;
+		throw error;
+	}
+
+	const equipCheck = await checkNonConsumableCapacityForInterval(conn, rule, startSql, endSql);
+	if (!equipCheck.ok) {
+		const error = new Error(equipCheck.error);
+		error.status = 409;
+		throw error;
+	}
+
+	const consumableReserve = await reserveConsumables(conn, rule);
+	if (!consumableReserve.ok) {
+		const error = new Error(consumableReserve.error);
+		error.status = 409;
+		throw error;
+	}
+
+	await maybeFillCustomerProfileIfEmpty(conn, userID, form);
+
+	const [apptInsert] = await conn.execute(
+		`insert into appointment (
+			userID,
+			petID,
+			roomNumber,
+			reasonKey,
+			date,
+			durationMinutes
+		) values (?,?,?,?,?,?)`,
+		[userID, petID, roomNumber, rule.reasonKey, startSql, rule.durationMinutes]
+	);
+
+	const appointmentID = Number(apptInsert.insertId);
+
+	await insertAppointmentForm(conn, appointmentID, form);
+	await insertAppointmentStaffRows(conn, appointmentID, staffAssignments);
+
+	for (const r of consumableReserve.reserved || []) {
+		await conn.execute(
+			"insert into appointment_consumable (appointmentID, itemID, qtyUsed) values (?,?,?)",
+			[appointmentID, r.itemID, r.qtyUsed]
+		);
+	}
+
+	return {
+		ok: true,
+		appointmentID,
+		reasonKey: rule.reasonKey,
+		date: appointmentDate,
+		durationMinutes: rule.durationMinutes,
+		assignedStaff: staffAssignments,
+		roomNumber,
+		petID,
 	};
 }
 

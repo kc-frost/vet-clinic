@@ -4,6 +4,7 @@ import {
 	getCustomerSummary,
 	getFollowUpPrefill,
 	getStaffSummary,
+	createFollowUpAppointment,
 	finalizeSummary,
 	saveDraftSummary,
 } from "../lib/appointmentSummaryService.js";
@@ -40,6 +41,15 @@ router.post("/staff/:appointmentID/finalize", requireStaff, async (req, res) => 
 router.get("/staff/:appointmentID/follow-up-prefill", requireStaff, async (req, res) => {
 	try {
 		const result = await getFollowUpPrefill(req.session.userID, req.params.appointmentID);
+		res.json(result);
+	} catch (error) {
+		res.status(error.status || 500).json({ error: error.message });
+	}
+});
+
+router.post("/staff/:appointmentID/follow-up", requireStaff, async (req, res) => {
+	try {
+		const result = await createFollowUpAppointment(req.session.userID, req.params.appointmentID, req.body);
 		res.json(result);
 	} catch (error) {
 		res.status(error.status || 500).json({ error: error.message });

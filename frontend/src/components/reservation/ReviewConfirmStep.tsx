@@ -102,7 +102,13 @@ export default function ReviewConfirmStep({
 					<strong>Current medications:</strong> {formData.currentMedications || "—"}
 				</p>
 				<p>
+					<strong>Medication history:</strong> {formData.medicationHistory || "—"}
+				</p>
+				<p>
 					<strong>Known allergies:</strong> {formData.knownAllergies || "—"}
+				</p>
+				<p>
+					<strong>Current conditions:</strong> {formData.currentConditions || "—"}
 				</p>
 				<p>
 					<strong>Past injuries / conditions:</strong> {formData.pastInjuriesConditions || "—"}

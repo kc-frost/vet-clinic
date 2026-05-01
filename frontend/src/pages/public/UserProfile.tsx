@@ -119,7 +119,9 @@ type PetErrors = Partial<Record<
 	| "spayedNeutered"
 	| "age"
 	| "currentMedications"
+	| "medicationHistory"
 	| "knownAllergies"
+	| "currentConditions"
 	| "pastInjuriesConditions"
 	| "vaccinationsUpToDate"
 	| "heartwormPreventionCurrent",
@@ -250,7 +252,9 @@ function normalizePetForDraft(pet: Pet) {
 		spayedNeutered: pet.spayedNeutered || "",
 		age: pet.age === null || pet.age === undefined ? "" : String(pet.age),
 		currentMedications: pet.currentMedications || "",
+		medicationHistory: pet.medicationHistory || "",
 		knownAllergies: pet.knownAllergies || "",
+		currentConditions: pet.currentConditions || "",
 		pastInjuriesConditions: pet.pastInjuriesConditions || "",
 		vaccinationsUpToDate: pet.vaccinationsUpToDate || "",
 		heartwormPreventionCurrent: pet.heartwormPreventionCurrent || "",
@@ -327,7 +331,9 @@ const DEV_PETS: Pet[] = [
 		height: 2,
 		behavior: "Friendly",
 		currentMedications: "None",
+		medicationHistory: "None",
 		knownAllergies: "Chicken",
+		currentConditions: "None",
 		pastInjuriesConditions: "Sprained leg in 2024",
 		vaccinationsUpToDate: "Yes",
 		heartwormPreventionCurrent: "Yes",
@@ -345,7 +351,9 @@ const DEV_PETS: Pet[] = [
 		height: 1,
 		behavior: "Calm",
 		currentMedications: "None",
+		medicationHistory: "None",
 		knownAllergies: "None",
+		currentConditions: "None",
 		pastInjuriesConditions: "None",
 		vaccinationsUpToDate: "Yes",
 		heartwormPreventionCurrent: "No",
@@ -1051,7 +1059,9 @@ export default function UserProfile() {
 		}
 
 		requireIfNeeded("currentMedications");
+		requireIfNeeded("medicationHistory");
 		requireIfNeeded("knownAllergies");
+		requireIfNeeded("currentConditions");
 		requireIfNeeded("pastInjuriesConditions");
 		requireIfNeeded("vaccinationsUpToDate");
 		requireIfNeeded("heartwormPreventionCurrent");
@@ -1653,6 +1663,16 @@ export default function UserProfile() {
 									</div>
 
 									<div className="fieldRow">
+										<label>Medication History</label>
+										<textarea
+											className="fieldInput fieldTextarea"
+											value={draft.medicationHistory}
+											onChange={(e) => onPetDraftChange(pet.petID, "medicationHistory", e.target.value)}
+										/>
+										{petFieldErrors.medicationHistory ? <p className="fieldError">{petFieldErrors.medicationHistory}</p> : null}
+									</div>
+
+									<div className="fieldRow">
 										<label>Allergies</label>
 										<textarea
 											className="fieldInput fieldTextarea"
@@ -1660,6 +1680,16 @@ export default function UserProfile() {
 											onChange={(e) => onPetDraftChange(pet.petID, "knownAllergies", e.target.value)}
 										/>
 										{petFieldErrors.knownAllergies ? <p className="fieldError">{petFieldErrors.knownAllergies}</p> : null}
+									</div>
+
+									<div className="fieldRow">
+										<label>Current Conditions</label>
+										<textarea
+											className="fieldInput fieldTextarea"
+											value={draft.currentConditions}
+											onChange={(e) => onPetDraftChange(pet.petID, "currentConditions", e.target.value)}
+										/>
+										{petFieldErrors.currentConditions ? <p className="fieldError">{petFieldErrors.currentConditions}</p> : null}
 									</div>
 
 									<div className="fieldRow">

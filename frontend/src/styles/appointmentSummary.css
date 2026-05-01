@@ -272,3 +272,14 @@
 		justify-content: flex-start;
 	}
 }
+
+.appointmentSummaryFollowUpBox {
+	padding: 12px;
+	border: 1px solid #d9e4ef;
+	border-radius: 12px;
+	background: #f8fbff;
+}
+
+.appointmentSummaryFollowUpCalendar {
+	margin-top: 12px;
+}

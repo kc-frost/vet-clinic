@@ -2,6 +2,8 @@ import { api } from "./client";
 import type {
 	AppointmentSummaryDraftPayload,
 	CustomerAppointmentSummaryResponse,
+	CreateFollowUpPayload,
+	CreateFollowUpResponse,
 	FollowUpPrefillResponse,
 	StaffAppointmentSummaryResponse,
 } from "../types/appointmentSummary";
@@ -34,5 +36,12 @@ export async function getFollowUpPrefill(appointmentID: number): Promise<FollowU
 export async function getCustomerAppointmentSummary(appointmentID: number): Promise<CustomerAppointmentSummaryResponse> {
 	return api<CustomerAppointmentSummaryResponse>(`/appointment-summaries/customer/${appointmentID}`, {
 		method: "GET",
+	});
+}
+
+export async function createFollowUpAppointment(appointmentID: number, payload: CreateFollowUpPayload): Promise<CreateFollowUpResponse> {
+	return api<CreateFollowUpResponse>(`/appointment-summaries/staff/${appointmentID}/follow-up`, {
+		method: "POST",
+		body: payload,
 	});
 }

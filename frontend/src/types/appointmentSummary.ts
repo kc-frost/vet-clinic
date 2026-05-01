@@ -14,9 +14,11 @@ export type AppointmentSummaryAppointment = {
 	groomingDyeStyleKey: string;
 	groomingReferencePhotoPath: string;
 	groomingStyleNotes: string;
+	followUpAppointmentID: number | null;
 };
 
 export type AppointmentSummaryOwner = {
+	userID: number;
 	legalFirstName: string;
 	legalLastName: string;
 	email: string;
@@ -120,3 +122,20 @@ export type FollowUpPrefillResponse = {
 };
 
 export type CustomerAppointmentSummaryResponse = StaffAppointmentSummaryResponse;
+
+export type CreateFollowUpPayload = {
+	reasonKey: string;
+	appointmentDate: string;
+	startTime: string;
+};
+
+export type CreateFollowUpResponse = {
+	ok: boolean;
+	appointmentId: number;
+	reasonKey: string;
+	date: string;
+	durationMinutes: number;
+	roomNumber: number;
+	petID: number | null;
+	followUpAppointmentID: number;
+};

@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+	createFollowUpAppointment,
 	finalizeStaffAppointmentSummary,
-	getFollowUpPrefill,
 	getStaffAppointmentSummary,
 	saveStaffAppointmentSummary,
 } from "../../api/appointmentSummary";
+import { getAvailability } from "../../api/reservations";
 import type {
 	AppointmentSummaryDraftPayload,
 	DraftPetProfile,
 	StaffAppointmentSummaryResponse,
 	SummarySaveStatus,
 } from "../../types/appointmentSummary";
+import type { AvailableSlot, ReasonKey } from "../../types/reservation";
+import { REASON_OPTIONS } from "../../types/reservation";
+import SlotCalendar from "../../components/calendar/SlotCalendar";
 import "../../styles/appointmentSummary.css";
 
 // How long staff has to stop typing before autosave runs
@@ -128,6 +132,11 @@ export default function AppointmentSummary() {
 	const [finalizing, setFinalizing] = useState(false);
 	const [followUpLoading, setFollowUpLoading] = useState(false);
 	const [followUpMessage, setFollowUpMessage] = useState("");
+	const [followUpReasonKey, setFollowUpReasonKey] = useState<ReasonKey | "">("");
+	const [followUpSlots, setFollowUpSlots] = useState<AvailableSlot[]>([]);
+	const [followUpSelectedSlotId, setFollowUpSelectedSlotId] = useState("");
+	const [followUpDate, setFollowUpDate] = useState("");
+	const [followUpStartTime, setFollowUpStartTime] = useState("");
 
 	// This tells autosave not to run while the first backend load is filling the form
 	const hasLoadedRef = useRef(false);
@@ -196,6 +205,8 @@ export default function AppointmentSummary() {
 	// Staff can only edit or finalize when the backend says the appointment is in the right state
 	const canEdit = Boolean(summaryData && !summaryData.summary.isFinalized && summaryData.state.isEditableNow);
 	const canFinalize = Boolean(summaryData && !summaryData.summary.isFinalized && summaryData.state.canFinalizeNow);
+	const followUpAlreadyCreated = Boolean(summaryData?.appointment.followUpAppointmentID);
+	const canCreateFollowUp = Boolean(summaryData && summaryData.state.isEditableNow && !followUpAlreadyCreated);
 
 	useEffect(() => {
 		// Do not autosave until data exists, the first load finished, and editing is allowed
@@ -235,7 +246,44 @@ export default function AppointmentSummary() {
 		};
 	}, [summaryData, draftSummaryValues, draftPetProfile, canEdit]);
 
-	function updateSummaryField(field: keyof typeof EMPTY_SUMMARY_VALUES, value: string) {
+	
+	useEffect(() => {
+		if (!summaryData || !followUpReasonKey || !canCreateFollowUp) {
+			setFollowUpSlots([]);
+			setFollowUpSelectedSlotId("");
+			setFollowUpDate("");
+			setFollowUpStartTime("");
+			return;
+		}
+
+		let cancelled = false;
+
+		async function loadFollowUpSlots() {
+			try {
+				const result = await getAvailability({
+					reasonKey: followUpReasonKey as ReasonKey,
+					userID: summaryData!.owner.userID,
+					petID: summaryData!.appointment.petID,
+					days: 90,
+				});
+
+				if (cancelled) return;
+				setFollowUpSlots(result.slots || []);
+			} catch (error) {
+				if (cancelled) return;
+				setFollowUpSlots([]);
+				setFollowUpMessage(error instanceof Error ? error.message : "Failed to load follow-up slots");
+			}
+		}
+
+		loadFollowUpSlots();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [summaryData, followUpReasonKey, canCreateFollowUp]);
+
+function updateSummaryField(field: keyof typeof EMPTY_SUMMARY_VALUES, value: string) {
 		// Keep the other summary fields the same and replace only the field that changed
 		setDraftSummaryValues((prev) => ({ ...prev, [field]: value }));
 	}
@@ -245,7 +293,23 @@ export default function AppointmentSummary() {
 		setDraftPetProfile((prev) => ({ ...prev, [field]: value }));
 	}
 
-	async function handleFinalize() {
+	
+	function handleFollowUpReasonChange(value: string) {
+		setFollowUpReasonKey(value as ReasonKey | "");
+		setFollowUpSelectedSlotId("");
+		setFollowUpDate("");
+		setFollowUpStartTime("");
+		setFollowUpMessage("");
+	}
+
+	function handleFollowUpSlotSelect(value: { date: string; startTime: string; slotId?: string }) {
+		setFollowUpSelectedSlotId(value.slotId || "");
+		setFollowUpDate(value.date);
+		setFollowUpStartTime(value.startTime);
+		setFollowUpMessage("");
+	}
+
+async function handleFinalize() {
 		if (!summaryData || !canFinalize) return;
 
 		try {
@@ -274,26 +338,39 @@ export default function AppointmentSummary() {
 	}
 
 	async function handleCreateFollowUp() {
-		if (!summaryData) return;
+		if (!summaryData || !canCreateFollowUp) return;
+
+		if (!followUpReasonKey || !followUpDate || !followUpStartTime) {
+			setFollowUpMessage("Pick a follow-up reason and an available slot");
+			return;
+		}
 
 		try {
 			setFollowUpLoading(true);
 			setFollowUpMessage("");
 
-			// Ask the backend for the appointment data that should prefill a follow-up later
-			const result = await getFollowUpPrefill(summaryData.appointment.appointmentID);
+			const result = await createFollowUpAppointment(summaryData.appointment.appointmentID, {
+				reasonKey: followUpReasonKey as ReasonKey,
+				appointmentDate: followUpDate,
+				startTime: followUpStartTime,
+			});
 
-			// Stores the newest draft values so the follow-up appointment hookup can use them later
-			sessionStorage.setItem("appointmentSummaryFollowUpPrefill", JSON.stringify(result));
-			setFollowUpMessage("Follow-up appointment data is ready to use");
+			setSummaryData((prev) => prev ? {
+				...prev,
+				appointment: {
+					...prev.appointment,
+					followUpAppointmentID: result.followUpAppointmentID,
+				},
+			} : prev);
+			setFollowUpMessage("Follow-up appointment created");
 		} catch (error) {
-			setFollowUpMessage(error instanceof Error ? error.message : "Failed to prepare follow-up appointment data");
+			setFollowUpMessage(error instanceof Error ? error.message : "Failed to create follow-up appointment");
 		} finally {
 			setFollowUpLoading(false);
 		}
 	}
 
-	// Turns the save status enum into text and a matching CSS class
+// Turns the save status enum into text and a matching CSS class
 	const saveText = saveStatus === "idle" ? "Not saved yet" : saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save failed";
 	const saveClass = `appointmentSummarySaveLine appointmentSummarySaveState${saveStatus.charAt(0).toUpperCase()}${saveStatus.slice(1)}`;
 
@@ -494,12 +571,44 @@ export default function AppointmentSummary() {
 				) : null}
 			</div>
 
-			{followUpMessage ? <div className="appointmentSummaryMessage">{followUpMessage}</div> : null}
+			<div className="appointmentSummarySection">
+				<h2>Follow-Up</h2>
+				<div className="appointmentSummaryFollowUpBox">
+					<label className="appointmentSummaryField">
+						<span className="appointmentSummaryLabel">Follow-Up Reason</span>
+						<select className="appointmentSummarySelect" value={followUpReasonKey} onChange={(e) => handleFollowUpReasonChange(e.target.value)} disabled={!canCreateFollowUp || followUpLoading}>
+							<option value="">Select</option>
+							{REASON_OPTIONS.map((option) => (
+								<option key={option.value} value={option.value}>{option.label}</option>
+							))}
+						</select>
+					</label>
 
-			<div className="appointmentSummaryBottomActions">
-				<button type="button" className="appointmentSummarySecondaryBtn" onClick={handleCreateFollowUp} disabled={followUpLoading}>
-					{followUpLoading ? "Preparing..." : "Create Follow-Up Appointment"}
-				</button>
+					{followUpReasonKey ? (
+						<div className="appointmentSummaryFollowUpCalendar">
+							<SlotCalendar
+								slots={followUpSlots}
+								value={followUpDate && followUpStartTime ? { date: followUpDate, startTime: followUpStartTime, slotId: followUpSelectedSlotId } : null}
+								onSelectSlot={handleFollowUpSlotSelect}
+								isLoading={followUpLoading}
+								errorText=""
+							/>
+						</div>
+					) : null}
+
+					{followUpMessage ? <div className="appointmentSummaryMessage">{followUpMessage}</div> : null}
+
+					<div className="appointmentSummaryBottomActions">
+						<button
+							type="button"
+							className="appointmentSummarySecondaryBtn"
+							onClick={handleCreateFollowUp}
+							disabled={!canCreateFollowUp || followUpLoading || !followUpReasonKey || !followUpDate || !followUpStartTime}
+						>
+							{followUpAlreadyCreated ? "Follow-Up Created" : followUpLoading ? "Creating..." : "Create Follow-Up"}
+						</button>
+					</div>
+				</div>
 			</div>
 		</div>
 	);

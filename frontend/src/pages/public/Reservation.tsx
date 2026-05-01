@@ -324,7 +324,9 @@ export default function Reservation() {
 				spayedNeutered: "",
 				petAge: "",
 				currentMedications: "",
+				medicationHistory: "",
 				knownAllergies: "",
+				currentConditions: "",
 				pastInjuriesConditions: "",
 				vaccinationsUpToDate: "",
 				heartwormPreventionCurrent: "",
@@ -344,7 +346,9 @@ export default function Reservation() {
 			spayedNeutered: p.spayedNeutered || "",
 			petAge: p.age === null ? "" : String(p.age),
 			currentMedications: p.currentMedications || "",
+			medicationHistory: p.medicationHistory || "",
 			knownAllergies: p.knownAllergies || "",
+			currentConditions: p.currentConditions || "",
 			pastInjuriesConditions: p.pastInjuriesConditions || "",
 			vaccinationsUpToDate: p.vaccinationsUpToDate || "",
 			heartwormPreventionCurrent: p.heartwormPreventionCurrent || "",
@@ -454,7 +458,9 @@ export default function Reservation() {
 
 		if (isBlank(data.pastInjuriesConditions)) e.pastInjuriesConditions = "required";
 		if (isBlank(data.currentMedications)) e.currentMedications = "required";
+		if (isBlank(data.medicationHistory)) e.medicationHistory = "required";
 		if (isBlank(data.knownAllergies)) e.knownAllergies = "required";
+		if (isBlank(data.currentConditions)) e.currentConditions = "required";
 		if (isBlank(data.vaccinationsUpToDate)) e.vaccinationsUpToDate = "required";
 		if (isBlank(data.heartwormPreventionCurrent)) e.heartwormPreventionCurrent = "required";
 

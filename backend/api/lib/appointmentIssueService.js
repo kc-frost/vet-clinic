@@ -528,9 +528,36 @@ function formatIssueNotificationDateTime(value) {
 	});
 }
 
+function formatIssueNotificationDate(value) {
+	// This is for same-day ranges where the date only needs to show once
+	const dateValue = value instanceof Date ? value : new Date(value);
+	return dateValue.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "numeric",
+		day: "numeric",
+	});
+}
+
+function formatIssueNotificationTime(value) {
+	// This is for same-day ranges where only the time changes
+	const dateValue = value instanceof Date ? value : new Date(value);
+	return dateValue.toLocaleTimeString("en-US", {
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
 function formatIssueNotificationReason(reasonKey) {
-	// Turn the stored reason key into something readable in the email
-	return String(reasonKey || "").replaceAll("_", " ").trim() || "appointment";
+	// Turn the stored reason key into readable title text in the email
+	const label = String(reasonKey || "")
+		.replaceAll("_", " ")
+		.toLowerCase()
+		.split(/\s+/)
+		.filter(Boolean)
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(" ")
+		.trim();
+	return label || "Appointment";
 }
 
 function buildResolvedAppointmentSubject() {
@@ -542,8 +569,19 @@ function buildResolvedAppointmentMessage(row, startAt, endAt) {
 	// Tell the user the appointment was fixed and give the new time window
 	const petName = String(row.petName || "").trim() || "your pet";
 	const reasonLabel = formatIssueNotificationReason(row.reasonKey);
-	const startText = formatIssueNotificationDateTime(startAt);
-	const endText = formatIssueNotificationDateTime(endAt);
+	const startDate = startAt instanceof Date ? startAt : new Date(startAt);
+	const endDate = endAt instanceof Date ? endAt : new Date(endAt);
+	const sameDay = formatIssueNotificationDate(startDate) === formatIssueNotificationDate(endDate);
+
+	if (sameDay) {
+		const dateText = formatIssueNotificationDate(startDate);
+		const startTimeText = formatIssueNotificationTime(startDate);
+		const endTimeText = formatIssueNotificationTime(endDate);
+		return `Your appointment for ${petName} for ${reasonLabel} was resolved by an administrator and has been rescheduled to ${dateText}, ${startTimeText} - ${endTimeText}.`;
+	}
+
+	const startText = formatIssueNotificationDateTime(startDate);
+	const endText = formatIssueNotificationDateTime(endDate);
 	return `Your appointment for ${petName} for ${reasonLabel} was resolved by an administrator and has been rescheduled to ${startText} through ${endText}.`;
 }
 
@@ -616,8 +654,7 @@ export async function notifyUsersAboutUnderReviewAppointments(appointmentIDs) {
 		const petName = String(row.petName || "").trim() || "your pet";
 		const reasonLabel = formatIssueNotificationReason(row.reasonKey);
 		const subject = "Appointment needs review";
-		const message = `Sorry, your appointment at ${appointmentDateText} for ${petName} for ${reasonLabel} has encountered a problem in our system and will be promptly resolved by an administrator. 
-		If it is fixed you will be notified, and if it is canceled you will be notified as well`;
+		const message = `Sorry, your appointment at ${appointmentDateText} for ${petName} for ${reasonLabel} has encountered a problem in our system and will be promptly resolved by an administrator. If it is fixed you will be notified, and if it is canceled you will be notified as well`;
 
 		try {
 			await sendEmail({ to: recipientEmail, subject, text: message });

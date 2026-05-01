@@ -7,7 +7,6 @@ import type { Room, RoomCreate, RoomType } from "../../types/rooms";
 import type { InventoryCreate, InventoryItem } from "../../types/inventory";
 
 import { getStaff, createStaff, getStaffUsers } from "../../api/staff";
-import { deactivateUser } from "../../api/users";
 import { getRooms, createRoom, deactivateRoom, reactivateRoom } from "../../api/rooms";
 import { getInventory, createInventoryItem, updateInventoryItem, deactivateInventoryItem, reactivateInventoryItem } from "../../api/inventory";
 
@@ -207,12 +206,10 @@ export default function Inventory() {
 	const [showRemovedItems, setShowRemovedItems] = useState(false);
 
 	// Keep remove as a two step action so it is harder to click by accident
-	const [confirmingStaffUserID, setConfirmingStaffUserID] = useState<number | null>(null);
 	const [confirmingRoomNumber, setConfirmingRoomNumber] = useState<number | null>(null);
 	const [confirmingItemID, setConfirmingItemID] = useState<number | null>(null);
 
 	// Tracks whichever row is currently running a remove or restore request
-	const [workingStaffUserID, setWorkingStaffUserID] = useState<number | null>(null);
 	const [workingRoomNumber, setWorkingRoomNumber] = useState<number | null>(null);
 	const [workingItemID, setWorkingItemID] = useState<number | null>(null);
 
@@ -690,27 +687,6 @@ export default function Inventory() {
 	}
 
 
-	/*
-		Removing staff here means deactivating the linked user account
-
-		That lets the existing deactivation logic handle staff resource fallout too
-	*/
-	async function handleRemoveStaff(userID: number) {
-		setPageError("");
-		setPageMessage("");
-		setWorkingStaffUserID(userID);
-
-		try {
-			await deactivateUser(userID);
-			setConfirmingStaffUserID(null);
-			setPageMessage("Staff member removed.");
-			await refreshAll();
-		} catch (err) {
-			setPageError(errMsg(err));
-		} finally {
-			setWorkingStaffUserID(null);
-		}
-	}
 
 	/*
 		Room remove and restore both use the inactive state routes
@@ -972,23 +948,6 @@ export default function Inventory() {
 										<div className="row-meta">Address: {addressLine}</div>
 										<div className="row-meta">Roles: {s.roleKeys.length > 0 ? s.roleKeys.join(", ") : "N/A"}</div>
 										<div className="row-meta">Account status: {s.isDeactivated ? "Removed" : "Active"}</div>
-
-										<div className="row-actions">
-											{confirmingStaffUserID === s.userID ? (
-												<>
-													<button className="btn danger" type="button" onClick={() => handleRemoveStaff(s.userID)} disabled={loading || workingStaffUserID === s.userID}>
-														{workingStaffUserID === s.userID ? "Removing..." : "Confirm Remove"}
-													</button>
-													<button className="btn" type="button" onClick={() => setConfirmingStaffUserID(null)} disabled={loading || workingStaffUserID === s.userID}>
-														Cancel
-													</button>
-												</>
-											) : (
-												<button className="btn danger" type="button" onClick={() => setConfirmingStaffUserID(s.userID)} disabled={loading || !!s.isDeactivated}>
-													Remove
-												</button>
-											)}
-										</div>
 									</div>
 								</div>
 							);

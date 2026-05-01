@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { createReservationForUser } from "../routes/reservations.js";
 import { sendEmail } from "./mailer.js";
 
 const EDIT_WINDOW_BEFORE_MINUTES = 32 * 60;
@@ -143,6 +144,11 @@ async function loadStaffAppointmentContext(conn, staffID, appointmentID) {
 			c.email,
 			c.legalFirstName,
 			c.legalLastName,
+			c.phone,
+			c.addressLine1,
+			c.city,
+			c.state,
+			c.zipCode,
 			p.petName,
 			p.petType,
 			p.breed,
@@ -156,6 +162,12 @@ async function loadStaffAppointmentContext(conn, staffID, appointmentID) {
 			p.pastInjuriesConditions,
 			p.vaccinationsUpToDate,
 			p.heartwormPreventionCurrent,
+			af.petName AS formPetName,
+			af.petType AS formPetType,
+			af.breed AS formBreed,
+			af.petSex AS formPetSex,
+			af.spayedNeutered AS formSpayedNeutered,
+			af.petAge AS formPetAge,
 			af.currentMedications AS formCurrentMedications,
 			af.medicationHistory AS formMedicationHistory,
 			af.knownAllergies AS formKnownAllergies,
@@ -182,6 +194,7 @@ async function loadStaffAppointmentContext(conn, staffID, appointmentID) {
 			s.isFinalized,
 			s.finalizedByStaffID,
 			s.finalizedAt,
+			s.followUpAppointmentID,
 			fc.legalFirstName AS finalizedByStaffFirstName,
 			fc.legalLastName AS finalizedByStaffLastName
 		 FROM appointment_staff aps
@@ -233,6 +246,11 @@ async function loadCustomerAppointmentContext(conn, userID, appointmentID) {
 			c.email,
 			c.legalFirstName,
 			c.legalLastName,
+			c.phone,
+			c.addressLine1,
+			c.city,
+			c.state,
+			c.zipCode,
 			p.petName,
 			p.petType,
 			p.breed,
@@ -246,6 +264,12 @@ async function loadCustomerAppointmentContext(conn, userID, appointmentID) {
 			p.pastInjuriesConditions,
 			p.vaccinationsUpToDate,
 			p.heartwormPreventionCurrent,
+			af.petName AS formPetName,
+			af.petType AS formPetType,
+			af.breed AS formBreed,
+			af.petSex AS formPetSex,
+			af.spayedNeutered AS formSpayedNeutered,
+			af.petAge AS formPetAge,
 			af.currentMedications AS formCurrentMedications,
 			af.medicationHistory AS formMedicationHistory,
 			af.knownAllergies AS formKnownAllergies,
@@ -272,6 +296,7 @@ async function loadCustomerAppointmentContext(conn, userID, appointmentID) {
 			s.isFinalized,
 			s.finalizedByStaffID,
 			s.finalizedAt,
+			s.followUpAppointmentID,
 			fc.legalFirstName AS finalizedByStaffFirstName,
 			fc.legalLastName AS finalizedByStaffLastName
 		 FROM appointment a
@@ -303,18 +328,42 @@ async function loadCustomerAppointmentContext(conn, userID, appointmentID) {
 }
 
 /*
+	The summary page should stay anchored to the booking snapshot
+	Live pet data is only a last fallback if something is unexpectedly missing
+*/
+function buildSnapshotPetProfile(row) {
+	return {
+		petName: cleanText(firstDefinedValue(row.formPetName, row.petName)),
+		petType: cleanText(firstDefinedValue(row.formPetType, row.petType)),
+		breed: cleanText(firstDefinedValue(row.formBreed, row.breed)),
+		petSex: cleanText(firstDefinedValue(row.formPetSex, row.petSex)),
+		spayedNeutered: cleanText(firstDefinedValue(row.formSpayedNeutered, row.spayedNeutered)),
+		age: firstDefinedValue(row.formPetAge, row.age),
+		currentMedications: normalizeDraftValue(firstDefinedValue(row.formCurrentMedications, row.currentMedications)),
+		medicationHistory: normalizeDraftValue(firstDefinedValue(row.formMedicationHistory, row.medicationHistory)),
+		allergies: normalizeDraftValue(firstDefinedValue(row.formKnownAllergies, row.knownAllergies)),
+		currentConditions: normalizeDraftValue(firstDefinedValue(row.formCurrentConditions, row.currentConditions)),
+		pastConditions: normalizeDraftValue(firstDefinedValue(row.formPastInjuriesConditions, row.pastInjuriesConditions)),
+		vaccinationsUpToDate: normalizeDraftValue(firstDefinedValue(row.formVaccinationsUpToDate, row.vaccinationsUpToDate)),
+		heartwormPreventionCurrent: normalizeDraftValue(firstDefinedValue(row.formHeartwormPreventionCurrent, row.heartwormPreventionCurrent)),
+	};
+}
+
+/*
 	Draft values come first because staff may have already edited them
-	Only missing draft values fall back to the pet profile or booking snapshot
+	Only missing draft values fall back to the booking snapshot and then live pet data
 */
 function buildDraftPetValues(row) {
+	const snapshotPetProfile = buildSnapshotPetProfile(row);
+
 	return {
-		draftAllergies: normalizeDraftValue(firstDefinedValue(row.draftAllergies, row.knownAllergies, row.formKnownAllergies)),
-		draftCurrentMedications: normalizeDraftValue(firstDefinedValue(row.draftCurrentMedications, row.currentMedications, row.formCurrentMedications)),
-		draftMedicationHistory: normalizeDraftValue(firstDefinedValue(row.draftMedicationHistory, row.medicationHistory, row.formMedicationHistory)),
-		draftCurrentConditions: normalizeDraftValue(firstDefinedValue(row.draftCurrentConditions, row.currentConditions, row.formCurrentConditions)),
-		draftPastConditions: normalizeDraftValue(firstDefinedValue(row.draftPastConditions, row.pastInjuriesConditions, row.formPastInjuriesConditions)),
-		draftVaccinationsUpToDate: normalizeDraftValue(firstDefinedValue(row.draftVaccinationsUpToDate, row.vaccinationsUpToDate, row.formVaccinationsUpToDate)),
-		draftHeartwormPreventionCurrent: normalizeDraftValue(firstDefinedValue(row.draftHeartwormPreventionCurrent, row.heartwormPreventionCurrent, row.formHeartwormPreventionCurrent)),
+		draftAllergies: normalizeDraftValue(firstDefinedValue(row.draftAllergies, snapshotPetProfile.allergies)),
+		draftCurrentMedications: normalizeDraftValue(firstDefinedValue(row.draftCurrentMedications, snapshotPetProfile.currentMedications)),
+		draftMedicationHistory: normalizeDraftValue(firstDefinedValue(row.draftMedicationHistory, snapshotPetProfile.medicationHistory)),
+		draftCurrentConditions: normalizeDraftValue(firstDefinedValue(row.draftCurrentConditions, snapshotPetProfile.currentConditions)),
+		draftPastConditions: normalizeDraftValue(firstDefinedValue(row.draftPastConditions, snapshotPetProfile.pastConditions)),
+		draftVaccinationsUpToDate: normalizeDraftValue(firstDefinedValue(row.draftVaccinationsUpToDate, snapshotPetProfile.vaccinationsUpToDate)),
+		draftHeartwormPreventionCurrent: normalizeDraftValue(firstDefinedValue(row.draftHeartwormPreventionCurrent, snapshotPetProfile.heartwormPreventionCurrent)),
 	};
 }
 
@@ -374,6 +423,7 @@ async function ensureSummaryRow(conn, row) {
 function buildSummaryResponse(row) {
 	const summaryState = getEditWindowState(row.date, row.durationMinutes, Boolean(row.isFinalized));
 	const draftPetValues = buildDraftPetValues(row);
+	const snapshotPetProfile = buildSnapshotPetProfile(row);
 
 	return {
 		appointment: {
@@ -389,8 +439,10 @@ function buildSummaryResponse(row) {
 			groomingDyeStyleKey: row.groomingDyeStyleKey || "",
 			groomingReferencePhotoPath: row.groomingReferencePhotoPath || "",
 			groomingStyleNotes: row.groomingStyleNotes || "",
+			followUpAppointmentID: row.followUpAppointmentID === null || row.followUpAppointmentID === undefined ? null : Number(row.followUpAppointmentID),
 		},
 		owner: {
+			userID: Number(row.userID),
 			legalFirstName: row.legalFirstName || "",
 			legalLastName: row.legalLastName || "",
 			email: row.email || "",
@@ -407,19 +459,19 @@ function buildSummaryResponse(row) {
 			finalizedAt: toIsoDateTime(row.finalizedAt),
 		},
 		miniPetProfile: {
-			petName: row.petName || "",
-			petType: row.petType || "",
-			breed: row.breed || "",
-			petSex: row.petSex || "",
-			spayedNeutered: row.spayedNeutered || "",
-			age: row.age === null ? null : Number(row.age),
-			currentMedications: normalizeDraftValue(firstDefinedValue(row.currentMedications, row.formCurrentMedications)),
-			medicationHistory: normalizeDraftValue(firstDefinedValue(row.medicationHistory, row.formMedicationHistory)),
-			allergies: normalizeDraftValue(firstDefinedValue(row.knownAllergies, row.formKnownAllergies)),
-			currentConditions: normalizeDraftValue(firstDefinedValue(row.currentConditions, row.formCurrentConditions)),
-			pastConditions: normalizeDraftValue(firstDefinedValue(row.pastInjuriesConditions, row.formPastInjuriesConditions)),
-			vaccinationsUpToDate: normalizeDraftValue(firstDefinedValue(row.vaccinationsUpToDate, row.formVaccinationsUpToDate)),
-			heartwormPreventionCurrent: normalizeDraftValue(firstDefinedValue(row.heartwormPreventionCurrent, row.formHeartwormPreventionCurrent)),
+			petName: snapshotPetProfile.petName,
+			petType: snapshotPetProfile.petType,
+			breed: snapshotPetProfile.breed,
+			petSex: snapshotPetProfile.petSex,
+			spayedNeutered: snapshotPetProfile.spayedNeutered,
+			age: snapshotPetProfile.age === "" || snapshotPetProfile.age === null ? null : Number(snapshotPetProfile.age),
+			currentMedications: snapshotPetProfile.currentMedications,
+			medicationHistory: snapshotPetProfile.medicationHistory,
+			allergies: snapshotPetProfile.allergies,
+			currentConditions: snapshotPetProfile.currentConditions,
+			pastConditions: snapshotPetProfile.pastConditions,
+			vaccinationsUpToDate: snapshotPetProfile.vaccinationsUpToDate,
+			heartwormPreventionCurrent: snapshotPetProfile.heartwormPreventionCurrent,
 		},
 		draftPetProfile: {
 			allergies: draftPetValues.draftAllergies,
@@ -440,6 +492,7 @@ function buildSummaryResponse(row) {
 */
 function buildFollowUpPrefillResponse(row) {
 	const draftPetValues = buildDraftPetValues(row);
+	const snapshotPetProfile = buildSnapshotPetProfile(row);
 
 	return {
 		sourceAppointmentID: Number(row.appointmentID),
@@ -451,12 +504,12 @@ function buildFollowUpPrefillResponse(row) {
 		},
 		pet: {
 			petID: row.petID === null ? null : Number(row.petID),
-			petName: row.petName || "",
-			petType: row.petType || "",
-			breed: row.breed || "",
-			petSex: row.petSex || "",
-			spayedNeutered: row.spayedNeutered || "",
-			petAge: row.age === null ? null : Number(row.age),
+			petName: snapshotPetProfile.petName,
+			petType: snapshotPetProfile.petType,
+			breed: snapshotPetProfile.breed,
+			petSex: snapshotPetProfile.petSex,
+			spayedNeutered: snapshotPetProfile.spayedNeutered,
+			petAge: snapshotPetProfile.age === "" || snapshotPetProfile.age === null ? null : Number(snapshotPetProfile.age),
 			currentMedications: draftPetValues.draftCurrentMedications,
 			medicationHistory: draftPetValues.draftMedicationHistory,
 			knownAllergies: draftPetValues.draftAllergies,
@@ -599,6 +652,121 @@ function applyMedicationAutoCarry(summaryValues, draftPetValues) {
 	if (normalizedLower.includes(prescribedMedication.toLowerCase())) return currentDraftMedications;
 
 	return `${currentDraftMedications}\n${prescribedMedication}`.trim();
+}
+
+
+async function createFollowUpInsideTransaction(conn, row, payload) {
+	await ensureSummaryRow(conn, row);
+	await maybeAutoFinalizeSummary(conn, row);
+
+	if (row.followUpAppointmentID) {
+		const error = new Error("A follow-up has already been created for this appointment");
+		error.status = 409;
+		throw error;
+	}
+
+	const summaryState = getEditWindowState(row.date, row.durationMinutes, Boolean(row.isFinalized));
+	if (!summaryState.isEditableNow) {
+		const error = new Error("This summary is outside the edit window");
+		error.status = 403;
+		throw error;
+	}
+
+	const reasonKey = cleanText(payload?.reasonKey);
+	const appointmentDate = cleanText(payload?.appointmentDate);
+	const startTime = cleanText(payload?.startTime);
+
+	if (!reasonKey || !appointmentDate || !startTime) {
+		const error = new Error("reasonKey, appointmentDate, and startTime are required");
+		error.status = 400;
+		throw error;
+	}
+
+	const draftValues = buildDraftPetValues(row);
+	const snapshotPetProfile = buildSnapshotPetProfile(row);
+
+	const createBody = {
+		reasonKey,
+		appointmentDate,
+		startTime,
+		enablePetProfiles: true,
+		petID: row.petID,
+		formData: {
+			legalFirstName: row.legalFirstName || "",
+			legalLastName: row.legalLastName || "",
+			email: row.email || "",
+			phone: row.phone || "",
+			addressLine1: row.addressLine1 || "",
+			city: row.city || "",
+			state: row.state || "",
+			zipCode: row.zipCode || "",
+			petName: snapshotPetProfile.petName,
+			petType: snapshotPetProfile.petType,
+			breed: snapshotPetProfile.breed,
+			petSex: snapshotPetProfile.petSex,
+			spayedNeutered: snapshotPetProfile.spayedNeutered,
+			petAge: snapshotPetProfile.age === "" || snapshotPetProfile.age === undefined || snapshotPetProfile.age === null ? "" : String(snapshotPetProfile.age),
+			reasonDetails: "",
+			currentMedications: draftValues.draftCurrentMedications,
+			medicationHistory: draftValues.draftMedicationHistory,
+			knownAllergies: draftValues.draftAllergies,
+			currentConditions: draftValues.draftCurrentConditions,
+			pastInjuriesConditions: draftValues.draftPastConditions,
+			vaccinationsUpToDate: draftValues.draftVaccinationsUpToDate,
+			heartwormPreventionCurrent: draftValues.draftHeartwormPreventionCurrent,
+			insuranceProvider: null,
+			insuranceMemberId: null,
+			consentToFormInfo: true,
+		},
+	};
+
+	const result = await createReservationForUser(conn, row.userID, createBody);
+
+	await conn.execute(
+		`UPDATE appointment_summary
+		 SET followUpAppointmentID = ?
+		 WHERE appointmentID = ?`,
+		[result.appointmentID, row.appointmentID]
+	);
+
+	row.followUpAppointmentID = result.appointmentID;
+
+	return {
+		ok: true,
+		appointmentId: result.appointmentID,
+		reasonKey: result.reasonKey,
+		date: result.date,
+		durationMinutes: result.durationMinutes,
+		roomNumber: result.roomNumber,
+		petID: result.petID ?? null,
+		followUpAppointmentID: result.appointmentID,
+	};
+}
+
+export async function createFollowUpAppointment(sessionUserID, rawAppointmentID, payload) {
+	const appointmentID = parsePositiveInt(rawAppointmentID);
+	if (!appointmentID) {
+		const error = new Error("Invalid appointment id");
+		error.status = 400;
+		throw error;
+	}
+
+	const conn = await pool.getConnection();
+
+	try {
+		const staffContext = await getStaffContextByUserID(conn, sessionUserID);
+		const row = await loadStaffAppointmentContext(conn, staffContext.staffID, appointmentID);
+
+		await conn.beginTransaction();
+		const result = await createFollowUpInsideTransaction(conn, row, payload);
+		await conn.commit();
+		return result;
+	} catch (error) {
+		try { await conn.rollback(); } catch {}
+		throw error;
+	} finally {
+		conn.release();
+	}
 }
 
 // Staff summary load is the main entry point for opening the summary page
