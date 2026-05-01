@@ -196,7 +196,6 @@ create table appointment_review(
 	rating tinyint unsigned not null,
 	reviewText varchar(500),
 	createdAt datetime not null default current_timestamp,
-	updatedAt datetime not null default current_timestamp on update current_timestamp,
 
 	foreign key (appointmentID) references appointment(appointmentID),
 	foreign key (userID) references customer(userID),
