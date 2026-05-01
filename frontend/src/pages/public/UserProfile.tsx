@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import "../../styles/userProfile.css";
+import RatingStars from "../../components/profile/RatingStars";
 
 import { getCurrentUser, type AuthUser } from "../../api/auth";
 import { api } from "../../api/client";
 import { getAvailability, getPetsForUser, updatePetProfile } from "../../api/reservations";
 import { getMyAppointments, cancelMyAppointment, rescheduleMyAppointment } from "../../api/appointments";
+import { submitAppointmentReview } from "../../api/reviews";
 import SlotCalendar from "../../components/calendar/SlotCalendar";
 
 import type { PetProfile, ReasonKey } from "../../types/reservation";
@@ -94,6 +96,9 @@ type Reservation = {
 	startTimeRaw: string;
 	summaryIsFinalized: boolean;
 	canModify: boolean;
+	rating?: number | null;
+	reviewText?: string | null;
+	reviewCreatedAt?: string | null;
 };
 
 /*
@@ -518,6 +523,9 @@ function mapAppointmentsToReservations(rows: Appointment[]) {
 			startTimeRaw: mysqlTimeOnly(a.date),
 			summaryIsFinalized: Boolean(a.summaryIsFinalized),
 			canModify: startMs >= nowMs,
+			rating: a.rating ?? null,
+			reviewText: a.reviewText ?? null,
+			reviewCreatedAt: a.reviewCreatedAt ?? null,
 		};
 	});
 }
@@ -608,6 +616,8 @@ export default function UserProfile() {
 	const [rescheduleStartTime, setRescheduleStartTime] = useState("");
 	const [rescheduleBusy, setRescheduleBusy] = useState(false);
 	const [actionMessage, setActionMessage] = useState<string>("");
+	const [reviewDrafts, setReviewDrafts] = useState<Record<number, { rating: number; reviewText: string }>>({});
+	const [reviewBusyId, setReviewBusyId] = useState<number | null>(null);
 
 	/*
 		fileInputRef lets the custom Choose Image button open the hidden file input
@@ -616,6 +626,38 @@ export default function UserProfile() {
 	*/
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const rescheduleSectionRef = useRef<HTMLDivElement | null>(null);
+
+	function onReviewDraftChange(appointmentID: number, value: { rating?: number; reviewText?: string }) {
+		setReviewDrafts((prev) => ({
+			...prev,
+			[appointmentID]: {
+				rating: value.rating ?? prev[appointmentID]?.rating ?? 0,
+				reviewText: value.reviewText ?? prev[appointmentID]?.reviewText ?? "",
+			},
+		}));
+	}
+
+	async function onSubmitReview(reservation: Reservation) {
+		const draft = reviewDrafts[reservation.id];
+
+		if (!draft || draft.rating < 1 || draft.rating > 5) {
+			setActionMessage("choose a rating from 1 to 5 stars first");
+			return;
+		}
+
+		try {
+			setReviewBusyId(reservation.id);
+			setActionMessage("");
+
+			await submitAppointmentReview(reservation.id, { rating: draft.rating, reviewText: draft.reviewText });
+			await loadAllProfileData();
+			setActionMessage("review saved");
+		} catch (e) {
+			setActionMessage(e instanceof Error ? e.message : "failed to save review");
+		} finally {
+			setReviewBusyId(null);
+		}
+	}
 
 	async function loadAllProfileData() {
 		/*
@@ -1496,18 +1538,30 @@ export default function UserProfile() {
 					items={past}
 					onCancel={onCancelAppointment}
 					onReschedule={beginReschedule}
+					reviewDrafts={reviewDrafts}
+					reviewBusyId={reviewBusyId}
+					onReviewDraftChange={onReviewDraftChange}
+					onSubmitReview={onSubmitReview}
 				/>
 				<ReservationBox
 					title="Today"
 					items={today}
 					onCancel={onCancelAppointment}
 					onReschedule={beginReschedule}
+					reviewDrafts={reviewDrafts}
+					reviewBusyId={reviewBusyId}
+					onReviewDraftChange={onReviewDraftChange}
+					onSubmitReview={onSubmitReview}
 				/>
 				<ReservationBox
 					title="Future Reservations"
 					items={future}
 					onCancel={onCancelAppointment}
 					onReschedule={beginReschedule}
+					reviewDrafts={reviewDrafts}
+					reviewBusyId={reviewBusyId}
+					onReviewDraftChange={onReviewDraftChange}
+					onSubmitReview={onSubmitReview}
 				/>
 			</div>
 
@@ -1758,11 +1812,19 @@ function ReservationBox({
 	items,
 	onCancel,
 	onReschedule,
+	reviewDrafts,
+	reviewBusyId,
+	onReviewDraftChange,
+	onSubmitReview,
 }: {
 	title: string;
 	items: Reservation[];
 	onCancel: (reservation: Reservation) => void;
 	onReschedule: (reservation: Reservation) => void;
+	reviewDrafts: Record<number, { rating: number; reviewText: string }>;
+	reviewBusyId: number | null;
+	onReviewDraftChange: (appointmentID: number, value: { rating?: number; reviewText?: string }) => void;
+	onSubmitReview: (reservation: Reservation) => void;
 }) {
 	/*
 		Reusable appointment card section used for the past, today, and future columns
@@ -1832,6 +1894,14 @@ function ReservationBox({
 									) : null}
 								</div>
 
+								<ReservationReviewArea
+									reservation={reservation}
+									reviewDraft={reviewDrafts[reservation.id] || { rating: 0, reviewText: "" }}
+									reviewBusy={reviewBusyId === reservation.id}
+									onReviewDraftChange={onReviewDraftChange}
+									onSubmitReview={onSubmitReview}
+								/>
+
 								{isOngoing ? (
 									<p className="userAppointmentHint">This appointment is still ongoing, so rating is not available yet</p>
 								) : null}
@@ -1843,5 +1913,54 @@ function ReservationBox({
 				</div>
 			)}
 		</section>
+	);
+}
+
+function ReservationReviewArea({
+	reservation,
+	reviewDraft,
+	reviewBusy,
+	onReviewDraftChange,
+	onSubmitReview,
+}: {
+	reservation: Reservation;
+	reviewDraft: { rating: number; reviewText: string };
+	reviewBusy: boolean;
+	onReviewDraftChange: (appointmentID: number, value: { rating?: number; reviewText?: string }) => void;
+	onSubmitReview: (reservation: Reservation) => void;
+}) {
+	const endMs = reservation.endTime ? new Date(reservation.endTime).getTime() : NaN;
+	const isFullyCompleted = Number.isFinite(endMs) && endMs <= Date.now();
+
+	if (!isFullyCompleted) return null;
+
+	if (reservation.rating) {
+		return (
+			<div className="reviewSavedBox">
+				<p className="reviewLabel">Your Rating</p>
+				<RatingStars value={Number(reservation.rating)} readonly />
+				{reservation.reviewText ? <p className="reviewTextDisplay">{reservation.reviewText}</p> : null}
+			</div>
+		);
+	}
+
+	return (
+		<div className="reviewFormBox">
+			<p className="reviewLabel">Rate this completed appointment</p>
+
+			<RatingStars value={reviewDraft.rating} onChange={(rating) => onReviewDraftChange(reservation.id, { rating })} />
+
+			<textarea
+				className="reviewTextarea"
+				maxLength={500}
+				placeholder="Optional brief review..."
+				value={reviewDraft.reviewText}
+				onChange={(e) => onReviewDraftChange(reservation.id, { reviewText: e.target.value })}
+			/>
+
+			<button type="button" className="miniPrimaryBtn" disabled={reviewBusy || reviewDraft.rating < 1} onClick={() => onSubmitReview(reservation)}>
+				{reviewBusy ? "Saving..." : "Confirm Rating"}
+			</button>
+		</div>
 	);
 }

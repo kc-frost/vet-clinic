@@ -184,13 +184,24 @@ create table appointment(
 	-- under review appointments are temporarily invalid and need admin resolution
 	underReview boolean not null default false,
 
-	-- completed appointment review rating
-	rating tinyint unsigned null,
-
 	foreign key (userID) references customer(userID),
 	foreign key (petID) references pet(petID),
-	foreign key (roomNumber) references rooms(roomNumber),
-	check (rating is null or rating between 1 and 5)
+	foreign key (roomNumber) references rooms(roomNumber)
+);
+
+-- stores the customer rating and optional review text for completed appointments
+create table appointment_review(
+	reviewID int auto_increment primary key,
+	appointmentID int not null unique,
+	userID int not null,
+	rating tinyint unsigned not null,
+	reviewText varchar(500),
+	createdAt datetime not null default current_timestamp,
+	updatedAt datetime not null default current_timestamp on update current_timestamp,
+
+	foreign key (appointmentID) references appointment(appointmentID),
+	foreign key (userID) references customer(userID),
+	check (rating between 1 and 5)
 );
 
 -- actual many-to-many staff assignments for appointments

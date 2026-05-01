@@ -365,3 +365,57 @@
 		flex-direction: column;
 	}
 }
+
+.ratingStars {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+	margin: 6px 0;
+}
+
+.starButton {
+	border: none;
+	background: transparent;
+	font-size: 1.4rem;
+	cursor: pointer;
+	padding: 0;
+}
+
+.starFilled {
+	color: #d99a00;
+	font-size: 1.4rem;
+}
+
+.starEmpty {
+	color: #c9c9c9;
+	font-size: 1.4rem;
+}
+
+.reviewFormBox,
+.reviewSavedBox {
+	margin-top: 10px;
+	padding: 10px;
+	border: 1px solid #e1e1e1;
+	border-radius: 8px;
+	background: #fafafa;
+}
+
+.reviewLabel {
+	font-weight: 700;
+	margin: 0 0 4px;
+}
+
+.reviewTextarea {
+	width: 100%;
+	min-height: 60px;
+	margin: 6px 0;
+	padding: 8px;
+	border: 1px solid #ccc;
+	border-radius: 6px;
+	resize: vertical;
+}
+
+.reviewTextDisplay {
+	margin: 6px 0 0;
+	font-style: italic;
+}

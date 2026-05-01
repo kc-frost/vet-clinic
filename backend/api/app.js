@@ -19,6 +19,7 @@ import reservationsRoutes from "./routes/reservations.js";
 import usersRoutes from "./routes/users.js";
 import appointmentIssuesRoutes from "./routes/appointmentIssues.js";
 import appointmentSummaryRoutes from "./routes/appointmentSummary.js";
+import reviewsRoutes from "./routes/reviews.js";
 
 import adminAnalyticsRoutes from "./routes/adminAnalytics.js";
 
@@ -78,6 +79,7 @@ app.use("/api/reservations", reservationsRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/appointment-issues", appointmentIssuesRoutes);
 app.use("/api/appointment-summaries", appointmentSummaryRoutes);
+app.use("/api/reviews", reviewsRoutes);
 
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use("/api/profile", profileRoutes);

@@ -179,3 +179,14 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+.adminAnalyticsReviewExtreme {
+	display: grid;
+	gap: 8px;
+	color: #2f241a;
+	line-height: 1.5;
+}
+
+.adminAnalyticsReviewExtreme p {
+	margin: 0;
+}
