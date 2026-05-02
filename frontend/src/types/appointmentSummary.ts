@@ -11,6 +11,7 @@ export type AppointmentSummaryAppointment = {
 	underReview: boolean;
 	petID: number | null;
 	petName: string;
+	reasonDetails: string;
 	groomingDyeStyleKey: string;
 	groomingReferencePhotoPath: string;
 	groomingStyleNotes: string;

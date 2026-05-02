@@ -175,6 +175,7 @@ async function loadStaffAppointmentContext(conn, staffID, appointmentID) {
 			af.pastInjuriesConditions AS formPastInjuriesConditions,
 			af.vaccinationsUpToDate AS formVaccinationsUpToDate,
 			af.heartwormPreventionCurrent AS formHeartwormPreventionCurrent,
+			af.reasonDetails,
 			af.groomingDyeStyleKey,
 			af.groomingReferencePhotoPath,
 			af.groomingStyleNotes,
@@ -277,6 +278,7 @@ async function loadCustomerAppointmentContext(conn, userID, appointmentID) {
 			af.pastInjuriesConditions AS formPastInjuriesConditions,
 			af.vaccinationsUpToDate AS formVaccinationsUpToDate,
 			af.heartwormPreventionCurrent AS formHeartwormPreventionCurrent,
+			af.reasonDetails,
 			af.groomingDyeStyleKey,
 			af.groomingReferencePhotoPath,
 			af.groomingStyleNotes,
@@ -436,6 +438,7 @@ function buildSummaryResponse(row) {
 			underReview: Boolean(row.underReview),
 			petID: row.petID === null ? null : Number(row.petID),
 			petName: row.petName || "",
+			reasonDetails: row.reasonDetails || "",
 			groomingDyeStyleKey: row.groomingDyeStyleKey || "",
 			groomingReferencePhotoPath: row.groomingReferencePhotoPath || "",
 			groomingStyleNotes: row.groomingStyleNotes || "",
@@ -637,24 +640,6 @@ async function maybeAutoFinalizeSummary(conn, row) {
 	return row;
 }
 
-/*
-	Prescribed medication is appointment-specific, but it usually also belongs in current medications
-	This appends it without duplicating it if it is already there
-*/
-function applyMedicationAutoCarry(summaryValues, draftPetValues) {
-	const prescribedMedication = cleanText(summaryValues.medicationPrescribed);
-	const currentDraftMedications = normalizeDraftValue(draftPetValues.currentMedications);
-
-	if (!prescribedMedication) return currentDraftMedications;
-	if (!currentDraftMedications) return prescribedMedication;
-
-	const normalizedLower = currentDraftMedications.toLowerCase();
-	if (normalizedLower.includes(prescribedMedication.toLowerCase())) return currentDraftMedications;
-
-	return `${currentDraftMedications}\n${prescribedMedication}`.trim();
-}
-
-
 async function createFollowUpInsideTransaction(conn, row, payload) {
 	await ensureSummaryRow(conn, row);
 	await maybeAutoFinalizeSummary(conn, row);
@@ -666,8 +651,12 @@ async function createFollowUpInsideTransaction(conn, row, payload) {
 	}
 
 	const summaryState = getEditWindowState(row.date, row.durationMinutes, Boolean(row.isFinalized));
-	if (!summaryState.isEditableNow) {
-		const error = new Error("This summary is outside the edit window");
+	const nowMs = Date.now();
+	const startMs = new Date(summaryState.startAt).getTime();
+	const editEndsAtMs = new Date(summaryState.editEndsAt).getTime();
+
+	if (nowMs < startMs || nowMs > editEndsAtMs) {
+		const error = new Error("Follow-up appointments can only be created after the appointment begins and before the edit window closes");
 		error.status = 403;
 		throw error;
 	}
@@ -857,7 +846,6 @@ export async function saveDraftSummary(sessionUserID, rawAppointmentID, payload)
 			heartwormPreventionCurrent: getPayloadDraftValue(payload, "heartwormPreventionCurrent", currentDraftValues.draftHeartwormPreventionCurrent),
 		};
 
-		nextDraftPetValues.currentMedications = applyMedicationAutoCarry(nextSummaryValues, nextDraftPetValues);
 
 		await conn.execute(
 			`UPDATE appointment_summary

@@ -93,6 +93,25 @@ function isGroomingReason(reasonKey: string) {
 	return ["BASIC_GROOMING", "FLEA_BATH_GROOMING", "GROOMING_DYE"].includes(String(reasonKey || "").toUpperCase());
 }
 
+function getAppointmentStatus(state: StaffAppointmentSummaryResponse["state"]) {
+	const nowMs = Date.now();
+	const startMs = new Date(state.startAt).getTime();
+
+	if (nowMs < startMs) return "Upcoming";
+	if (state.isOngoing) return "Ongoing";
+	return "Ended";
+}
+
+function canCreateFollowUpFromState(summaryData: StaffAppointmentSummaryResponse | null, followUpAlreadyCreated: boolean) {
+	if (!summaryData || followUpAlreadyCreated) return false;
+
+	const nowMs = Date.now();
+	const startMs = new Date(summaryData.state.startAt).getTime();
+	const editEndsAtMs = new Date(summaryData.state.editEndsAt).getTime();
+
+	return nowMs >= startMs && nowMs <= editEndsAtMs;
+}
+
 function getGroomingImagePath(summaryData: StaffAppointmentSummaryResponse) {
 	const referencePhotoPath = summaryData.appointment.groomingReferencePhotoPath;
 
@@ -150,6 +169,7 @@ export default function AppointmentSummary() {
 	const [followUpSelectedSlotId, setFollowUpSelectedSlotId] = useState("");
 	const [followUpDate, setFollowUpDate] = useState("");
 	const [followUpStartTime, setFollowUpStartTime] = useState("");
+	const [draftRevision, setDraftRevision] = useState(0);
 
 	// This tells autosave not to run while the first backend load is filling the form
 	const hasLoadedRef = useRef(false);
@@ -177,6 +197,10 @@ export default function AppointmentSummary() {
 				// If the page changed or unmounted while waiting, ignore this old response
 				if (cancelled) return;
 
+				if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+				setSaveStatus(result.summary.isFinalized ? "saved" : "idle");
+				setSaveError("");
+				setDraftRevision(0);
 				setSummaryData(result);
 
 				// Copy only the editable summary fields into the form state
@@ -219,24 +243,21 @@ export default function AppointmentSummary() {
 	const canEdit = Boolean(summaryData && !summaryData.summary.isFinalized && summaryData.state.isEditableNow);
 	const canFinalize = Boolean(summaryData && !summaryData.summary.isFinalized && summaryData.state.canFinalizeNow);
 	const followUpAlreadyCreated = Boolean(summaryData?.appointment.followUpAppointmentID);
-	const canCreateFollowUp = Boolean(summaryData && summaryData.state.isEditableNow && !followUpAlreadyCreated);
+	const canCreateFollowUp = canCreateFollowUpFromState(summaryData, followUpAlreadyCreated);
 
 	useEffect(() => {
-		// Do not autosave until data exists, the first load finished, and editing is allowed
-		if (!summaryData || !hasLoadedRef.current || !canEdit) return;
+		// Only autosave after a staff edit increments draftRevision
+		if (!summaryData || !hasLoadedRef.current || !canEdit || draftRevision === 0) return;
 
-		// The user typed again, so cancel the old pending autosave before starting a new one
 		if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
 
 		setSaveStatus("saving");
 		setSaveError("");
 
-		// Wait a little after typing stops, then save the newest draft values
 		saveTimerRef.current = window.setTimeout(async () => {
 			try {
 				const result = await saveStaffAppointmentSummary(summaryData.appointment.appointmentID, buildDraftPayload(draftSummaryValues, draftPetProfile));
 
-				// Refresh backend data and form drafts from the saved result
 				setSummaryData(result);
 				setDraftSummaryValues({
 					symptoms: result.summary.symptoms,
@@ -254,10 +275,9 @@ export default function AppointmentSummary() {
 		}, SAVE_DELAY_MS);
 
 		return () => {
-			// If the draft changes again before the delay ends, cancel this save and let the next effect start a new one
 			if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
 		};
-	}, [summaryData, draftSummaryValues, draftPetProfile, canEdit]);
+	}, [draftRevision, canEdit]);
 
 	
 	useEffect(() => {
@@ -297,16 +317,29 @@ export default function AppointmentSummary() {
 	}, [summaryData, followUpReasonKey, canCreateFollowUp]);
 
 function updateSummaryField(field: keyof typeof EMPTY_SUMMARY_VALUES, value: string) {
-		// Keep the other summary fields the same and replace only the field that changed
 		setDraftSummaryValues((prev) => ({ ...prev, [field]: value }));
+		setDraftRevision((prev) => prev + 1);
 	}
 
 	function updateDraftPetField(field: keyof DraftPetProfile, value: string) {
-		// Keep the other pet profile draft fields the same and replace only the field that changed
 		setDraftPetProfile((prev) => ({ ...prev, [field]: value }));
+		setDraftRevision((prev) => prev + 1);
 	}
 
-	
+	function handleTransferMedication() {
+		const prescribedMedication = draftSummaryValues.medicationPrescribed.trim();
+		if (!prescribedMedication || !canEdit) return;
+
+		setDraftPetProfile((prev) => {
+			const currentMedications = prev.currentMedications.trim();
+			const nextCurrentMedications = currentMedications ? `${currentMedications}
+${prescribedMedication}` : prescribedMedication;
+			return { ...prev, currentMedications: nextCurrentMedications };
+		});
+		setDraftRevision((prev) => prev + 1);
+	}
+
+
 	function handleFollowUpReasonChange(value: string) {
 		setFollowUpReasonKey(value as ReasonKey | "");
 		setFollowUpSelectedSlotId("");
@@ -342,6 +375,7 @@ async function handleFinalize() {
 				notes: result.summary.notes,
 			});
 			setDraftPetProfile({ ...result.draftPetProfile });
+			setDraftRevision(0);
 			setSaveStatus("saved");
 		} catch (error) {
 			setPageError(error instanceof Error ? error.message : "Failed to finalize summary");
@@ -375,6 +409,11 @@ async function handleFinalize() {
 					followUpAppointmentID: result.followUpAppointmentID,
 				},
 			} : prev);
+			setFollowUpReasonKey("");
+			setFollowUpSlots([]);
+			setFollowUpSelectedSlotId("");
+			setFollowUpDate("");
+			setFollowUpStartTime("");
 			setFollowUpMessage("Follow-up appointment created");
 		} catch (error) {
 			setFollowUpMessage(error instanceof Error ? error.message : "Failed to create follow-up appointment");
@@ -401,6 +440,8 @@ async function handleFinalize() {
 	}
 
 	if (!summaryData) return null;
+
+	const appointmentStatus = getAppointmentStatus(summaryData.state);
 
 	return (
 		<div className="appointmentSummaryPage">
@@ -440,10 +481,14 @@ async function handleFinalize() {
 						<DetailItem label="Owner Email" value={summaryData.owner.email} />
 					</div>
 
+					<div className="appointmentSummaryInfoBox appointmentSummaryCustomerNotes">
+						<b>Customer appointment notes:</b> {summaryData.appointment.reasonDetails || "N/A"}
+					</div>
+
 					<div className="appointmentSummaryStatusBox">
 						<h3>Status</h3>
 						<div className="appointmentSummaryStatusGrid">
-							<DetailItem label="Appointment" value={summaryData.state.isOngoing ? "Ongoing" : "Ended"} />
+							<DetailItem label="Appointment" value={appointmentStatus} />
 							<DetailItem label="Summary" value={summaryData.summary.isFinalized ? "Finalized" : "Not Finalized"} />
 							<DetailItem label="Edit Window" value={`${formatDateTime(summaryData.state.editStartsAt)} to ${formatDateTime(summaryData.state.editEndsAt)}`} />
 							{summaryData.summary.finalizedAt ? <DetailItem label="Finalized At" value={formatDateTime(summaryData.summary.finalizedAt)} /> : null}
@@ -517,6 +562,13 @@ async function handleFinalize() {
 								<textarea className="appointmentSummaryTextarea" value={draftSummaryValues.medicationPrescribed} onChange={(e) => updateSummaryField("medicationPrescribed", e.target.value)} rows={4} disabled={!canEdit} />
 							</label>
 
+							<div className="appointmentSummaryTransferRow">
+								<button type="button" className="appointmentSummarySecondaryBtn" onClick={handleTransferMedication} disabled={!canEdit || !draftSummaryValues.medicationPrescribed.trim()}>
+									Transfer
+								</button>
+								<span>Transfers prescribed medication to current medication</span>
+							</div>
+
 							<label className="appointmentSummaryField">
 								<span className="appointmentSummaryLabel">Treatment Performed</span>
 								<textarea className="appointmentSummaryTextarea" value={draftSummaryValues.treatmentPerformed} onChange={(e) => updateSummaryField("treatmentPerformed", e.target.value)} rows={4} disabled={!canEdit} />
@@ -526,10 +578,6 @@ async function handleFinalize() {
 								<span className="appointmentSummaryLabel">Notes</span>
 								<textarea className="appointmentSummaryTextarea" value={draftSummaryValues.notes} onChange={(e) => updateSummaryField("notes", e.target.value)} rows={6} disabled={!canEdit} />
 							</label>
-
-							<div className="appointmentSummaryInfoBox">
-								Medication prescribed can carry into draft current medications
-							</div>
 						</>
 					)}
 				</div>

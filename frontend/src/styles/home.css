@@ -264,3 +264,52 @@
 .missionText {
   text-align: left;
 }
+
+/* final homepage presentation polish */
+.missionBrandWrapper {
+  margin-bottom: 14px;
+}
+
+.missionBrand {
+  font-size: 46px;
+  line-height: 1.15;
+}
+
+.missionTitle {
+  text-align: center;
+  font-size: 38px;
+  margin-bottom: 18px;
+}
+
+.missionText {
+  text-align: left;
+}
+
+.homeSection > h2 {
+  font-size: 38px;
+  text-align: center;
+  margin: 0 0 18px;
+}
+
+.homeSection > p {
+  font-size: 18px;
+  line-height: 1.75;
+}
+
+@media (max-width: 820px) {
+  .missionBrand {
+    font-size: 38px;
+  }
+
+  .missionTitle,
+  .homeSection > h2 {
+    font-size: 32px;
+  }
+}
+
+/* center the Our Services heading area */
+.sectionHeader {
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}

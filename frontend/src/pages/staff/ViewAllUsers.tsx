@@ -202,9 +202,9 @@ export default function ViewAllUsers() {
 						<select id="rangeField" className="usersFilterInput" value={rangeField} onChange={(e) => setRangeField(e.target.value as RangeField)}>
 							<option value="userID">User ID</option>
 							<option value="days_registered">Days Registered</option>
-							<option value="total_reservations">Total Reservations</option>
-							<option value="past_reservations">Past Reservations</option>
-							<option value="upcoming_reservations">Upcoming Reservations</option>
+							<option value="total_reservations">Total Appointments</option>
+							<option value="past_reservations">Past Appointments</option>
+							<option value="upcoming_reservations">Upcoming Appointments</option>
 						</select>
 					</div>
 
@@ -233,9 +233,9 @@ export default function ViewAllUsers() {
 							<th>Email</th>
 							<th>Type</th>
 							<th>Days Registered</th>
-							<th>Total Reservations</th>
-							<th>Past Reservations</th>
-							<th>Upcoming Reservations</th>
+							<th>Total Appointments</th>
+							<th>Past Appointments</th>
+							<th>Upcoming Appointments</th>
 							<th>Action</th>
 						</tr>
 					</thead>
@@ -286,7 +286,7 @@ export default function ViewAllUsers() {
 						<div className="usersRemoveDetails">
 							<div><b>User ID:</b> {selectedUser.userID}</div>
 							<div><b>Type:</b> {selectedUser.userType}</div>
-							<div><b>Upcoming Reservations:</b> {selectedUser.upcoming_reservations}</div>
+							<div><b>Upcoming Appointments:</b> {selectedUser.upcoming_reservations}</div>
 						</div>
 
 						<div className="usersFilterField">

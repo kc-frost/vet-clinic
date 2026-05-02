@@ -233,7 +233,7 @@ async function executeCancellation(
 
   const startDt = appointment.date instanceof Date ? appointment.date : new Date(appointment.date);
   if (startDt.getTime() < Date.now()) {
-    const err = new Error("Past appointments cannot be canceled");
+    const err = new Error("Appointments that have already started cannot be canceled");
     err.status = 400;
     throw err;
   }

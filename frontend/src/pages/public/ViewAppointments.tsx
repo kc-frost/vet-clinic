@@ -68,6 +68,10 @@ function buildCountLabel(count: number, showCanceled: boolean) {
 	return `Showing ${count} active appointment${count === 1 ? "" : "s"}`;
 }
 
+function canCancelAppointment(appointment: Appointment) {
+	return parseMySqlDateTime(appointment.date).getTime() > Date.now();
+}
+
 export default function ViewAppointments() {
 	const navigate = useNavigate();
 	const [loading, setLoading] = useState(false);
@@ -170,9 +174,14 @@ export default function ViewAppointments() {
 		setFilterStaff("");
 	}
 
-	function openCancelPanel(appointmentID: number) {
-		// Open the admin cancel panel for one appointment and reset old form state
-		setCancelAppointmentID(appointmentID);
+	function openCancelPanel(appointment: Appointment) {
+		// Only future appointments can be canceled
+		if (!canCancelAppointment(appointment)) {
+			setCancelMessage("Appointments that have already started cannot be canceled");
+			return;
+		}
+
+		setCancelAppointmentID(appointment.appointmentID);
 		setCancelReason("");
 		setCancelMessage("");
 		setCancelConfirmArmed(false);
@@ -188,6 +197,11 @@ export default function ViewAppointments() {
 
 	async function submitAdminCancel() {
 		if (!selectedAppointment) return;
+
+		if (!canCancelAppointment(selectedAppointment)) {
+			setCancelMessage("Appointments that have already started cannot be canceled");
+			return;
+		}
 
 		const trimmedReason = cancelReason.trim();
 
@@ -353,6 +367,7 @@ export default function ViewAppointments() {
 							const endDateTime = appointment.endDateTime
 								? String(appointment.endDateTime)
 								: new Date(parseMySqlDateTime(appointment.date).getTime() + Number(appointment.durationMinutes || 0) * 60000).toISOString();
+							const appointmentCanBeCanceled = canCancelAppointment(appointment);
 
 							return (
 								<tr key={appointment.appointmentID}>
@@ -377,9 +392,13 @@ export default function ViewAppointments() {
 										<>
 											<td className="equipmentCell">{appointment.equipmentUsed || "—"}</td>
 											<td>
-												<button type="button" className="appointmentsCancelBtn appointmentsTableCancelBtn" onClick={() => openCancelPanel(appointment.appointmentID)}>
-													Cancel Appointment
-												</button>
+												{appointmentCanBeCanceled ? (
+													<button type="button" className="appointmentsCancelBtn appointmentsTableCancelBtn" onClick={() => openCancelPanel(appointment)}>
+														Cancel Appointment
+													</button>
+												) : (
+													<span className="cellSubText">Ongoing</span>
+												)}
 											</td>
 										</>
 									)}

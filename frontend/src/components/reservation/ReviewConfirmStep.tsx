@@ -33,7 +33,7 @@ export default function ReviewConfirmStep({
 	return (
 		<div>
 			<h2>Review & Confirm</h2>
-			<p>Review your details and confirm your reservation.</p>
+			<p>Review your details and confirm your appointment.</p>
 
 			{/* this is a read-only summary view
 			   it pulls values from formData and shows placeholders ("—") when something is empty */}
@@ -182,7 +182,7 @@ export default function ReviewConfirmStep({
 				</button>
 			) : (
 				<button type="button" className="next-button" onClick={onSubmit} disabled={isSubmitting}>
-					{isSubmitting ? "Submitting..." : "Submit Reservation"}
+					{isSubmitting ? "Submitting..." : "Submit Appointment"}
 				</button>
 			)}
 		</div>

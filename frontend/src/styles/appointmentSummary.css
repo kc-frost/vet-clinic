@@ -95,7 +95,7 @@
 }
 
 .appointmentSummaryTopGrid {
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
 	align-items: stretch;
 }
 
@@ -149,7 +149,7 @@
 
 .appointmentSummaryStatusGrid {
 	display: grid;
-	grid-template-columns: 1fr 1fr 2fr;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(260px, 2fr);
 	gap: 10px 14px;
 }
 
@@ -282,4 +282,17 @@
 
 .appointmentSummaryFollowUpCalendar {
 	margin-top: 12px;
+}
+
+.appointmentSummaryTransferRow {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: -4px 0 14px;
+	font-size: 14px;
+	color: #425466;
+}
+
+.appointmentSummaryCustomerNotes {
+	margin-top: 14px;
 }

@@ -1167,7 +1167,7 @@ router.post("/mine/:id/reschedule", requireAuth, async (req, res) => {
 			/*
 				Past appointments cannot be rescheduled
 			*/
-			if (oldStartDt.getTime() < Date.now()) return { ok: false, status: 400, error: "past appointments cannot be rescheduled" };
+			if (oldStartDt.getTime() < Date.now()) return { ok: false, status: 400, error: "Appointments that have already started cannot be rescheduled" };
 
 			/*
 				Load the old snapshot row so it can be copied to the new appointment

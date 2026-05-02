@@ -1534,7 +1534,7 @@ export default function UserProfile() {
 
 			<div className="reservationsRow">
 				<ReservationBox
-					title="Past Reservations"
+					title="Past Appointments"
 					items={past}
 					onCancel={onCancelAppointment}
 					onReschedule={beginReschedule}
@@ -1554,7 +1554,7 @@ export default function UserProfile() {
 					onSubmitReview={onSubmitReview}
 				/>
 				<ReservationBox
-					title="Future Reservations"
+					title="Future Appointments"
 					items={future}
 					onCancel={onCancelAppointment}
 					onReschedule={beginReschedule}
@@ -1835,7 +1835,7 @@ function ReservationBox({
 		<section className="card">
 			<h2>{title}</h2>
 			{items.length === 0 ? (
-				<p className="hint">No reservations.</p>
+				<p className="hint">No appointments.</p>
 			) : (
 				<div className="userAppointmentList">
 					{items.map((reservation) => {
@@ -1903,7 +1903,7 @@ function ReservationBox({
 								/>
 
 								{isOngoing ? (
-									<p className="userAppointmentHint">This appointment is still ongoing, so rating is not available yet</p>
+									<p className="userAppointmentHint">This appointment is ongoing</p>
 								) : null}
 
 								{canShowRating ? <div className="userAppointmentRatingSpacer" /> : null}
