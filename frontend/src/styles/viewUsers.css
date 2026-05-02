@@ -1,5 +1,5 @@
 .usersPage {
-	max-width: 1180px;
+	max-width: 1380px;
 	margin: 0 auto;
 	padding: 22px 24px 32px 24px;
 }
@@ -96,7 +96,7 @@
 .usersTable {
 	width: 100%;
 	border-collapse: collapse;
-	min-width: 900px;
+	min-width: 1080px;
 }
 
 .usersTable th {
@@ -226,4 +226,10 @@
 	.usersRemoveDetails {
 		grid-template-columns: 1fr;
 	}
+}
+
+.usersTable th:last-child,
+.usersTable td:last-child {
+	min-width: 120px;
+	white-space: nowrap;
 }

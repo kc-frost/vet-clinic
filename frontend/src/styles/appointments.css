@@ -1,7 +1,8 @@
 .appointmentsPage {
   max-width: 1380px;
   margin: 0 auto;
-  padding: 22px 0 32px 0;
+  padding: 22px 24px 32px 24px;
+  box-sizing: border-box;
 }
 
 .appointmentsHeader {
@@ -129,7 +130,7 @@
 .appointments-table {
   border-collapse: collapse;
   width: 100%;
-  min-width: 1240px;
+  min-width: 1180px;
 }
 
 .appointments-table tr:hover {

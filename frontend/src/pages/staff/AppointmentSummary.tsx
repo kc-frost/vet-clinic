@@ -177,6 +177,9 @@ export default function AppointmentSummary() {
 	// Stores the current autosave timer id so the old timer can be cancelled when staff keeps typing
 	const saveTimerRef = useRef<number | null>(null);
 
+	// Tracks the latest draft revision that completed autosave
+	const savedRevisionRef = useRef(0);
+
 	useEffect(() => {
 		if (!Number.isInteger(appointmentID) || appointmentID < 1) {
 			setLoading(false);
@@ -200,6 +203,7 @@ export default function AppointmentSummary() {
 				if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
 				setSaveStatus(result.summary.isFinalized ? "saved" : "idle");
 				setSaveError("");
+				savedRevisionRef.current = 0;
 				setDraftRevision(0);
 				setSummaryData(result);
 
@@ -247,7 +251,7 @@ export default function AppointmentSummary() {
 
 	useEffect(() => {
 		// Only autosave after a staff edit increments draftRevision
-		if (!summaryData || !hasLoadedRef.current || !canEdit || draftRevision === 0) return;
+		if (!summaryData || !hasLoadedRef.current || !canEdit || draftRevision === 0 || savedRevisionRef.current === draftRevision) return;
 
 		if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
 
@@ -258,15 +262,20 @@ export default function AppointmentSummary() {
 			try {
 				const result = await saveStaffAppointmentSummary(summaryData.appointment.appointmentID, buildDraftPayload(draftSummaryValues, draftPetProfile));
 
-				setSummaryData(result);
-				setDraftSummaryValues({
-					symptoms: result.summary.symptoms,
-					diagnosis: result.summary.diagnosis,
-					medicationPrescribed: result.summary.medicationPrescribed,
-					treatmentPerformed: result.summary.treatmentPerformed,
-					notes: result.summary.notes,
-				});
-				setDraftPetProfile({ ...result.draftPetProfile });
+				// Keep the local textarea values unchanged so autosave does not move the cursor or trim a space while staff is typing
+				setSummaryData((prev) => prev ? {
+					...result,
+					summary: {
+						...result.summary,
+						symptoms: draftSummaryValues.symptoms,
+						diagnosis: draftSummaryValues.diagnosis,
+						medicationPrescribed: draftSummaryValues.medicationPrescribed,
+						treatmentPerformed: draftSummaryValues.treatmentPerformed,
+						notes: draftSummaryValues.notes,
+					},
+					draftPetProfile: { ...draftPetProfile },
+				} : result);
+				savedRevisionRef.current = draftRevision;
 				setSaveStatus("saved");
 			} catch (error) {
 				setSaveStatus("error");
@@ -277,7 +286,7 @@ export default function AppointmentSummary() {
 		return () => {
 			if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
 		};
-	}, [draftRevision, canEdit]);
+	}, [draftRevision, canEdit, summaryData, draftSummaryValues, draftPetProfile]);
 
 	
 	useEffect(() => {
@@ -375,6 +384,7 @@ async function handleFinalize() {
 				notes: result.summary.notes,
 			});
 			setDraftPetProfile({ ...result.draftPetProfile });
+			savedRevisionRef.current = 0;
 			setDraftRevision(0);
 			setSaveStatus("saved");
 		} catch (error) {
