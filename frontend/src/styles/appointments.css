@@ -1,5 +1,5 @@
 .appointmentsPage {
-  width: min(96vw, 1585px);
+  width: min(92vw, 1500px);
   max-width: none;
   margin: 0 auto;
   padding: 22px 24px 32px 24px;
@@ -359,7 +359,7 @@
   }
 }
 
-/* keep the admin appointment table inside the visible page width */
+/* keep the admin appointment table centered without forcing horizontal scroll */
 .appointments-table th,
 .appointments-table td {
   overflow-wrap: anywhere;
@@ -369,7 +369,7 @@
 .appointments-table td:nth-child(1),
 .appointments-table th:nth-child(2),
 .appointments-table td:nth-child(2) {
-  width: 8%;
+  width: 7%;
 }
 
 .appointments-table th:nth-child(3),
@@ -379,36 +379,36 @@
 
 .appointments-table th:nth-child(4),
 .appointments-table td:nth-child(4) {
-  width: 10%;
+  width: 9%;
 }
 
 .appointments-table th:nth-child(5),
 .appointments-table td:nth-child(5) {
-  width: 16%;
+  width: 15%;
 }
 
 .appointments-table th:nth-child(6),
 .appointments-table td:nth-child(6) {
-  width: 19%;
+  width: 18%;
 }
 
 .appointments-table th:nth-child(7),
 .appointments-table td:nth-child(7) {
-  width: 8%;
+  width: 7%;
 }
 
 .appointments-table th:nth-child(8),
 .appointments-table td:nth-child(8) {
-  width: 20%;
+  width: 19%;
 }
 
 .appointments-table th:nth-child(9),
 .appointments-table td:nth-child(9) {
-  width: 13%;
+  width: 12%;
 }
 
 .appointmentsTableCancelBtn {
   width: 100%;
-  min-width: 110px;
+  min-width: 0;
   white-space: normal;
 }
