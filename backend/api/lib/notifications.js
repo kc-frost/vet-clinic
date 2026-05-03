@@ -207,7 +207,8 @@ async function createStaffOneHourReminders() {
 		 INNER JOIN customer owner
 			ON owner.userID = a.userID
 		 WHERE a.date >= ?
-			AND a.date < ?`,
+			AND a.date < ?
+			AND COALESCE(a.isCanceled, 0) = 0`,
 		[window.startSql, window.endSql]
 	);
 
@@ -266,6 +267,7 @@ async function sendCustomer24HourEmails() {
 			ON p.petID = a.petID
 		 WHERE a.date >= ?
 			AND a.date < ?
+			AND COALESCE(a.isCanceled, 0) = 0
 			AND c.email IS NOT NULL
 			AND c.email <> ''`,
 		[window.startSql, window.endSql]
