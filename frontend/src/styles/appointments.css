@@ -1,5 +1,5 @@
 .appointmentsPage {
-  width: min(96vw, 1620px);
+  width: min(98vw, 1700px);
   max-width: none;
   margin: 0 auto;
   padding: 22px 0 32px 0;
@@ -468,6 +468,72 @@
 }
 
 /* canceled appointment table readability */
+.appointments-table-canceled th:nth-child(7),
+.appointments-table-canceled td:nth-child(7),
+.appointments-table-canceled th:nth-child(11),
+.appointments-table-canceled td:nth-child(11) {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.appointments-table-canceled th:nth-child(10),
+.appointments-table-canceled td:nth-child(10) {
+  overflow-wrap: break-word;
+}
+
+/* final canceled appointment table width tuning */
+.appointments-table-canceled th:nth-child(1),
+.appointments-table-canceled td:nth-child(1),
+.appointments-table-canceled th:nth-child(2),
+.appointments-table-canceled td:nth-child(2) {
+  width: 5.8%;
+}
+
+.appointments-table-canceled th:nth-child(3),
+.appointments-table-canceled td:nth-child(3) {
+  width: 4.2%;
+}
+
+.appointments-table-canceled th:nth-child(4),
+.appointments-table-canceled td:nth-child(4) {
+  width: 7.6%;
+}
+
+.appointments-table-canceled th:nth-child(5),
+.appointments-table-canceled td:nth-child(5) {
+  width: 14.7%;
+}
+
+.appointments-table-canceled th:nth-child(6),
+.appointments-table-canceled td:nth-child(6) {
+  width: 12.7%;
+}
+
+.appointments-table-canceled th:nth-child(7),
+.appointments-table-canceled td:nth-child(7) {
+  width: 7.5%;
+}
+
+.appointments-table-canceled th:nth-child(8),
+.appointments-table-canceled td:nth-child(8) {
+  width: 8.5%;
+}
+
+.appointments-table-canceled th:nth-child(9),
+.appointments-table-canceled td:nth-child(9) {
+  width: 7%;
+}
+
+.appointments-table-canceled th:nth-child(10),
+.appointments-table-canceled td:nth-child(10) {
+  width: 15.5%;
+}
+
+.appointments-table-canceled th:nth-child(11),
+.appointments-table-canceled td:nth-child(11) {
+  width: 11.5%;
+}
+
 .appointments-table-canceled th:nth-child(7),
 .appointments-table-canceled td:nth-child(7),
 .appointments-table-canceled th:nth-child(11),
