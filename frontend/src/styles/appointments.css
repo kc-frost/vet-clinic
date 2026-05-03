@@ -359,52 +359,106 @@
   }
 }
 
-/* keep the admin appointment table centered without forcing horizontal scroll */
-.appointments-table th,
-.appointments-table td {
+/* active and canceled appointment tables have different column counts */
+.appointments-table-active th,
+.appointments-table-active td,
+.appointments-table-canceled th,
+.appointments-table-canceled td {
   overflow-wrap: anywhere;
 }
 
-.appointments-table th:nth-child(1),
-.appointments-table td:nth-child(1),
-.appointments-table th:nth-child(2),
-.appointments-table td:nth-child(2) {
+.appointments-table-active th:nth-child(1),
+.appointments-table-active td:nth-child(1),
+.appointments-table-active th:nth-child(2),
+.appointments-table-active td:nth-child(2) {
   width: 7%;
 }
 
-.appointments-table th:nth-child(3),
-.appointments-table td:nth-child(3) {
+.appointments-table-active th:nth-child(3),
+.appointments-table-active td:nth-child(3) {
   width: 6%;
 }
 
-.appointments-table th:nth-child(4),
-.appointments-table td:nth-child(4) {
+.appointments-table-active th:nth-child(4),
+.appointments-table-active td:nth-child(4) {
   width: 9%;
 }
 
-.appointments-table th:nth-child(5),
-.appointments-table td:nth-child(5) {
+.appointments-table-active th:nth-child(5),
+.appointments-table-active td:nth-child(5) {
   width: 15%;
 }
 
-.appointments-table th:nth-child(6),
-.appointments-table td:nth-child(6) {
+.appointments-table-active th:nth-child(6),
+.appointments-table-active td:nth-child(6) {
   width: 18%;
 }
 
-.appointments-table th:nth-child(7),
-.appointments-table td:nth-child(7) {
+.appointments-table-active th:nth-child(7),
+.appointments-table-active td:nth-child(7) {
   width: 7%;
 }
 
-.appointments-table th:nth-child(8),
-.appointments-table td:nth-child(8) {
+.appointments-table-active th:nth-child(8),
+.appointments-table-active td:nth-child(8) {
   width: 19%;
 }
 
-.appointments-table th:nth-child(9),
-.appointments-table td:nth-child(9) {
+.appointments-table-active th:nth-child(9),
+.appointments-table-active td:nth-child(9) {
   width: 12%;
+}
+
+.appointments-table-canceled th:nth-child(1),
+.appointments-table-canceled td:nth-child(1),
+.appointments-table-canceled th:nth-child(2),
+.appointments-table-canceled td:nth-child(2) {
+  width: 7%;
+}
+
+.appointments-table-canceled th:nth-child(3),
+.appointments-table-canceled td:nth-child(3) {
+  width: 5%;
+}
+
+.appointments-table-canceled th:nth-child(4),
+.appointments-table-canceled td:nth-child(4) {
+  width: 9%;
+}
+
+.appointments-table-canceled th:nth-child(5),
+.appointments-table-canceled td:nth-child(5) {
+  width: 14%;
+}
+
+.appointments-table-canceled th:nth-child(6),
+.appointments-table-canceled td:nth-child(6) {
+  width: 16%;
+}
+
+.appointments-table-canceled th:nth-child(7),
+.appointments-table-canceled td:nth-child(7) {
+  width: 6%;
+}
+
+.appointments-table-canceled th:nth-child(8),
+.appointments-table-canceled td:nth-child(8) {
+  width: 10%;
+}
+
+.appointments-table-canceled th:nth-child(9),
+.appointments-table-canceled td:nth-child(9) {
+  width: 8%;
+}
+
+.appointments-table-canceled th:nth-child(10),
+.appointments-table-canceled td:nth-child(10) {
+  width: 12%;
+}
+
+.appointments-table-canceled th:nth-child(11),
+.appointments-table-canceled td:nth-child(11) {
+  width: 6%;
 }
 
 .appointmentsTableCancelBtn {

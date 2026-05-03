@@ -336,7 +336,7 @@ export default function ViewAppointments() {
 			)}
 
 			<div className="appointmentsShell">
-				<table className="appointments-table">
+				<table className={showCanceled ? "appointments-table appointments-table-canceled" : "appointments-table appointments-table-active"}>
 							<thead>
 								<tr>
 									<th>Start</th>
