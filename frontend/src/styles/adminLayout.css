@@ -56,9 +56,11 @@
 }
 
 .adminMain {
-	max-width: 1320px;
-	margin: 0 auto;
-	padding: 24px;
+	width: 100%;
+	max-width: none;
+	margin: 0;
+	padding: 24px 0;
+	box-sizing: border-box;
 }
 .adminContent {
 	display: grid;
